@@ -21,21 +21,18 @@ def circuitWrap(C,J,L):
     Circuit = np.concatenate([C,J,L])
     return Circuit
 
-def circuitUnwrap(Circuit):
+def circuitUnwrap(Circuit,inductances=False):
+    if inductances:
+        N = int(len(Circuit)/3)
+        C = Circuit[:N]
+        J = Circuit[N:2*N]
+        L = Circuit[2*N:]
+        return C,J,L
+
     N = int(len(Circuit)/2)
     C = Circuit[:N]
     J = Circuit[N:]
-    #L = Circuit[2*N:]
     return C,J
-
-## C,J,L are connectivity matrices
-
-def defineComponentBounds(circuit_bounds,N):
-    bounds = [(circuit_bounds['C']['low'],circuit_bounds['C']['high'])]*N
-    bounds += [(circuit_bounds['J']['low'],circuit_bounds['J']['high'])]*N
-    if 'L' in circuit_bounds:
-        bounds += [(circuit_bounds['L']['low'],circuit_bounds['L']['high'])]*N
-    return bounds
 
 ## Design Random Circuit
 

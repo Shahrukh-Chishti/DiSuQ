@@ -80,3 +80,10 @@ def lossBuilder(target_spectrum,phiExt_sweep,circuit_bounds):
         loss = meritTargetSpectrum(spec,target_spectrum,C,J,circuit_bounds)
         return loss
     return loss
+
+def defineComponentBounds(circuit_bounds,N):
+    bounds = [(circuit_bounds['C']['low'],circuit_bounds['C']['high'])]*N
+    bounds += [(circuit_bounds['J']['low'],circuit_bounds['J']['high'])]*N
+    if 'L' in circuit_bounds:
+        bounds += [(circuit_bounds['L']['low'],circuit_bounds['L']['high'])]*N
+    return bounds

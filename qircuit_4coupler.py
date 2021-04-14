@@ -1,23 +1,22 @@
 import numpy as np
 import copy
+from utils import *
 
-def check_circuit_doublewell(circuit):
+def check_circuit_doublewell(spectrum):
 	"""
 		Check whether the circuit spectrum is None, zero-length, flat, or has no double-well feature.
 		If one or more of those is the case, the output is False. Otherwise, it is True. Spectrum is
 		in GHz.
-		Input
-		circuit: circuit dict
-		Output
-		check: bool
+		Input : spectrum
+		Output : check:bool
 	"""
 
 	# Initialization
 	check    = True
-	spectrum = np.array(circuit['measurements']['eigen_spectrum']).T
+	spectrum = np.array(spectrum).T
 
 	# Check validity of spectrum
-	if circuit['measurements']['eigen_spectrum'] is None:
+	if spectrum is None:
 		check = False
 	elif len(spectrum) == 0:
 		check = False
@@ -25,9 +24,9 @@ def check_circuit_doublewell(circuit):
 		check = False
 
 	# Check outermost level population
-	elif 'max_pop' in circuit['measurements'] and circuit['measurements']['max_pop'] > 0.01:
-		print('MAX POP TOO HIGH!')
-		check = False
+	#elif 'max_pop' in circuit['measurements'] and circuit['measurements']['max_pop'] > 0.01:
+	#	print('MAX POP TOO HIGH!')
+	#	check = False
 
 	# Check for double well
 	else:
@@ -49,10 +48,7 @@ def check_circuit_doublewell(circuit):
 
 	return check
 
-
-def merit_DoubleWell(circuit, merit_options, **kwargs):
-
-	print('# Calculating double-well merit ...')
+def merit_DoubleWell(Circuit, merit_options):
 
 	# Loss function settings
 	max_peak       = merit_options['max_peak']
@@ -60,12 +56,13 @@ def merit_DoubleWell(circuit, merit_options, **kwargs):
 	norm_p         = merit_options['norm_p']
 	flux_sens_bool = merit_options['flux_sens']
 	max_merit      = merit_options['max_merit']
+    num_biases     = merit_options['num_biases'] # bias points of noise
 
+    # Circuit spectrum
+    C,J,L = circuitUnwrap(Circuit,True)
+    spectrum,timeout_bool = solver_JJcircuitSimV3(C,J,L)
 	# Check if circuit is valid and has double well
-	if check_circuit_doublewell(circuit):
-
-		# Circuit spectrum
-		spectrum = np.array(circuit['measurements']['eigen_spectrum']).T
+	if check_circuit_doublewell(spectrum):
 
 		# Extract ground and excited state spectra
 		spectrumGS = spectrum[0]
@@ -75,51 +72,18 @@ def merit_DoubleWell(circuit, merit_options, **kwargs):
 
 		# (1) Check if flux sensitivity should be calculated and submit extra task if necessary
 		hsens = None
+        ### omitting noise sensitivity asymmetery loss
+        # perturbed circuits==context cicuits ?
 		# Context circuits have been calculated
-		if flux_sens_bool and ('context_circuits' in kwargs):
-			hsens = 0
-			context_circuits = kwargs['context_circuits']
-			for context_circuit in context_circuits:
-				# Context circuit valid
-				if check_circuit_doublewell(context_circuit):
-					spectrum_context = np.array(context_circuit['measurements']['eigen_spectrum']).T
-					spectrumGS_context = spectrum_context[0]
-					mididx = len(spectrumGS_context) // 2
-					hsens += abs( np.min(spectrumGS_context[:mididx]) - np.min(spectrumGS_context[mididx:]) )
-				# Context circuit invalid
-				else:
-					loss = max_merit
-					print('# INVALID CONTEXT CIRCUIT -> LOSS: {} ...'.format(loss))
-					merit_dict = {'loss': loss, 'extra_tasks': []}
-					return merit_dict
-					
-		# Context circuits have *not* been calculated
-		elif flux_sens_bool:
-			print('# PREPARING CONTEXT CIRCUITS ...')
-			# Determine number of flux biases
-			if 'num_biases' in circuit['measurements']:
-				num_biases = circuit['measurements']['num_biases']
-				# Case A: no additional biases beyond the main loop
-				if num_biases<=1:
-					print('# No additional biases, moving to merit calculation ...')
-					pass
-				# Case B: perturb existing additional biases
-				else:
-					print('# Preparing {} perturbed circuit(s)'.format(num_biases-1))
-					perturbed_circuits = []
-					for i in range(1,num_biases):
-						perturbed_circuit = copy.deepcopy(circuit)
-						perturbed_circuit['measurements'].clear()
-						perturbed_circuit['circuit']['circuit_values']['phiOffs'][i] += 0.0001
-						perturbed_circuits.append(perturbed_circuit)
-					merit_dict = {'extra_tasks': perturbed_circuits}
-					return merit_dict
-			# Number of biases can not be determined (was not saved)
-			else:
-				loss = max_merit
-				print('# NUMBER OF BIASES COULD NOT BE DETERMINED -> LOSS: {} ...'.format(loss))
-				merit_dict = {'loss': loss, 'extra_tasks': []}
-				return merit_dict
+        #if flux_sens_bool:
+		#	hsens = 0
+        #    for i in range(1,num_biases):
+        #        perturbed_circuit = copy.deepcopy(Circuit)
+        #        perturbed_circuit['circuit']['circuit_values']['phiOffs'][i] += 0.0001
+        #        spectrum_context = np.array(context_circuit['measurements']['eigen_spectrum']).T
+        #        spectrumGS_context = spectrum_context[0]
+        #        mididx = len(spectrumGS_context) // 2
+        #        hsens += abs( np.min(spectrumGS_context[:mididx]) - np.min(spectrumGS_context[mididx:]) )
 
 		# (2) Center peak height
 		idx_mid = int(len(spectrumGS)/2)
@@ -137,19 +101,17 @@ def merit_DoubleWell(circuit, merit_options, **kwargs):
 			# print('A:', (hpeak/max_peak))
 			# print('B:', (hsplit/max_split))
 			# print('C:', noise_factor*(1 - np.min((hsens/hpeak, 1))))
-			loss = max_merit - ( abs(hpeak/max_peak)**norm_p + abs(hsplit/max_split)**norm_p \
-								 + (1 - np.min((hsens/hpeak, 1)))**norm_p )**(1/norm_p)
+			loss = max_merit - ( abs(hpeak/max_peak)**norm_p + abs(hsplit/max_split)**norm_p
+            loss += (1 - np.min((hsens/hpeak, 1)))**norm_p )**(1/norm_p)
 
 	else:
 		loss = max_merit
 
 	print('# LOSS: {} ...'.format(loss))
-	
-	merit_dict = {'loss': loss, 'extra_tasks': []}
 
-	return merit_dict
+	return loss
 
-def solver_JJcircuitSimV3(Carr, Larr, JJarr, nLin=6, nNol=8, nJos=11, nIsl=1, timeout=600, fluxSweep=True, phiOffs=[0.5,0.5,0.5,0.5]):
+def solver_JJcircuitSimV3(Carr, JJarr, Larr, nLin=6, nNol=8, nJos=11, nIsl=1, timeout=600, fluxSweep=True, phiOffs=[0.5,0.5,0.5,0.5]):
 	"""
 		Returns:
 		eigenspec - 10-dim numpy array of the circuit eigenspectrum at fixed flux. If fluxSweep=True,
@@ -246,11 +208,21 @@ def solver_JJcircuitSimV3(Carr, Larr, JJarr, nLin=6, nNol=8, nJos=11, nIsl=1, ti
 		print('# Maximum outermost level pop: {}'.format(max_pop))
 
 		print('Simulation time: {} s'.format(time.time()-tA))
-		return eigenspec, timeout_bool, num_biases, max_pop
+		return eigenspec, timeout_bool
 
 	except:
 		print('ERROR: could not determine number of flux biases or outermost level population')
 		print('Simulation time: {} s'.format(time.time()-tA))
 		return eigenspec, timeout_bool
 
+def defineComponentBounds(circuit_bounds,N):
+    high = [circuit_bounds['C']['high']]*N
+    high += [circuit_bounds['J']['high']]*N
+    high += [circuit_bounds['L']['high']]*N
+
+    low = [circuit_bounds['C']['low']]*N
+    low += [circuit_bounds['J']['low']]*N
+    low += [circuit_bounds['L']['low']]*N
+
+    return numpy.array(low),numpy.array(high)
 
