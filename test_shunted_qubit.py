@@ -11,7 +11,7 @@ target_spectrum = target_info['spectrum']
 
 phiExt = numpy.linspace(0,1,41,endpoint=True)
 N = 3
-c_specs = {'dimension': 3, 'low': 0., 'high': 100, 'keep_prob': 1.}
+c_specs = {'dimension': 3, 'low': 0., 'high': 10000, 'keep_prob': 1.}
 j_specs = {'dimension': 3, 'low': 0., 'high': 200, 'keep_num':  3}
 circuit_bounds = {'C':{'low':c_specs['low'],'high':c_specs['high']},
                   'J':{'low':j_specs['low'],'high':j_specs['high']}}
@@ -26,6 +26,14 @@ res = sp_minimize(loss, init_pos, method = 'L-BFGS-B', bounds = bounds, options 
 # optimised circuit
 C,J = circuitUnwrap(res.x)
 Cmat,Jmat = arrayMatrix(C),arrayMatrix(J)
+
+print(c_specs)
+print(j_specs)
+print('optimisation result:')
+print(res)
+print('\n\n')
+print('Capacitances[C11,C12,C22]:',C)
+print('Josephsons[J11,J12,J22]:',J)
 
 ## plot Eigenspectrum
 spec = [eigen2Node(Cmat,Jmat,phi) for phi in phiExt]
