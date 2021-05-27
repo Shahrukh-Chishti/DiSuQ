@@ -1,5 +1,5 @@
 import numpy,networkx
-from components import J,L,C
+from components import *
 import numpy
 import jax.numpy as jnp
 from jax import grad, jit
@@ -8,18 +8,58 @@ from jax import random
 flux_quanta = 1
 h = 1
 
-def modeTensorProduct():
+def modeTensorProduct(pre,M,post):
     """
         extend mode to full system basis
+        sequentially process duplication
     """
+    H = 1
+    for dim in pre:
+        H = numpy.kron(H,numpy.ones(dim))
+    H = numpy.kron(H,M)
+    for dim in post:
+        H = numpy.kron(H,numpy.ones(dim))
+    return H
 
-def modeQuantProduct(A,M,B):
+def basisProduct(O,index):
     """
-        M : N x N : mode operator
-        B : basisB x basisB : basis operator yielding N-tuple
-        A : basisA x basisA : basis operator(transpose) yield N-tuple
-        returns : basisA x basisB mode state Hamiltonian matrix
+        O : basis_operators : list of quantised operators
+        index : index of basis representation
+        returns B : full basis representation : n_basis X n_basis
     """
+    n = len(O)
+    B = 1
+    for i in range(index-1):
+        n_basis = len(O[i])
+        B = numpy.kron(B,numpy.ones(n_basis,n_basis))
+    B = numpy.kron(B,O[index])
+    for i in range(index,n):
+        n_basis = len(O[i])
+        B = numpy.kron(B,numpy.ones(n_basis,n_basis))
+    return B
+
+def modeMatrixProduct(A,M,B,cross_product=False):
+    """
+        M : mode operator
+        B : list : basis operators
+        A : list : basis operators(transpose)
+        cross_product : indicates if A!=B, assumed ordering : AxB
+        returns : prod(nA) x prod(nB) mode state Hamiltonian matrix
+    """
+    H = 0
+    nA,nB = len(A),len(B)
+    assert M.shape==(nA,nB)
+    for i in range(nA):
+        for j in range(nB):
+            left = basisProduct(A,i)
+            right = basisProduct(B,j)
+            if cross_product:
+                left = numpy.kron(left,numpy.ones(1,len(right)))
+                right = numpy.kron(numpy.ones(len(left),1),right)
+
+            H += M[i,j]*numpy.dot(left,right)
+
+    return H
 
 def inverse(A):
     return numpy.linalg.inv(A)
@@ -67,12 +107,35 @@ class Circuit:
 
     def hamiltonian(self,basis):
         """
-            basis : {o:(,,,),i:(,,,),j:(,,,)}
+            basis : {O:(,,,),I:(,,,),J:(,,,)}
         """
         Lo_,C_ = self.transformComponents()
         Co_,Coi_,Coj_,Ci_,Cij_,Cj_ = C_
+        n_baseO,n_baseI,n_baseJ = self.modeBasisSize(basis)
 
-        Zi = numpy.sqrt(numpy.diagonal(Co_)/numpy.diagonal(Lo_))
+        Z = numpy.sqrt(numpy.diagonal(Co_)/numpy.diagonal(Lo_))
+        Qo = [basisQo(basis_max,Zi) for Zi,basis_max in zip(Z,basis['O'])]
+        Qi = [basisQji(basis_max) for basis_max in basis['I']]
+        Qj = [basisQji(basis_max) for basis_max in basis['J']]
+
+        Co = modeMatrixProduct(Qo,Co_,Qo)
+        Co = modeTensorProduct(((n_baseJ,n_baseJ),(n_baseI,n_baseI)),Co,(1,1))
+
+        Po = [basisPo(basis_max,Zi) for Zi,basis_max in zip(Z,basis['O'])]
+        Lo = modeMatrixProduct(Po,Lo_,Po)
+        Lo = modeTensorProduct(((n_baseJ,n_baseJ),(n_baseI,n_baseI)),Lo,(1,1))
+
+        Ho = Co + Lo + Uj
+
+        Coj = modeMatrixProduct(Qo,Coj_,delQj)
+        Coj = modeTensorProduct()
+
+    def modeBasisSize(self,basis):
+        n_baseO *= numpy.prod(basis['O'])
+        n_baseI *= numpy.prod(basis['I'])
+        n_baseJ *= numpy.prod(basis['J'])
+
+        return n_baseO,n_baseI,n_baseJ
 
     def modeDistribution(self):
         return No,Ni,Nj
@@ -80,6 +143,7 @@ class Circuit:
     def spanningTree(self):
         GL = self.graphGL()
         S = networkx.minimum_spanning_tree(GL)
+        return S
 
     def graphGL(self):
         GL = self.G.copy()

@@ -1,7 +1,22 @@
 import numpy
 
-def basisQo(modes):
-    return basis
+def basisQo(n,impedance):
+    return Qo*iota*numpy.sqrt(h/2/impedance)
+
+def basisQji(n):
+    return Qji*2*e
+
+def basisPo(n,impedance):
+    return Po*numpy.sqrt(h*impedance/2)
+
+def basisPj(n):
+    return Pj
+
+def chargeDisplacePlus(n):
+    return D
+
+def chargeDisplaceMinus(n):
+    return D
 
 class Elements:
     def __init__(self,plus,minus):
