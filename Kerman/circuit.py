@@ -89,7 +89,7 @@ class Circuit:
         M = self.mutualInductance()
 
         Ln_ = transformation(inverse(Lb+M),Rbn)
-        R,N0,Ni,Nj = self.modeTransformation(Ln_)
+        R,No,Ni,Nj = self.modeTransformation(Ln_)
         L_ = transformation(Ln_,inverse(R))
 
         Lo_ = L_[:No,:No]
@@ -125,10 +125,30 @@ class Circuit:
         Lo = modeMatrixProduct(Po,Lo_,Po)
         Lo = modeTensorProduct(((n_baseJ,n_baseJ),(n_baseI,n_baseI)),Lo,(1,1))
 
-        Ho = Co + Lo + Uj
+        Ho = Co + Lo + Uo
+
+        Coi = modeMatrixProduct(Qo,Coi_,delQi)
+        Coi = modeTensorProduct()
 
         Coj = modeMatrixProduct(Qo,Coj_,delQj)
         Coj = modeTensorProduct()
+
+        Cij = modeMatrixProduct(delQi,Cij_,delQj)
+        Cij = modeTensorProduct()
+
+        Hint = Coi + Coj + Cij + Uint
+
+        Ci = modeMatrixProduct(delQi,Ci_delQi)
+        Ci = modeTensorProduct()
+
+        Hi = Ci
+
+        Cj = modeMatrixProduct(delQj,Ci_delQj)
+        Cj = modeTensorProduct()
+
+        Hj = Cj + Uj
+
+        return Ho+Hint+Hi+Hj
 
     def modeBasisSize(self,basis):
         n_baseO *= numpy.prod(basis['O'])
@@ -137,7 +157,10 @@ class Circuit:
 
         return n_baseO,n_baseI,n_baseJ
 
-    def modeDistribution(self):
+    def modeDistribution(self,Ln_):
+        Ni = 1 # defaulted
+        No = numpy.linalg.matrix_rank(Ln_)
+        Nj = self.Nn - Ni - No
         return No,Ni,Nj
 
     def spanningTree(self):
@@ -197,7 +220,8 @@ class Circuit:
         return Rbn
 
     def modeTransformation(self,Ln_):
-        return R
+        No,Ni,Nj = self.modeDistribution(Ln_)
+        return R,No,Ni,Nj
 
 if __name__=='__main__':
     transmon = [J(0,1,10),C(0,1,5)]
