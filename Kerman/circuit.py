@@ -5,9 +5,6 @@ import jax.numpy as jnp
 from jax import grad, jit
 from jax import random
 
-flux_quanta = 1
-h = 1
-
 def modeTensorProduct(pre,M,post):
     """
         extend mode to full system basis
@@ -38,6 +35,16 @@ def basisProduct(O,index):
         B = numpy.kron(B,numpy.ones(n_basis,n_basis))
     return B
 
+def basisProduct(O,indices):
+    n = len(O)
+    B = 1
+    for i in range(n):
+        if i in indices:
+            B = numpy.kron(B,O[i])
+        else:
+            B = numpy.kron(B,numpy.identity(len(O[i])))
+    return B
+
 def modeMatrixProduct(A,M,B,cross_product=False):
     """
         M : mode operator
@@ -51,8 +58,8 @@ def modeMatrixProduct(A,M,B,cross_product=False):
     assert M.shape==(nA,nB)
     for i in range(nA):
         for j in range(nB):
-            left = basisProduct(A,i)
-            right = basisProduct(B,j)
+            left = basisProduct(A,[i])
+            right = basisProduct(B,[j])
             if cross_product:
                 left = numpy.kron(left,numpy.ones(1,len(right)))
                 right = numpy.kron(numpy.ones(len(left),1),right)
@@ -82,13 +89,21 @@ class Circuit:
             G.add_edge(component.minus,component.plus,component=component)
         return G
 
-    def transformComponents(self):
+    def josephsonComponents(self):
+        return edges,Ej
+
+    def componentMatrix(self):
         Cn_ = self.nodeCapacitance()
         Rbn = self.connectionPolarity()
         Lb = self.branchInductance()
         M = self.mutualInductance()
-
         Ln_ = transformation(inverse(Lb+M),Rbn)
+
+        return Cn_,Ln_
+
+    def transformComponents(self):
+        Cn_,Ln_ = self.componentMatrix()
+
         R,No,Ni,Nj = self.modeTransformation(Ln_)
         L_ = transformation(Ln_,inverse(R))
 
@@ -104,6 +119,32 @@ class Circuit:
         C_ = Co_,Coi_,Coj_,Ci_,Cij_,Cj_
 
         return Lo_,C_
+
+    def hamiltonian_charged(self,basis):
+        """
+            basis : [basis_size] charge
+        """
+        Cn_,Ln_ = self.componentMatrix()
+        Q = [basisQji(basis_max) for basis_max in basis]
+        P = [basisPj(basis_max) for basis_max in basis]
+        Dplus = [chargeDisplacePlus(basis_max) for basis_max in basis]
+        Dminus = [chargeDisplaceMinus(basis_max) for basis_max in basis]
+
+        C = modeMatrixProduct(Q,Cn_,Q)
+        L = modeMatrixProduct(P,Ln_,P)
+
+        Hlc = (C+L)/2
+        Hj = 0
+        edges,Ej = self.josephsonComponents()
+
+        for edge,E in zip(edges,Ej):
+            i,j = edge # assuming polarity on nodes
+            Jplus = basisProduct(Dplus,[i]) + basisProduct(Dminus,[i])
+            Jminus = basisProduct(Dplus,[j]) + basisProduct(Dminus,[j])
+            Hj += E*(1-Jplus+Jminus)/2
+
+        H = Hlc + Hj
+        return H
 
     def hamiltonian(self,basis):
         """
@@ -138,7 +179,7 @@ class Circuit:
 
         Hint = Coi + Coj + Cij + Uint
 
-        Ci = modeMatrixProduct(delQi,Ci_delQi)
+        Ci = modeMatrixProduct(delQi,Ci_,delQi)
         Ci = modeTensorProduct()
 
         Hi = Ci
