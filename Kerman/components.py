@@ -32,15 +32,15 @@ def basisPj(n):
 def chargeDisplacePlus(n):
     """n : charge basis truncation"""
     D = numpy.zeros((2*n+1,2*n+1),dtype=int)
-    diagonal = numpy.range(2*n)
-    D.take(zip(diagonal+1,diagonal)) = 1
+    diagonal = numpy.arange(2*n,dtype=int)
+    D[diagonal+1,diagonal] = 1
     return D
 
 def chargeDisplaceMinus(n):
     """n : charge basis truncation"""
     D = numpy.zeros((2*n+1,2*n+1),dtype=int)
-    diagonal = numpy.range(2*n)
-    D.take(zip(diagonal,diagonal+1)) = 1
+    diagonal = numpy.arange(2*n,dtype=int)
+    D[diagonal,diagonal+1] = 1
     return D
 
 class Elements:

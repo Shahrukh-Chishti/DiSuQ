@@ -1,4 +1,5 @@
 import numpy,networkx
+import matplotlib.pyplot as plt
 from components import *
 import numpy
 import jax.numpy as jnp
@@ -72,25 +73,24 @@ def inverse(A):
     return numpy.linalg.inv(A)
 
 def transformation(M,T):
-    return numpy.dot(T.t,M.dot(T))
+    # need reecheck for transpose
+    return numpy.dot(T.T,M.dot(T))
 
 class Circuit:
     def __init__(self,network):
         self.network = network
         self.G = self.parseCircuit()
         self.nodes = self.nodeIndex()
+        self.node_ = {val:key for key,val in self.nodes.items()}
         self.edges = self.edgesIndex()
         self.Nn = len(self.nodes)
         self.Nb = len(self.edges)
 
     def parseCircuit(self):
         G = networkx.Graph()
-        for component in self.network:
-            G.add_edge(component.minus,component.plus,component=component)
+        for u,v,components in self.network:
+            G.add_edge(u,v,**components)
         return G
-
-    def josephsonComponents(self):
-        return edges,Ej
 
     def componentMatrix(self):
         Cn_ = self.nodeCapacitance()
@@ -125,6 +125,7 @@ class Circuit:
             basis : [basis_size] charge
         """
         Cn_,Ln_ = self.componentMatrix()
+
         Q = [basisQji(basis_max) for basis_max in basis]
         P = [basisPj(basis_max) for basis_max in basis]
         Dplus = [chargeDisplacePlus(basis_max) for basis_max in basis]
@@ -225,16 +226,26 @@ class Circuit:
         edges = dict([*enumerate([*self.G.edges()])])
         return edges
 
+    def josephsonComponents(self):
+        edges,Ej = [],[]
+        for i,(u,v) in self.edges.items():
+            component = self.G[u][v]
+            if 'J' in component:
+                edges.append((u,v))
+                Ej.append(component['J'].energy)
+        return edges,Ej
+
     def nodeCapacitance(self):
         Cn = numpy.zeros((self.Nn,self.Nn))
         for i,node in self.nodes.items():
-            node_capacitance = 0
             for u,v,component in self.G.edges(node,data=True):
-                component = component['component']
-                if component.__class__ == C:
-                    node_capacitance += component.capacitance
-            Cn[i,i] = node_capacitance
-            # off diagonals path non-uniqueness
+                #component = component['component']
+                #if component.__class__ == C:
+                if 'C' in component:
+                    C = component['C'].capacitance
+                    Cn[i,i] += C
+                    Cn[self.node_[u],self.node_[v]] = -C
+                    Cn[self.node_[v],self.node_[u]] = -C
 
         Cn_ = inverse(Cn)
         return Cn_
@@ -243,9 +254,10 @@ class Circuit:
         Lb = numpy.zeros((self.Nb,self.Nb))
         for i,(u,v) in self.edges.items():
             component = self.G[u][v]
-            component = component['component']
-            if component.__class__ == L:
-                Lb[i,i] = component.inductance
+            #component = component['component']
+            #if component.__class__ == L:
+            if 'L' in component:
+                Lb[i,i] = component['L'].inductance
         return Lb
 
     def mutualInductance(self):
@@ -254,10 +266,9 @@ class Circuit:
 
     def connectionPolarity(self):
         Rbn = numpy.zeros((self.Nb,self.Nn),int)
-        node_ = {val:key for key,val in self.nodes.items()}
-        for i,(u,v) in self.edges:
-            Rbn[i][node_[u]] = 1
-            Rbn[i][node_[v]] = -1
+        for i,(u,v) in self.edges.items():
+            Rbn[i][self.node_[u]] = 1
+            Rbn[i][self.node_[v]] = -1
         return Rbn
 
     def modeTransformation(self,Ln_):
@@ -265,6 +276,12 @@ class Circuit:
         return R,No,Ni,Nj
 
 if __name__=='__main__':
-    transmon = [J(0,1,10),C(0,1,5)]
+    transmon = [[1,2,{'J':J(1,2,10),'C':C(1,2,5),'L':L(1,2,100)}]]
+    transmon += [[0,1,{'C':C(0,1,100)}]]
     transmon = Circuit(transmon)
+    H = transmon.hamiltonian_charged([5,5])
+    spectrum = numpy.linalg.eigvals(H)
+    spectrum.sort()
+    #networkx.draw_spring(transmon.G)
+    #plt.show()
     import ipdb;ipdb.set_trace()
