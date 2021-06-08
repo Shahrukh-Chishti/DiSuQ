@@ -80,11 +80,11 @@ class Circuit:
     def __init__(self,network):
         self.network = network
         self.G = self.parseCircuit()
-        self.nodes = self.nodeIndex()
-        self.node_ = {val:key for key,val in self.nodes.items()}
+        self.nodes,self.nodes_ = self.nodeIndex()
         self.edges = self.edgesIndex()
         self.Nn = len(self.nodes)
         self.Nb = len(self.edges)
+        self.Cn_,self.Ln_ = self.componentMatrix()
 
     def parseCircuit(self):
         G = networkx.Graph()
@@ -124,13 +124,12 @@ class Circuit:
         """
             basis : [basis_size] charge
         """
-        Cn_,Ln_ = self.componentMatrix()
+        Cn_,Ln_ = self.Cn_,self.Ln_
 
         Q = [basisQji(basis_max) for basis_max in basis]
         P = [basisPj(basis_max) for basis_max in basis]
         Dplus = [chargeDisplacePlus(basis_max) for basis_max in basis]
-        Dminus = [chargeDisplaceMinus(basis_max) for basis_max in basis]
-
+        Dminus = [chargeDisplaceMinus(basis_max) for basis_max in basis] 
         C = modeMatrixProduct(Q,Cn_,Q)
         L = modeMatrixProduct(P,Ln_,P)
 
@@ -219,8 +218,13 @@ class Circuit:
         return GL
 
     def nodeIndex(self):
-        nodes = dict([*enumerate([*self.G.nodes()])])
-        return nodes
+        nodes = list(self.G.nodes())
+        nodes.remove(0) # removing ground from active nodes
+        nodes = dict([*enumerate(nodes)])
+
+        nodes_ = {val:key for key,val in nodes.items()}
+        nodes_[0] = 0
+        return nodes,nodes_
 
     def edgesIndex(self):
         edges = dict([*enumerate([*self.G.edges()])])
@@ -244,8 +248,8 @@ class Circuit:
                 if 'C' in component:
                     C = component['C'].capacitance
                     Cn[i,i] += C
-                    Cn[self.node_[u],self.node_[v]] = -C
-                    Cn[self.node_[v],self.node_[u]] = -C
+                    Cn[self.nodes_[u],self.nodes_[v]] = -C
+                    Cn[self.nodes_[v],self.nodes_[u]] = -C
 
         Cn_ = inverse(Cn)
         return Cn_
@@ -267,8 +271,10 @@ class Circuit:
     def connectionPolarity(self):
         Rbn = numpy.zeros((self.Nb,self.Nn),int)
         for i,(u,v) in self.edges.items():
-            Rbn[i][self.node_[u]] = 1
-            Rbn[i][self.node_[v]] = -1
+            if not u==0 or v==0:
+                # no polarity on ground
+                Rbn[i][self.nodes_[u]] = 1
+                Rbn[i][self.nodes_[v]] = -1
         return Rbn
 
     def modeTransformation(self,Ln_):
@@ -276,10 +282,9 @@ class Circuit:
         return R,No,Ni,Nj
 
 if __name__=='__main__':
-    transmon = [[1,2,{'J':J(1,2,10),'C':C(1,2,5),'L':L(1,2,100)}]]
-    transmon += [[0,1,{'C':C(0,1,100)}]]
+    transmon = [[0,1,{'J':J(0,1,10),'C':C(0,1,5),'L':L(0,1,100)}]]
     transmon = Circuit(transmon)
-    H = transmon.hamiltonian_charged([5,5])
+    H = transmon.hamiltonian_charged([5])
     spectrum = numpy.linalg.eigvals(H)
     spectrum.sort()
     #networkx.draw_spring(transmon.G)
