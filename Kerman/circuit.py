@@ -36,6 +36,19 @@ def basisProduct(O,index):
         B = numpy.kron(B,numpy.ones(n_basis,n_basis))
     return B
 
+def crossBasisProduct(A,B,a,b):
+    assert len(A)==len(B)
+    n = len(A)
+    product = 1
+    for i in range(n):
+        if i==a:
+            product = numpy.kron(product,A[i])
+        elif i==b:
+            product = numpy.kron(product,B[i])
+        else:
+            product = numpy.kron(product,numpy.identity(len(A[i])))
+    return product
+
 def basisProduct(O,indices):
     n = len(O)
     B = 1
@@ -70,16 +83,22 @@ def modeMatrixProduct(A,M,B,cross_product=False):
     return H
 
 def inverse(A):
+    if numpy.linalg.det(A) == 0:
+        return numpy.zeros_like(A)
     return numpy.linalg.inv(A)
+
+def phase(phi):
+    return exp(im*2*pi*phi)
 
 def transformation(M,T):
     # need reecheck for transpose
     return numpy.dot(T.T,M.dot(T))
 
 class Circuit:
-    def __init__(self,network):
+    def __init__(self,network,basis):
         self.network = network
         self.G = self.parseCircuit()
+        self.basis = basis
         self.nodes,self.nodes_ = self.nodeIndex()
         self.edges = self.edgesIndex()
         self.Nn = len(self.nodes)
@@ -120,28 +139,38 @@ class Circuit:
 
         return Lo_,C_
 
-    def hamiltonian_charged(self,basis):
+    def hamiltonian_charged(self,external_fluxes):
         """
             basis : [basis_size] charge
         """
         Cn_,Ln_ = self.Cn_,self.Ln_
+        basis = self.basis
 
         Q = [basisQji(basis_max) for basis_max in basis]
         P = [basisPj(basis_max) for basis_max in basis]
         Dplus = [chargeDisplacePlus(basis_max) for basis_max in basis]
-        Dminus = [chargeDisplaceMinus(basis_max) for basis_max in basis] 
+        Dminus = [chargeDisplaceMinus(basis_max) for basis_max in basis]
         C = modeMatrixProduct(Q,Cn_,Q)
         L = modeMatrixProduct(P,Ln_,P)
 
         Hlc = (C+L)/2
-        Hj = 0
+        Hj = 0*im
         edges,Ej = self.josephsonComponents()
+        assert len(external_fluxes) == len(edges)
 
-        for edge,E in zip(edges,Ej):
+        for edge,E,flux in zip(edges,Ej,external_fluxes):
             i,j = edge # assuming polarity on nodes
-            Jplus = basisProduct(Dplus,[i]) + basisProduct(Dminus,[i])
-            Jminus = basisProduct(Dplus,[j]) + basisProduct(Dminus,[j])
-            Hj += E*(1-Jplus+Jminus)/2
+            i,j = self.nodes_[i],self.nodes_[j]
+            if i<0 or j<0:
+                # grounded josephson, without external flux
+                i = max(i,j)
+                Jplus = basisProduct(Dplus,[i])
+                Jminus = basisProduct(Dminus,[i])
+                Hj -= E*(Jplus+Jminus)
+            else:
+                Jplus = E*crossBasisProduct(Dplus,Dminus,i,j)*phase(flux)
+                Jminus = E*crossBasisProduct(Dplus,Dminus,j,i)*phase(-flux)
+                Hj -= Jplus + Jminus
 
         H = Hlc + Hj
         return H
@@ -223,7 +252,7 @@ class Circuit:
         nodes = dict([*enumerate(nodes)])
 
         nodes_ = {val:key for key,val in nodes.items()}
-        nodes_[0] = 0
+        nodes_[0] = -1
         return nodes,nodes_
 
     def edgesIndex(self):
@@ -248,8 +277,9 @@ class Circuit:
                 if 'C' in component:
                     C = component['C'].capacitance
                     Cn[i,i] += C
-                    Cn[self.nodes_[u],self.nodes_[v]] = -C
-                    Cn[self.nodes_[v],self.nodes_[u]] = -C
+                    if not (u==0 or v==0):
+                        Cn[self.nodes_[u],self.nodes_[v]] = -C
+                        Cn[self.nodes_[v],self.nodes_[u]] = -C
 
         Cn_ = inverse(Cn)
         return Cn_
@@ -271,7 +301,7 @@ class Circuit:
     def connectionPolarity(self):
         Rbn = numpy.zeros((self.Nb,self.Nn),int)
         for i,(u,v) in self.edges.items():
-            if not u==0 or v==0:
+            if not (u==0 or v==0):
                 # no polarity on ground
                 Rbn[i][self.nodes_[u]] = 1
                 Rbn[i][self.nodes_[v]] = -1
@@ -282,8 +312,6 @@ class Circuit:
         return R,No,Ni,Nj
 
 if __name__=='__main__':
-    transmon = [[0,1,{'J':J(0,1,10),'C':C(0,1,5),'L':L(0,1,100)}]]
-    transmon = Circuit(transmon)
     H = transmon.hamiltonian_charged([5])
     spectrum = numpy.linalg.eigvals(H)
     spectrum.sort()

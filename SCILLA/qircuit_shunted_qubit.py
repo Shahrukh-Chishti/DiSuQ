@@ -59,6 +59,7 @@ def eigen2Node(C,J,phiExt_fix=0,n=6):
     U = U - Jmat[1,1]/2 * np.kron(I, (Dp + Dm))
     U = U - Jmat[0,1]/2 * ( np.exp(-2*np.pi*1j*phiExt_fix) * np.kron(Dp,Dm) + np.exp(2*np.pi*1j*phiExt_fix) * np.kron(Dm,Dp) )
 
+    import ipdb;ipdb.set_trace()
     # Assemble Hamiltonian
     H = T + U
 
