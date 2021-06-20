@@ -1,38 +1,24 @@
-import networkx,qucat,numpy
-import matplotlib.pyplot as plt
-#from qucat import Network,L,J,C,R
-from circuit import Circuit
-from components import *
-import plotly.offline as py
-import plotly.graph_objs as go
+import qucat_circuits as qC
+import kerman_circuits as kC
+import utils,numpy
 
-def transmon():
-    transmon = [[0,1,{'J':J(0,1,10),'C':C(0,1,5),'L':L(0,1,100)}]]
-    transmon = Circuit(transmon)
+def transmon(fluxes):
+    q_spectrum,k_spectrum = [],[]
+    q_transmon = qC.transmon()
+    k_transmon = kC.transmon([7])
+
+    for flux in fluxes:
+        H = k_transmon.hamiltonian_charged([flux])
+        energy = numpy.linalg.eigvals(H)
+        k_spectrum.append(min(energy).real)
+
+        H = q_transmon.hamiltonian(Lj = qC.Lj(flux),excitations = 7,taylor = 4)
+        q_spectrum.append(H.eigenenergies()[0])
+
+    eigenspectrum = {'qucat':q_spectrum,'kerman':k_spectrum}
+    utils.plotCompare(fluxes,eigenspectrum)
     return transmon
 
-def shuntedQubit(basis):
-    circuit = [[0,1,{'J':J(0,1,10),'C':C(0,1,10)}]]
-    circuit += [[1,2,{'J':J(1,2,10),'C':C(1,2,10)}]]
-    circuit += [[0,2,{'J':J(0,2,10),'C':C(0,2,10)}]]
-    circuit = Circuit(circuit,basis)
-    return circuit
-
-def phaseSlip():
-    return circuit
-
-def qucat2Kerman(circuit):
-    return circuit
-
 if __name__=='__main__':
-    circuit = shuntedQubit([5,5])
-    spectrum = []
     fluxes = numpy.linspace(-1,1,100)
-    for flux in fluxes:
-        H = circuit.hamiltonian_charged([0,0,flux])
-        energy = numpy.linalg.eigvals(H)
-        spectrum.append(min(energy).real)
-    py.plot([go.Scatter(x=fluxes,y=spectrum)])
-    #networkx.draw_spring(circuit.G)
-    #plt.show()
-
+    transmon(fluxes)
