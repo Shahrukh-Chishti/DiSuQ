@@ -23,3 +23,4 @@ def qucat2Kerman(circuit):
 if __name__=='__main__':
     circuit = transmon([7])
     H = circuit.hamiltonian_charged([1])
+    import ipdb;ipdb.set_trace()

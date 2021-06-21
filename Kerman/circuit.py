@@ -148,32 +148,36 @@ class Circuit:
 
         Q = [basisQji(basis_max) for basis_max in basis]
         P = [basisPj(basis_max) for basis_max in basis]
-        Dplus = [chargeDisplacePlus(basis_max) for basis_max in basis]
-        Dminus = [chargeDisplaceMinus(basis_max) for basis_max in basis]
         C = modeMatrixProduct(Q,Cn_,Q)
         L = modeMatrixProduct(P,Ln_,P)
 
-        Hlc = (C+L)/2
-        Hj = 0*im
+        Hj = self.josephsonEnergy(external_fluxes)
+        H = (C+L)/2 + Hj
+
+        return H
+
+    def josephsonEnergy(self,external_fluxes):
+        basis = self.basis
+        Dplus = [chargeDisplacePlus(basis_max) for basis_max in basis]
+        Dminus = [chargeDisplaceMinus(basis_max) for basis_max in basis]
         edges,Ej = self.josephsonComponents()
         assert len(external_fluxes) == len(edges)
 
+        Hj = 0*im
         for edge,E,flux in zip(edges,Ej,external_fluxes):
             i,j = edge # assuming polarity on nodes
             i,j = self.nodes_[i],self.nodes_[j]
             if i<0 or j<0:
                 # grounded josephson, without external flux
                 i = max(i,j)
-                Jplus = basisProduct(Dplus,[i])
-                Jminus = basisProduct(Dminus,[i])
-                Hj -= E*(Jplus+Jminus)
+                Jplus = E*basisProduct(Dplus,[i])*phase(flux)
+                Jminus = E*basisProduct(Dminus,[i])*phase(-flux)
             else:
                 Jplus = E*crossBasisProduct(Dplus,Dminus,i,j)*phase(flux)
                 Jminus = E*crossBasisProduct(Dplus,Dminus,j,i)*phase(-flux)
-                Hj -= Jplus + Jminus
+            Hj -= Jplus + Jminus
 
-        H = Hlc + Hj
-        return H
+        return Hj/2
 
     def hamiltonian(self,basis):
         """
