@@ -95,9 +95,16 @@ def transformation(M,T):
     return numpy.dot(T.T,M.dot(T))
 
 class Circuit:
+    """
+        * no external fluxes must be in parallel : redundant
+        * no LC component must be in parallel : redundant
+        * only Josephson elements allowed in parallel
+    """
+
     def __init__(self,network,basis):
         self.network = network
         self.G = self.parseCircuit()
+        self.spanning_tree = self.spanningTree()
         self.basis = basis
         self.nodes,self.nodes_ = self.nodeIndex()
         self.edges = self.edgesIndex()
@@ -106,10 +113,30 @@ class Circuit:
         self.Cn_,self.Ln_ = self.componentMatrix()
 
     def parseCircuit(self):
-        G = networkx.Graph()
-        for u,v,components in self.network:
-            G.add_edge(u,v,**components)
+        G = networkx.MultiGraph()
+        for u,v,component in self.network:
+            weight = 1
+            if component.__class__ == J:
+                weight = component.energy
+            G.add_edge(u,v,weight=weight,component=component)
         return G
+
+    def nodeIndex(self):
+        # nodes identify variable placeholders
+        nodes = list(self.G.nodes())
+        nodes.remove(0) # removing ground from active nodes
+        nodes = dict([*enumerate(nodes)])
+
+        nodes_ = {val:key for key,val in nodes.items()}
+        nodes_[0] = -1
+        return nodes,nodes_
+
+    def edgesIndex(self):
+        """
+            {(u,v):[,,,]} : MultiGraph edges
+        """
+        edges = dict([*enumerate([*self.G.edges()])])
+        return edges
 
     def componentMatrix(self):
         Cn_ = self.nodeCapacitance()
@@ -119,65 +146,6 @@ class Circuit:
         Ln_ = transformation(inverse(Lb+M),Rbn)
 
         return Cn_,Ln_
-
-    def transformComponents(self):
-        Cn_,Ln_ = self.componentMatrix()
-
-        R,No,Ni,Nj = self.modeTransformation(Ln_)
-        L_ = transformation(Ln_,inverse(R))
-
-        Lo_ = L_[:No,:No]
-        C_ = transformation(Cn_,R.t)
-        Co_ = C_[:No,:No]
-        Coi_ = C_[:No,No:-Nj]
-        Coj_ = C_[:No,-Nj:]
-        Ci_ = C_[No:-Nj,No:-Nj]
-        Cij_ = C_[No:-Nj,-Nj:]
-        Cj_ = C_[-Nj:,-Nj:]
-
-        C_ = Co_,Coi_,Coj_,Ci_,Cij_,Cj_
-
-        return Lo_,C_
-
-    def hamiltonian_charged(self,external_fluxes):
-        """
-            basis : [basis_size] charge
-        """
-        Cn_,Ln_ = self.Cn_,self.Ln_
-        basis = self.basis
-
-        Q = [basisQji(basis_max) for basis_max in basis]
-        P = [basisPj(basis_max) for basis_max in basis]
-        C = modeMatrixProduct(Q,Cn_,Q)
-        L = modeMatrixProduct(P,Ln_,P)
-
-        Hj = self.josephsonEnergy(external_fluxes)
-        H = (C+L)/2 + Hj
-
-        return H
-
-    def josephsonEnergy(self,external_fluxes):
-        basis = self.basis
-        Dplus = [chargeDisplacePlus(basis_max) for basis_max in basis]
-        Dminus = [chargeDisplaceMinus(basis_max) for basis_max in basis]
-        edges,Ej = self.josephsonComponents()
-        assert len(external_fluxes) == len(edges)
-
-        Hj = 0*im
-        for edge,E,flux in zip(edges,Ej,external_fluxes):
-            i,j = edge # assuming polarity on nodes
-            i,j = self.nodes_[i],self.nodes_[j]
-            if i<0 or j<0:
-                # grounded josephson, without external flux
-                i = max(i,j)
-                Jplus = E*basisProduct(Dplus,[i])*phase(flux)
-                Jminus = E*basisProduct(Dminus,[i])*phase(-flux)
-            else:
-                Jplus = E*crossBasisProduct(Dplus,Dminus,i,j)*phase(flux)
-                Jminus = E*crossBasisProduct(Dplus,Dminus,j,i)*phase(-flux)
-            Hj -= Jplus + Jminus
-
-        return Hj/2
 
     def hamiltonian(self,basis):
         """
@@ -224,18 +192,72 @@ class Circuit:
 
         return Ho+Hint+Hi+Hj
 
-    def modeBasisSize(self,basis):
-        n_baseO *= numpy.prod(basis['O'])
-        n_baseI *= numpy.prod(basis['I'])
-        n_baseJ *= numpy.prod(basis['J'])
+    def hamiltonianLC(self):
+        """
+            basis : [basis_size] charge
+        """
+        Cn_,Ln_ = self.Cn_,self.Ln_
+        basis = self.basis
 
-        return n_baseO,n_baseI,n_baseJ
+        Q = [basisQji(basis_max) for basis_max in basis]
+        P = [basisPj(basis_max) for basis_max in basis]
+        C = modeMatrixProduct(Q,Cn_,Q)
+        L = modeMatrixProduct(P,Ln_,P)
 
-    def modeDistribution(self,Ln_):
-        Ni = 1 # defaulted
-        No = numpy.linalg.matrix_rank(Ln_)
-        Nj = self.Nn - Ni - No
-        return No,Ni,Nj
+        H = (C+L)/2
+
+        return H
+
+    def spectrum(self,flux_range,flux_points):
+        """
+            external_fluxes : [edges index: range]
+        """
+        #manifold of flux space M
+        energy_spectrum = []
+        for point in manifold:
+            Hj = self.josephsonEnergy(point)
+            H = Hj + self.hamiltonianLC()
+            eigenenergies = numpy.linalg.eigvals(H)
+            energy_spectrum.append(eigenenergies.sort()[0])
+        return energy_spectrum
+
+    def loopFlux(self,u,v,external_fluxes):
+        flux = 0
+        S = self.spanning_tree
+        path = networkx.shortest_path(S,u,v)
+        for i in range(len(path)-1):
+            component = S.get_edge_data(path[i],path[i+1])['component']
+            if component.__class__ == L:
+                if not component.external is None:
+                    flux += external_fluxes[component.external]
+
+        return flux
+
+    def josephsonEnergy(self,indices,external_fluxes):
+        """
+            external_fluxes : {identifier:flux_value}
+        """
+        basis = self.basis
+        Dplus = [chargeDisplacePlus(basis_max) for basis_max in basis]
+        Dminus = [chargeDisplaceMinus(basis_max) for basis_max in basis]
+        edges,Ej = self.josephsonComponents()
+        assert len(external_fluxes) == len(edges)
+
+        Hj = 0*im
+        for edge,E in zip(edges,Ej):
+            i,j = edge # assuming polarity on nodes
+            i,j = self.nodes_[i],self.nodes_[j]
+            if i<0 or j<0:
+                # grounded josephson, without external flux
+                i = max(i,j)
+                Jplus = E*basisProduct(Dplus,[i])*phase(flux)
+                Jminus = E*basisProduct(Dminus,[i])*phase(-flux)
+            else:
+                Jplus = E*crossBasisProduct(Dplus,Dminus,i,j)*phase(flux)
+                Jminus = E*crossBasisProduct(Dplus,Dminus,j,i)*phase(-flux)
+            Hj -= Jplus + Jminus
+
+        return Hj/2
 
     def spanningTree(self):
         GL = self.graphGL()
@@ -250,19 +272,6 @@ class Circuit:
                 GL.remove_edge(u,v)
         return GL
 
-    def nodeIndex(self):
-        nodes = list(self.G.nodes())
-        nodes.remove(0) # removing ground from active nodes
-        nodes = dict([*enumerate(nodes)])
-
-        nodes_ = {val:key for key,val in nodes.items()}
-        nodes_[0] = -1
-        return nodes,nodes_
-
-    def edgesIndex(self):
-        edges = dict([*enumerate([*self.G.edges()])])
-        return edges
-
     def josephsonComponents(self):
         edges,Ej = [],[]
         for i,(u,v) in self.edges.items():
@@ -276,10 +285,9 @@ class Circuit:
         Cn = numpy.zeros((self.Nn,self.Nn))
         for i,node in self.nodes.items():
             for u,v,component in self.G.edges(node,data=True):
-                #component = component['component']
-                #if component.__class__ == C:
-                if 'C' in component:
-                    C = component['C'].capacitance
+                component = component['component']
+                if component.__class__ == C:
+                    C = component.capacitance
                     Cn[i,i] += C
                     if not (u==0 or v==0):
                         Cn[self.nodes_[u],self.nodes_[v]] = -C
@@ -292,9 +300,8 @@ class Circuit:
         Lb = numpy.zeros((self.Nb,self.Nb))
         for i,(u,v) in self.edges.items():
             component = self.G[u][v]
-            #component = component['component']
-            #if component.__class__ == L:
-            if 'L' in component:
+            component = component['component']
+            if component.__class__ == L:
                 Lb[i,i] = component['L'].inductance
         return Lb
 
@@ -311,9 +318,41 @@ class Circuit:
                 Rbn[i][self.nodes_[v]] = -1
         return Rbn
 
+    def modeBasisSize(self,basis):
+        n_baseO *= numpy.prod(basis['O'])
+        n_baseI *= numpy.prod(basis['I'])
+        n_baseJ *= numpy.prod(basis['J'])
+
+        return n_baseO,n_baseI,n_baseJ
+
+    def modeDistribution(self,Ln_):
+        Ni = 1 # defaulted
+        No = numpy.linalg.matrix_rank(Ln_)
+        Nj = self.Nn - Ni - No
+        return No,Ni,Nj
+
     def modeTransformation(self,Ln_):
         No,Ni,Nj = self.modeDistribution(Ln_)
         return R,No,Ni,Nj
+
+    def transformComponents(self):
+        Cn_,Ln_ = self.componentMatrix()
+
+        R,No,Ni,Nj = self.modeTransformation(Ln_)
+        L_ = transformation(Ln_,inverse(R))
+
+        Lo_ = L_[:No,:No]
+        C_ = transformation(Cn_,R.t)
+        Co_ = C_[:No,:No]
+        Coi_ = C_[:No,No:-Nj]
+        Coj_ = C_[:No,-Nj:]
+        Ci_ = C_[No:-Nj,No:-Nj]
+        Cij_ = C_[No:-Nj,-Nj:]
+        Cj_ = C_[-Nj:,-Nj:]
+
+        C_ = Co_,Coi_,Coj_,Ci_,Cij_,Cj_
+
+        return Lo_,C_
 
 if __name__=='__main__':
     H = transmon.hamiltonian_charged([5])

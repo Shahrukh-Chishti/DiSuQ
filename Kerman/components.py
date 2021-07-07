@@ -44,9 +44,10 @@ def chargeDisplaceMinus(n):
     return D
 
 class Elements:
-    def __init__(self,plus,minus):
+    def __init__(self,plus,minus,ID=None):
         self.plus = plus
         self.minus = minus
+        self.ID = None
 
 class J(Elements):
     def __init__(self,plus,minus,energy):
@@ -59,9 +60,10 @@ class C(Elements):
         self.capacitance = capacitance
 
 class L(Elements):
-    def __init__(self,plus,minus,inductance):
+    def __init__(self,plus,minus,inductance,external=None):
         super().__init__(plus,minus)
         self.inductance = inductance
+        self.external = external
 
 
 if __name__=='__main__':
