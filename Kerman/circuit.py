@@ -2,9 +2,9 @@ import numpy,networkx
 import matplotlib.pyplot as plt
 from components import *
 import numpy
-import jax.numpy as jnp
-from jax import grad, jit
-from jax import random
+#import jax.numpy as jnp
+#from jax import grad, jit
+#from jax import random
 
 def modeTensorProduct(pre,M,post):
     """
