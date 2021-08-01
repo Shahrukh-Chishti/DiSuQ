@@ -1,7 +1,7 @@
 import numpy,networkx
 import matplotlib.pyplot as plt
 from components import *
-import numpy
+import numpy,copy
 #import jax.numpy as jnp
 #from jax import grad, jit
 #from jax import random
@@ -100,6 +100,10 @@ class Circuit:
         * no LC component must be in parallel : redundant
         * only Josephson elements allowed in parallel
     """
+    """
+        * u,v : indices of raw graph : GL, minimum_spanning_tree
+        * i,j : indices of indexed graph : mode correspondence
+    """
 
     def __init__(self,network,basis):
         self.network = network
@@ -114,11 +118,11 @@ class Circuit:
 
     def parseCircuit(self):
         G = networkx.MultiGraph()
-        for u,v,component in self.network:
+        for component in self.network:
             weight = 1
             if component.__class__ == J:
                 weight = component.energy
-            G.add_edge(u,v,weight=weight,component=component)
+            G.add_edge(component.plus,component.minus,key=component.ID,weight=weight,component=component)
         return G
 
     def nodeIndex(self):
@@ -135,8 +139,24 @@ class Circuit:
         """
             {(u,v):[,,,]} : MultiGraph edges
         """
-        edges = dict([*enumerate([*self.G.edges()])])
+        edges = dict([*enumerate([*self.G.edges(keys=True)])])
         return edges
+
+    def spanningTree(self):
+        GL = self.graphGL()
+        S = networkx.minimum_spanning_tree(GL)
+        return S
+
+    def graphGL(self):
+        GL = copy.deepcopy(self.G)
+        capacitance_edges = []
+        for u,v,component in GL.edges(data=True):
+            component = component['component']
+            if component.__class__ == C:
+                capacitance_edges.append((u,v,component.ID))
+        GL.remove_edges_from(capacitance_edges)
+
+        return GL
 
     def componentMatrix(self):
         Cn_ = self.nodeCapacitance()
@@ -146,6 +166,91 @@ class Circuit:
         Ln_ = transformation(inverse(Lb+M),Rbn)
 
         return Cn_,Ln_
+
+    def loopFlux(self,u,v,key,external_fluxes):
+        flux = 0
+        external = set(external_fluxes.keys())
+        S = self.spanning_tree
+        path = networkx.shortest_path(S,u,v)
+        for i in range(len(path)-1):
+            multi = S.get_edge_data(path[i],path[i+1])
+            match = external.intersection(set(multi.keys()))
+            if len(match)==1 :
+                component = multi[match.pop()]['component']
+                assert component.__class__ == L
+                assert component.external == True
+                flux += external_fluxes[component.ID]
+
+        return flux
+
+    def josephsonEnergy(self,external_fluxes):
+        """
+            external_fluxes : {identifier:flux_value}
+        """
+        basis = self.basis
+        Dplus = [chargeDisplacePlus(basis_max) for basis_max in basis]
+        Dminus = [chargeDisplaceMinus(basis_max) for basis_max in basis]
+        edges,Ej = self.josephsonComponents()
+        Hj = 0*im
+        for (u,v,key),E in zip(edges,Ej):
+            i,j = self.nodes_[u],self.nodes_[v]
+            flux = self.loopFlux(u,v,key,external_fluxes)
+            if i<0 or j<0:
+                # grounded josephson, without external flux
+                i = max(i,j)
+                Jplus = E*basisProduct(Dplus,[i])*phase(flux)
+                Jminus = E*basisProduct(Dminus,[i])*phase(-flux)
+            else:
+                Jplus = E*crossBasisProduct(Dplus,Dminus,i,j)*phase(flux)
+                Jminus = E*crossBasisProduct(Dplus,Dminus,j,i)*phase(-flux)
+            Hj -= Jplus + Jminus
+
+        return Hj/2
+
+    def josephsonComponents(self):
+        edges,Ej = [],[]
+        for index,(u,v,key) in self.edges.items():
+            component = self.G[u][v][key]['component']
+            if component.__class__ == J:
+                edges.append((u,v,key))
+                Ej.append(component.energy)
+        return edges,Ej
+
+    def nodeCapacitance(self):
+        Cn = numpy.zeros((self.Nn,self.Nn))
+        for i,node in self.nodes.items():
+            for u,v,component in self.G.edges(node,data=True):
+                component = component['component']
+                if component.__class__ == C:
+                    capacitance = component.capacitance
+                    Cn[i,i] += capacitance
+                    if not (u==0 or v==0):
+                        Cn[self.nodes_[u],self.nodes_[v]] = -capacitance
+                        Cn[self.nodes_[v],self.nodes_[u]] = -capacitance
+
+        Cn_ = inverse(Cn)
+        return Cn_
+
+    def branchInductance(self):
+        Lb = numpy.zeros((self.Nb,self.Nb))
+        for index,(u,v,key) in self.edges.items():
+            component = self.G[u][v][key]['component']
+            if component.__class__ == L:
+                Lb[index,index] = component.inductance
+        return Lb
+
+    def mutualInductance(self):
+        M = numpy.zeros((self.Nb,self.Nb))
+        return M
+
+    def connectionPolarity(self):
+        Rbn = numpy.zeros((self.Nb,self.Nn),int)
+        for u,v in self.G.edges():
+            if not (u==0 or v==0):
+                # no polarity on ground
+                Rbn[i][self.nodes_[u]] = 1
+                Rbn[i][self.nodes_[v]] = -1
+        return Rbn
 
     def hamiltonian(self,basis):
         """
@@ -220,103 +325,6 @@ class Circuit:
             eigenenergies = numpy.linalg.eigvals(H)
             energy_spectrum.append(eigenenergies.sort()[0])
         return energy_spectrum
-
-    def loopFlux(self,u,v,external_fluxes):
-        flux = 0
-        S = self.spanning_tree
-        path = networkx.shortest_path(S,u,v)
-        for i in range(len(path)-1):
-            component = S.get_edge_data(path[i],path[i+1])['component']
-            if component.__class__ == L:
-                if not component.external is None:
-                    flux += external_fluxes[component.external]
-
-        return flux
-
-    def josephsonEnergy(self,indices,external_fluxes):
-        """
-            external_fluxes : {identifier:flux_value}
-        """
-        basis = self.basis
-        Dplus = [chargeDisplacePlus(basis_max) for basis_max in basis]
-        Dminus = [chargeDisplaceMinus(basis_max) for basis_max in basis]
-        edges,Ej = self.josephsonComponents()
-        assert len(external_fluxes) == len(edges)
-
-        Hj = 0*im
-        for edge,E in zip(edges,Ej):
-            i,j = edge # assuming polarity on nodes
-            i,j = self.nodes_[i],self.nodes_[j]
-            if i<0 or j<0:
-                # grounded josephson, without external flux
-                i = max(i,j)
-                Jplus = E*basisProduct(Dplus,[i])*phase(flux)
-                Jminus = E*basisProduct(Dminus,[i])*phase(-flux)
-            else:
-                Jplus = E*crossBasisProduct(Dplus,Dminus,i,j)*phase(flux)
-                Jminus = E*crossBasisProduct(Dplus,Dminus,j,i)*phase(-flux)
-            Hj -= Jplus + Jminus
-
-        return Hj/2
-
-    def spanningTree(self):
-        GL = self.graphGL()
-        S = networkx.minimum_spanning_tree(GL)
-        return S
-
-    def graphGL(self):
-        GL = self.G.copy()
-        for u,v,component in GL.edges(data=True):
-            component = component['component']
-            if component.__class__ == C:
-                GL.remove_edge(u,v)
-        return GL
-
-    def josephsonComponents(self):
-        edges,Ej = [],[]
-        for i,(u,v) in self.edges.items():
-            component = self.G[u][v]
-            if 'J' in component:
-                edges.append((u,v))
-                Ej.append(component['J'].energy)
-        return edges,Ej
-
-    def nodeCapacitance(self):
-        Cn = numpy.zeros((self.Nn,self.Nn))
-        for i,node in self.nodes.items():
-            for u,v,component in self.G.edges(node,data=True):
-                component = component['component']
-                if component.__class__ == C:
-                    C = component.capacitance
-                    Cn[i,i] += C
-                    if not (u==0 or v==0):
-                        Cn[self.nodes_[u],self.nodes_[v]] = -C
-                        Cn[self.nodes_[v],self.nodes_[u]] = -C
-
-        Cn_ = inverse(Cn)
-        return Cn_
-
-    def branchInductance(self):
-        Lb = numpy.zeros((self.Nb,self.Nb))
-        for i,(u,v) in self.edges.items():
-            component = self.G[u][v]
-            component = component['component']
-            if component.__class__ == L:
-                Lb[i,i] = component['L'].inductance
-        return Lb
-
-    def mutualInductance(self):
-        M = numpy.zeros((self.Nb,self.Nb))
-        return M
-
-    def connectionPolarity(self):
-        Rbn = numpy.zeros((self.Nb,self.Nn),int)
-        for i,(u,v) in self.edges.items():
-            if not (u==0 or v==0):
-                # no polarity on ground
-                Rbn[i][self.nodes_[u]] = 1
-                Rbn[i][self.nodes_[v]] = -1
-        return Rbn
 
     def modeBasisSize(self,basis):
         n_baseO *= numpy.prod(basis['O'])

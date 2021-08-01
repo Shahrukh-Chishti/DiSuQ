@@ -1,4 +1,4 @@
-import numpy
+import numpy,uuid
 from numpy import cos,sin,pi,exp
 
 im = 1.0j
@@ -47,21 +47,23 @@ class Elements:
     def __init__(self,plus,minus,ID=None):
         self.plus = plus
         self.minus = minus
-        self.ID = None
+        if ID is None:
+            ID = uuid.uuid4().hex
+        self.ID = ID
 
 class J(Elements):
-    def __init__(self,plus,minus,energy):
-        super().__init__(plus,minus)
+    def __init__(self,plus,minus,energy,ID=None):
+        super().__init__(plus,minus,ID)
         self.energy = energy
 
 class C(Elements):
-    def __init__(self,plus,minus,capacitance):
-        super().__init__(plus,minus)
+    def __init__(self,plus,minus,capacitance,ID=None):
+        super().__init__(plus,minus,ID)
         self.capacitance = capacitance
 
 class L(Elements):
-    def __init__(self,plus,minus,inductance,external=None):
-        super().__init__(plus,minus)
+    def __init__(self,plus,minus,inductance,ID=None,external=False):
+        super().__init__(plus,minus,ID)
         self.inductance = inductance
         self.external = external
 

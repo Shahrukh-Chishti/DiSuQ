@@ -9,6 +9,11 @@ __pycache__/
 # Plots
 *.html
 
+# Image files
+*.png
+*.pdf
+*.svg
+
 # Swap files
 *.swp
 
