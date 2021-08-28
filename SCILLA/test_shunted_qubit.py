@@ -19,6 +19,8 @@ circuit_bounds = {'C':{'low':c_specs['low'],'high':c_specs['high']},
 # initialise circuit
 random_circuit = designRandomCircuit(c_specs,j_specs)
 init_pos = numpy.concatenate([random_circuit['capacities'],random_circuit['junctions']])
+Cmat,Jmat = arrayMatrix(init_pos[:3]),arrayMatrix(init_pos[3:])
+"""
 # solve circuit
 loss = lossBuilder(target_spectrum,phiExt,circuit_bounds)
 bounds = defineComponentBounds(circuit_bounds,N)
@@ -34,7 +36,7 @@ print(res)
 print('\n\n')
 print('Capacitances[C11,C12,C22]:',C)
 print('Josephsons[J11,J12,J22]:',J)
-
+"""
 ## plot Eigenspectrum
 spec = [eigen2Node(Cmat,Jmat,phi) for phi in phiExt]
 spec = numpy.array(spec)
