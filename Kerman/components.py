@@ -2,9 +2,12 @@ import numpy,uuid
 from numpy import cos,sin,pi,exp
 
 im = 1.0j
-e = 1
-flux_quanta = 1
-h = 1
+e = 1.60217662 * 10**(-19)
+h = 6.62607004 * 10**(-34)
+flux_quanta = h/2/e
+
+def identity(n):
+    return numpy.eye(n)
 
 def basisQo(n,impedance):
     return Qo*iota*numpy.sqrt(h/2/impedance)
@@ -31,16 +34,14 @@ def basisPj(n):
 
 def chargeDisplacePlus(n):
     """n : charge basis truncation"""
-    D = numpy.zeros((2*n+1,2*n+1),dtype=int)
-    diagonal = numpy.arange(2*n,dtype=int)
-    D[diagonal+1,diagonal] = 1
+    diagonal = numpy.ones((2*n+1)-1,dtype=numpy.complex)
+    D = numpy.diag(diagonal,k=-1)
     return D
 
 def chargeDisplaceMinus(n):
     """n : charge basis truncation"""
-    D = numpy.zeros((2*n+1,2*n+1),dtype=int)
-    diagonal = numpy.arange(2*n,dtype=int)
-    D[diagonal,diagonal+1] = 1
+    diagonal = numpy.ones((2*n+1)-1,dtype=numpy.complex)
+    D = numpy.diag(diagonal,k=1)
     return D
 
 class Elements:
@@ -54,17 +55,17 @@ class Elements:
 class J(Elements):
     def __init__(self,plus,minus,energy,ID=None):
         super().__init__(plus,minus,ID)
-        self.energy = energy
+        self.energy = energy * 10.**9
 
 class C(Elements):
     def __init__(self,plus,minus,capacitance,ID=None):
         super().__init__(plus,minus,ID)
-        self.capacitance = capacitance
+        self.capacitance = capacitance * 10.**(-15)
 
 class L(Elements):
     def __init__(self,plus,minus,inductance,ID=None,external=False):
         super().__init__(plus,minus,ID)
-        self.inductance = inductance
+        self.inductance = inductance * 10.**(-12)
         self.external = external
 
 

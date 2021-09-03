@@ -2,9 +2,7 @@ import numpy,utils
 import numpy as np
 from numpy import cos,sin,pi,exp
 from numpy.linalg import det
-from components import basisPj
-
-im = 1.0j
+from components import basisPj,im,h,e
 
 def hamiltonianEnergy(H):
     eigenenergies = numpy.real(numpy.linalg.eigvals(H))
@@ -25,13 +23,23 @@ def hamiltonianKerman(n,flux):
     Dp = np.diag(np.ones((2*n+1)-1,dtype=np.complex128), k=-1)
     Dm = np.diag(np.ones((2*n+1)-1,dtype=np.complex128), k=1)
     I = np.eye(2*n+1) #identity matrix
-    P = basisPj(n) * 1e12
+    P = basisPj(n)
     P2 = numpy.dot(P,P)
     H = kronecker([I,Dp,Dm])*phase(flux) + kronecker([I,Dm,Dp])*phase(-flux)
     H += kronecker([Dp,Dm,I]) + kronecker([Dm,Dp,I])
     H += kronecker([Dp,I,I]) + kronecker([Dm,I,I])
-    H += kronecker([I,I,P2])/100
+    H -= kronecker([I,I,P2]) / 100 / h
     return H
+
+def josephsonE(n,flux):
+    Dp = np.diag(np.ones((2*n+1)-1,dtype=np.complex128), k=-1)
+    Dm = np.diag(np.ones((2*n+1)-1,dtype=np.complex128), k=1)
+    I = np.eye(2*n+1) #identity matrix
+
+    H = kronecker([I,Dp,Dm])*phase(flux) + kronecker([I,Dm,Dp])*phase(-flux)
+    H += kronecker([Dp,Dm,I]) + kronecker([Dm,Dp,I])
+    H += kronecker([Dp,I,I]) + kronecker([Dm,I,I])
+    return -H * 1e9 / 2
 
 def hamiltonianSCILLA(n,flux):
     Dp = np.diag(np.ones((2*n+1)-1,dtype=np.complex128), k=-1)

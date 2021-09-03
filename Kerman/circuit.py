@@ -1,10 +1,8 @@
-import numpy,networkx
+import networkx,copy
 import matplotlib.pyplot as plt
 from components import *
-import numpy,copy
-#import jax.numpy as jnp
-#from jax import grad, jit
-#from jax import random
+from numpy.linalg import det
+from numpy import kron
 
 def modeTensorProduct(pre,M,post):
     """
@@ -13,28 +11,11 @@ def modeTensorProduct(pre,M,post):
     """
     H = 1
     for dim in pre:
-        H = numpy.kron(H,numpy.ones(dim))
+        H = numpy.kron(H,numpy.identity(dim))
     H = numpy.kron(H,M)
     for dim in post:
-        H = numpy.kron(H,numpy.ones(dim))
+        H = numpy.kron(H,numpy.identity(dim))
     return H
-
-def basisProduct(O,index):
-    """
-        O : basis_operators : list of quantised operators
-        index : index of basis representation
-        returns B : full basis representation : n_basis X n_basis
-    """
-    n = len(O)
-    B = 1
-    for i in range(index-1):
-        n_basis = len(O[i])
-        B = numpy.kron(B,numpy.ones(n_basis,n_basis))
-    B = numpy.kron(B,O[index])
-    for i in range(index,n):
-        n_basis = len(O[i])
-        B = numpy.kron(B,numpy.ones(n_basis,n_basis))
-    return B
 
 def crossBasisProduct(A,B,a,b):
     assert len(A)==len(B)
@@ -61,7 +42,7 @@ def basisProduct(O,indices):
 
 def modeMatrixProduct(A,M,B,cross_product=False):
     """
-        M : mode operator
+        M : mode operator, implementing mode interactions
         B : list : basis operators
         A : list : basis operators(transpose)
         cross_product : indicates if A!=B, assumed ordering : AxB
@@ -75,12 +56,15 @@ def modeMatrixProduct(A,M,B,cross_product=False):
             left = basisProduct(A,[i])
             right = basisProduct(B,[j])
             if cross_product:
-                left = numpy.kron(left,numpy.ones(1,len(right)))
-                right = numpy.kron(numpy.ones(len(left),1),right)
+                left = numpy.kron(left,numpy.identity(1,len(right)))
+                right = numpy.kron(numpy.identity(len(left),1),right)
 
-            H += M[i,j]*numpy.dot(left,right)
+            H += M[i,j]*dotProduct(left,right)
 
     return H
+
+def dotProduct(left,right):
+    return numpy.dot(left,right)
 
 def inverse(A):
     if numpy.linalg.det(A) == 0:
@@ -88,11 +72,17 @@ def inverse(A):
     return numpy.linalg.inv(A)
 
 def phase(phi):
+    # phi = flux/flux_quanta
     return exp(im*2*pi*phi)
 
 def transformation(M,T):
     # need reecheck for transpose
-    return numpy.dot(T.T,M.dot(T))
+    return dotProduct(T.T,dotProduct(M,T))
+
+def hamiltonianEnergy(H):
+    eigenenergies = numpy.real(numpy.linalg.eigvals(H))
+    eigenenergies.sort()
+    return eigenenergies
 
 class Circuit:
     """
@@ -121,7 +111,7 @@ class Circuit:
         for component in self.network:
             weight = 1
             if component.__class__ == J:
-                weight = component.energy
+                weight = component.energy * 1e-9
             G.add_edge(component.plus,component.minus,key=component.ID,weight=weight,component=component)
         return G
 
@@ -168,6 +158,9 @@ class Circuit:
         return Cn_,Ln_
 
     def loopFlux(self,u,v,key,external_fluxes):
+        """
+            external_fluxes : {identifier:flux_value}
+        """
         flux = 0
         external = set(external_fluxes.keys())
         S = self.spanning_tree
@@ -175,6 +168,8 @@ class Circuit:
         for i in range(len(path)-1):
             multi = S.get_edge_data(path[i],path[i+1])
             match = external.intersection(set(multi.keys()))
+            # multiple external flux forbidden on same branch
+            assert len(match) <= 2
             if len(match)==1 :
                 component = multi[match.pop()]['component']
                 assert component.__class__ == L
@@ -182,30 +177,6 @@ class Circuit:
                 flux += external_fluxes[component.ID]
 
         return flux
-
-    def josephsonEnergy(self,external_fluxes):
-        """
-            external_fluxes : {identifier:flux_value}
-        """
-        basis = self.basis
-        Dplus = [chargeDisplacePlus(basis_max) for basis_max in basis]
-        Dminus = [chargeDisplaceMinus(basis_max) for basis_max in basis]
-        edges,Ej = self.josephsonComponents()
-        Hj = 0*im
-        for (u,v,key),E in zip(edges,Ej):
-            i,j = self.nodes_[u],self.nodes_[v]
-            flux = self.loopFlux(u,v,key,external_fluxes)
-            if i<0 or j<0:
-                # grounded josephson, without external flux
-                i = max(i,j)
-                Jplus = E*basisProduct(Dplus,[i])*phase(flux)
-                Jminus = E*basisProduct(Dminus,[i])*phase(-flux)
-            else:
-                Jplus = E*crossBasisProduct(Dplus,Dminus,i,j)*phase(flux)
-                Jminus = E*crossBasisProduct(Dplus,Dminus,j,i)*phase(-flux)
-            Hj -= Jplus + Jminus
-
-        return Hj/2
 
     def josephsonComponents(self):
         edges,Ej = [],[]
@@ -215,6 +186,19 @@ class Circuit:
                 edges.append((u,v,key))
                 Ej.append(component.energy)
         return edges,Ej
+
+    def fluxBiasComponents(self):
+        """
+            Inducer : Inductor introduces external flux bias
+        """
+        edges,L_ext = [],[]
+        for index,(u,v,key) in self.edges.items():
+            component = self.G[u][v][key]['component']
+            if component.__class__ == L:
+                if component.external:
+                    edges.append((u,v,key))
+                    L_ext.append(component.inductance)
+        return edges,L_ext
 
     def nodeCapacitance(self):
         Cn = numpy.zeros((self.Nn,self.Nn))
@@ -236,7 +220,8 @@ class Circuit:
         for index,(u,v,key) in self.edges.items():
             component = self.G[u][v][key]['component']
             if component.__class__ == L:
-                Lb[index,index] = component.inductance
+                if not component.external:
+                    Lb[index,index] = component.inductance
         return Lb
 
     def mutualInductance(self):
@@ -245,14 +230,50 @@ class Circuit:
 
     def connectionPolarity(self):
         Rbn = numpy.zeros((self.Nb,self.Nn),int)
-        for u,v in self.G.edges():
+        for index,(u,v) in enumerate(self.G.edges()):
             if not (u==0 or v==0):
                 # no polarity on ground
-                Rbn[i][self.nodes_[u]] = 1
-                Rbn[i][self.nodes_[v]] = -1
+                Rbn[index][self.nodes_[u]] = 1
+                Rbn[index][self.nodes_[v]] = -1
         return Rbn
 
-    def hamiltonian(self,basis):
+    def modeBasisSize(self,basis):
+        n_baseO *= numpy.prod(basis['O'])
+        n_baseI *= numpy.prod(basis['I'])
+        n_baseJ *= numpy.prod(basis['J'])
+
+        return n_baseO,n_baseI,n_baseJ
+
+    def modeDistribution(self,Ln_):
+        Ni = 1 # defaulted
+        No = numpy.linalg.matrix_rank(Ln_)
+        Nj = self.Nn - Ni - No
+        return No,Ni,Nj
+
+    def modeTransformation(self,Ln_):
+        No,Ni,Nj = self.modeDistribution(Ln_)
+        return R,No,Ni,Nj
+
+    def transformComponents(self):
+        Cn_,Ln_ = self.componentMatrix()
+
+        R,No,Ni,Nj = self.modeTransformation(Ln_)
+        L_ = transformation(Ln_,inverse(R))
+
+        Lo_ = L_[:No,:No]
+        C_ = transformation(Cn_,R.t)
+        Co_ = C_[:No,:No]
+        Coi_ = C_[:No,No:-Nj]
+        Coj_ = C_[:No,-Nj:]
+        Ci_ = C_[No:-Nj,No:-Nj]
+        Cij_ = C_[No:-Nj,-Nj:]
+        Cj_ = C_[-Nj:,-Nj:]
+
+        C_ = Co_,Coi_,Coj_,Ci_,Cij_,Cj_
+
+        return Lo_,C_
+
+    def hamiltonianKerman(self,basis):
         """
             basis : {O:(,,,),I:(,,,),J:(,,,)}
         """
@@ -297,6 +318,47 @@ class Circuit:
 
         return Ho+Hint+Hi+Hj
 
+    def josephsonEnergy(self,external_fluxes=dict()):
+        basis = self.basis
+        Dplus = [chargeDisplacePlus(basis_max) for basis_max in basis]
+        Dminus = [chargeDisplaceMinus(basis_max) for basis_max in basis]
+        edges,Ej = self.josephsonComponents()
+        H = 0
+        for (u,v,key),E in zip(edges,Ej):
+            i,j = self.nodes_[u],self.nodes_[v]
+            flux = self.loopFlux(u,v,key,external_fluxes)
+            #print(u,v,i,j,flux)
+            if i<0 or j<0 :
+                # grounded josephson
+                i = max(i,j)
+                Jplus = basisProduct(Dplus,[i])
+                Jminus = basisProduct(Dminus,[i])
+            else:
+                Jplus = crossBasisProduct(Dplus,Dminus,i,j)
+                Jminus = crossBasisProduct(Dplus,Dminus,j,i)
+                #assert (Jminus == Jplus.conj().T).all()
+            Hj = E*(Jplus*phase(flux) + Jminus*phase(-flux))
+            H -= Hj
+
+        return H/2
+
+    def fluxInducerEnergy(self):
+        basis = self.basis
+        fluxModes = [basisPj(basis_max) for basis_max in basis]
+        edges,L_ext = self.fluxBiasComponents()
+        H = 0
+        for (u,v,key),L in zip(edges,L_ext):
+            i,j = self.nodes_[u],self.nodes_[v]
+            #print(u,v,i,j,L)
+            if i<0 or j<0 :
+                # grounded inducer
+                i = max(i,j)
+                P = basisProduct(fluxModes,[i])
+            else:
+                P = basisProduct(fluxModes,[i]) - basisProduct(fluxModes,[j])
+            H += dotProduct(P,P) / 2 / L
+        return H / h
+
     def hamiltonianLC(self):
         """
             basis : [basis_size] charge
@@ -309,63 +371,45 @@ class Circuit:
         C = modeMatrixProduct(Q,Cn_,Q)
         L = modeMatrixProduct(P,Ln_,P)
 
-        H = (C+L)/2
+        H = (C+L)/2/h
 
         return H
 
-    def spectrum(self,flux_range,flux_points):
+    def circuitEnergy(self,external_fluxes=dict()):
+        H_LC = self.hamiltonianLC()
+        H_ext = self.fluxInducerEnergy()
+        H_J = self.josephsonEnergy(external_fluxes)
+        H = H_LC + H_ext + H_J
+        eigenenergies = hamiltonianEnergy(H) / 1e9
+        return eigenenergies
+
+    def spectrumManifold(self,flux_points,flux_manifold,excitation=1):
         """
-            external_fluxes : [edges index: range]
+            flux_points : inductor identifier for external introduction
+            flux_manifold : [(fluxes)]
         """
         #manifold of flux space M
-        energy_spectrum = []
-        for point in manifold:
-            Hj = self.josephsonEnergy(point)
-            H = Hj + self.hamiltonianLC()
-            eigenenergies = numpy.linalg.eigvals(H)
-            energy_spectrum.append(eigenenergies.sort()[0])
-        return energy_spectrum
-
-    def modeBasisSize(self,basis):
-        n_baseO *= numpy.prod(basis['O'])
-        n_baseI *= numpy.prod(basis['I'])
-        n_baseJ *= numpy.prod(basis['J'])
-
-        return n_baseO,n_baseI,n_baseJ
-
-    def modeDistribution(self,Ln_):
-        Ni = 1 # defaulted
-        No = numpy.linalg.matrix_rank(Ln_)
-        Nj = self.Nn - Ni - No
-        return No,Ni,Nj
-
-    def modeTransformation(self,Ln_):
-        No,Ni,Nj = self.modeDistribution(Ln_)
-        return R,No,Ni,Nj
-
-    def transformComponents(self):
-        Cn_,Ln_ = self.componentMatrix()
-
-        R,No,Ni,Nj = self.modeTransformation(Ln_)
-        L_ = transformation(Ln_,inverse(R))
-
-        Lo_ = L_[:No,:No]
-        C_ = transformation(Cn_,R.t)
-        Co_ = C_[:No,:No]
-        Coi_ = C_[:No,No:-Nj]
-        Coj_ = C_[:No,-Nj:]
-        Ci_ = C_[No:-Nj,No:-Nj]
-        Cij_ = C_[No:-Nj,-Nj:]
-        Cj_ = C_[-Nj:,-Nj:]
-
-        C_ = Co_,Coi_,Coj_,Ci_,Cij_,Cj_
-
-        return Lo_,C_
+        energy_spectrum,E0 = [],[]
+        H_LC = self.hamiltonianLC()
+        H_ext = self.fluxInducerEnergy()
+        for fluxes in flux_manifold:
+            external_fluxes = dict(zip(flux_points,fluxes))
+            H_J = self.josephsonEnergy(external_fluxes)
+            H = H_LC + H_ext + H_J
+            eigenenergies = hamiltonianEnergy(H) / 1e9
+            E0.append(eigenenergies[0])
+            energy_spectrum.append(eigenenergies[excitation]-eigenenergies[0])
+        return E0,energy_spectrum
 
 if __name__=='__main__':
-    H = transmon.hamiltonian_charged([5])
-    spectrum = numpy.linalg.eigvals(H)
-    spectrum.sort()
-    #networkx.draw_spring(transmon.G)
-    #plt.show()
-    import ipdb;ipdb.set_trace()
+    circuit = shuntedQubit([2,2,2])
+    utils.plotMatPlotGraph(circuit.G,'circuit')
+    utils.plotMatPlotGraph(circuit.spanning_tree,'spanning_tree')
+    flux_manifold = zip(numpy.arange(0,1,.01))
+    from test_flux_spectrum import josephsonE
+    Ej0 = josephsonE(1,.125)
+    Ej1 = circuit.josephsonEnergy({'I':.125})
+    e1 = hamiltonianEnergy(Ej1)
+    Ej2 = circuit.josephsonEnergy({'I':.0003})
+    e2 = hamiltonianEnergy(Ej2)
+    import ipdb; ipdb.set_trace()

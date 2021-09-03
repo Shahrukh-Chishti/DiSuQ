@@ -4,8 +4,12 @@ from qucat import Network,J,C,L,R
 from scipy.constants import pi,hbar, h, e
 
 def transmon():
-    cir = Network([J(0,1,100e-15),C(0,1,500e-15),L(0,1,'Lj')])
-    return cir
+    cir = [J(0,1,1000e-9),C(0,1,50000e-15)]
+    return Network(cir)
+
+def oscillatorLC():
+    cir = [L(0,1,1000e-12),C(0,1,4000e-15)]
+    return Network(cir)
 
 def Lj(phi):
     # maximum Josephson energy
@@ -17,3 +21,8 @@ def Lj(phi):
     # Josephson energy to inductance
     return (hbar/2/e)**2/(Ej*h)
 
+if __name__ == '__main__':
+    circuit = oscillatorLC()
+    H = circuit.hamiltonian()
+    ee = H.eigenenergies()
+    print(ee[1])
