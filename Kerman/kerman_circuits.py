@@ -16,9 +16,9 @@ def oscillatorLC(basis):
     return Circuit(oscillator,basis)
 
 def shuntedQubit(basis):
-    circuit = [J(1,2,10),C(1,2,1000)]
-    circuit += [J(2,3,100),C(2,3,5500)]
-    circuit += [J(3,0,150),C(3,0,2500)]
+    circuit = [J(1,2,10),C(1,2,1.5)]
+    circuit += [J(2,3,100),C(2,3,5.5)]
+    circuit += [J(3,0,150),C(3,0,2.5)]
     circuit += [L(0,1,10,'I',True)]
 
     circuit = Circuit(circuit,basis)
@@ -48,7 +48,7 @@ def testPhaseSlip():
     utils.plotCompare(numpy.arange(0,1,.01),{'excitation':spectrum,'ground_state':E0})
 
 if __name__=='__main__':
-    circuit = shuntedQubit([4,4,4])
+    circuit = shuntedQubit([3,3,3])
     flux_manifold = zip(numpy.arange(0,1,.05))
     E0,spectrum = circuit.spectrumManifold(['I'],flux_manifold)
     utils.plotCompare(numpy.arange(0,1,.05),{'excitation':spectrum,'ground_state':E0})

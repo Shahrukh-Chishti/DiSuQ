@@ -8,10 +8,11 @@ e = 1.60217662 * 10**(-19)
 h = 6.62607004 * 10**(-34)
 hbar = h/2/pi
 flux_quanta = h/2/e
+Z0 = h/4/e/e
 
 # parasitic statics
-C_limit = 1e-15
-L_limit = 1e-6
+C_limit = 1e-15 * Z0
+L_limit = 1e-6 / Z0
 
 def diagonalisation(M):
     eig,vec = numpy.linalg.eig(M)
@@ -30,13 +31,13 @@ def basisQo(n,impedance):
     Qo = numpy.arange(1,n)
     Qo = numpy.sqrt(Qo)
     Qo = -numpy.diag(Qo,k=1) + numpy.diag(Qo,k=-1)
-    return Qo*im*numpy.sqrt(hbar/2/impedance)
+    return Qo*im*numpy.sqrt(1/4/pi/impedance/Z0))
 
 def basisPo(n,impedance):
     Po = numpy.arange(1,n)
     Po = numpy.sqrt(Po)
     Po = numpy.diag(Po,k=1) + numpy.diag(Po,k=-1)
-    return Po*numpy.sqrt(hbar*impedance/2)
+    return Po*numpy.sqrt(impedance/4/pi*Z0)
 
 def fluxFlux(n,impedance):
     Po = basisPo(n,impedance)
@@ -71,7 +72,7 @@ def basisQji(n):
     charge = numpy.linspace(n,-n,2*n+1,dtype=int)
     Qji = numpy.zeros((len(charge),len(charge)),numpy.complex128)
     numpy.fill_diagonal(Qji,charge)
-    return Qji*2*e
+    return Qji
 
 def basisPj(n):
     # charge basis
@@ -81,7 +82,7 @@ def basisPj(n):
     for q in charge:
         for p in charge:
             if not p==q:
-                P[q,p] = flux_quanta*(-(n+1)*sin(2*pi*(q-p)*n/N) + n*sin(2*pi*(q-p)*(n+1)/N))
+                P[q,p] = (-(n+1)*sin(2*pi*(q-p)*n/N) + n*sin(2*pi*(q-p)*(n+1)/N))
                 P[q,p] /= -im*N*(1-cos(2*pi*(q-p)/N))*N
     return P
 
@@ -93,7 +94,7 @@ def basisFj(n):
     for q in charge:
         for p in charge:
             P[q,p] = sum([k*sin(2*pi/N*(q-p)*k) for k in range(1,n+1)])
-    P *= 2*im*flux_quanta/(N*N)
+    P *= 2*im/(N*N)
     return P
 
 def chargeDisplacePlus(n):

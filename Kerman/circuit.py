@@ -357,7 +357,7 @@ class Circuit:
             else:
                 P = basisProduct(fluxModes,[i]) - basisProduct(fluxModes,[j])
             H += dotProduct(P,P) / 2 / L
-        return H / h
+        return H
 
     def hamiltonianLC(self):
         """
@@ -373,7 +373,7 @@ class Circuit:
         H_C = modeMatrixProduct(Q,Cn_,Q)
         H_L = modeMatrixProduct(P,Ln_,P)
 
-        H = (H_C+H_L)/2/h
+        H = (H_C+H_L)/2
 
         return H
 
@@ -389,7 +389,7 @@ class Circuit:
         C = modeMatrixProduct(Q,Cn_,Q)
         L = modeMatrixProduct(P,Ln_,P)
 
-        H = (C+L)/2/h
+        H = (C+L)/2
 
         return H
 

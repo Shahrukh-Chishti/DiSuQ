@@ -94,7 +94,7 @@ def fluxBasisLC(n):
     charge2 = numpy.dot(charge,charge)
 
     H = charge2/C/2 + flux2/L/2
-    return H / h
+    return H
 
 def chargeBasisLC(n):
     N = 2*n + 1
@@ -107,7 +107,7 @@ def chargeBasisLC(n):
     charge2 = numpy.dot(charge,charge)
 
     H = charge2/C/2 + flux2/L/2
-    return H / h
+    return H
 
 def oscillatorLC(n):
     L,C = 1000e-12,4000e-15
@@ -119,7 +119,7 @@ def oscillatorLC(n):
     charge2 = numpy.dot(charge,charge)
 
     H = charge2/C/2 + flux2/L/2
-    return H / h
+    return H
 
 def basisTransformation(n):
     Po = numpy.arange(1,n)
