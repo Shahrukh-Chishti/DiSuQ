@@ -1,8 +1,7 @@
-import numpy,utils
+import numpy,utils,sys
 import numpy as np
-from numpy import cos,sin,pi,exp
-from numpy.linalg import det
-from components import basisPj,im,h,e
+from numpy.linalg import det,norm
+from components import *
 
 def hamiltonianEnergy(H):
     eigenenergies = numpy.real(numpy.linalg.eigvals(H))
@@ -66,7 +65,88 @@ def spectrumFlux(flux_manifold):
         spectrum.append(ground_energy)
     return spectrum
 
+def fluxBasisLC(n):
+    N = 2*n + 1
+    L,C = 10e-6,1e-18
+    flux_max = 4*pi*flux_quanta
+    flux = numpy.linspace(-flux_max,flux_max,N)
+    delta = abs(flux[1]-flux[0])
+    flux = numpy.diag(flux)
+    flux2 = numpy.dot(flux,flux)
+
+    charge = -numpy.diag(numpy.ones(N-1),k=-1)
+    charge += numpy.diag(numpy.ones(N-1),k=1)
+    charge = hbar/2/delta * charge
+    charge2 = -numpy.dot(charge,charge)
+    #import ipdb; ipdb.set_trace()
+
+    H = (charge2/C + flux2/L)/2/h
+    return H
+
+def fluxBasisLC(n):
+    N = 2*n + 1
+    L,C = 1000e-12,4000e-15
+    impedance = numpy.sqrt(L/C)
+    flux = fluxFlux(N,impedance)
+    flux2 = numpy.dot(flux,flux)
+
+    charge = chargeFlux(N,impedance)
+    charge2 = numpy.dot(charge,charge)
+
+    H = charge2/C/2 + flux2/L/2
+    return H / h
+
+def chargeBasisLC(n):
+    N = 2*n + 1
+    L,C = 1000e-12,4000e-15
+    impedance = numpy.sqrt(L/C)
+    flux = fluxCharge(N,impedance)
+    flux2 = numpy.dot(flux,flux)
+
+    charge = chargeCharge(N,impedance)
+    charge2 = numpy.dot(charge,charge)
+
+    H = charge2/C/2 + flux2/L/2
+    return H / h
+
+def oscillatorLC(n):
+    L,C = 1000e-12,4000e-15
+    impedance = numpy.sqrt(L/C)
+    flux = basisPo(n,impedance)
+    flux2 = numpy.dot(flux,flux)
+
+    charge = basisQo(n,impedance)
+    charge2 = numpy.dot(charge,charge)
+
+    H = charge2/C/2 + flux2/L/2
+    return H / h
+
+def basisTransformation(n):
+    Po = numpy.arange(1,n)
+    Po = numpy.sqrt(Po)
+    Po = numpy.diag(Po,k=1) + numpy.diag(Po,k=-1)
+
+    Qo = numpy.arange(1,n)
+    Qo = numpy.sqrt(Qo)
+    Qo = -numpy.diag(Qo,k=1) + numpy.diag(Qo,k=-1)
+    Qo = numpy.asarray(Qo,dtype=numpy.complex128)
+    Qo *= im
+
+    import ipdb; ipdb.set_trace()
+    D = diagonalisation(Po)
+    Pp = unitaryTransformation(Po,D)
+    Qp = unitaryTransformation(Qo,D)
+
+    G = diagonalisation(Qo)
+    Qq = unitaryTransformation(Qo,G)
+    Pq = unitaryTransformation(Po,G)
+
 if __name__ == "__main__":
+    H = oscillatorLC(15)
+    E = hamiltonianEnergy(H[:-1,:-1]) / 1e9
+    print(E)
+    import ipdb; ipdb.set_trace()
+    sys.exit(0)
     flux_manifold = numpy.arange(0,3,.01)
     spectrum = spectrumFlux(flux_manifold)
     utils.plotCompare(numpy.arange(0,3,.01),{'I':spectrum})

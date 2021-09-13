@@ -76,7 +76,6 @@ def phase(phi):
     return exp(im*2*pi*phi)
 
 def transformation(M,T):
-    # need reecheck for transpose
     return dotProduct(T.T,dotProduct(M,T))
 
 def hamiltonianEnergy(H):
@@ -149,7 +148,8 @@ class Circuit:
         return GL
 
     def componentMatrix(self):
-        Cn_ = self.nodeCapacitance()
+        Cn = self.nodeCapacitance()
+        Cn_ = inverse(Cn)
         Rbn = self.connectionPolarity()
         Lb = self.branchInductance()
         M = self.mutualInductance()
@@ -211,12 +211,11 @@ class Circuit:
                     if not (u==0 or v==0):
                         Cn[self.nodes_[u],self.nodes_[v]] = -capacitance
                         Cn[self.nodes_[v],self.nodes_[u]] = -capacitance
-
-        Cn_ = inverse(Cn)
-        return Cn_
+        return Cn
 
     def branchInductance(self):
         Lb = numpy.zeros((self.Nb,self.Nb))
+        numpy.fill_diagonal(Lb,L_limit)
         for index,(u,v,key) in self.edges.items():
             component = self.G[u][v][key]['component']
             if component.__class__ == L:
@@ -231,10 +230,11 @@ class Circuit:
     def connectionPolarity(self):
         Rbn = numpy.zeros((self.Nb,self.Nn),int)
         for index,(u,v) in enumerate(self.G.edges()):
-            if not (u==0 or v==0):
-                # no polarity on ground
+            if not u==0:
                 Rbn[index][self.nodes_[u]] = 1
+            if not v==0:
                 Rbn[index][self.nodes_[v]] = -1
+
         return Rbn
 
     def modeBasisSize(self,basis):
@@ -366,6 +366,24 @@ class Circuit:
         Cn_,Ln_ = self.Cn_,self.Ln_
         basis = self.basis
 
+        impedance = [sqrt(Cn_[i,i]/Ln_[i,i]) for i in range(len(basis))]
+        Q = [chargeCharge(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
+        P = [fluxCharge(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
+
+        H_C = modeMatrixProduct(Q,Cn_,Q)
+        H_L = modeMatrixProduct(P,Ln_,P)
+
+        H = (H_C+H_L)/2/h
+
+        return H
+
+    def hamiltonianLC(self):
+        """
+            basis : [basis_size] charge
+        """
+        Cn_,Ln_ = self.Cn_,self.Ln_
+        basis = self.basis
+
         Q = [basisQji(basis_max) for basis_max in basis]
         P = [basisPj(basis_max) for basis_max in basis]
         C = modeMatrixProduct(Q,Cn_,Q)
@@ -375,11 +393,13 @@ class Circuit:
 
         return H
 
-    def circuitEnergy(self,external_fluxes=dict()):
+    def circuitEnergy(self,external_fluxes=dict(),exclude=False):
         H_LC = self.hamiltonianLC()
         H_ext = self.fluxInducerEnergy()
         H_J = self.josephsonEnergy(external_fluxes)
         H = H_LC + H_ext + H_J
+        if exclude:
+            H = H[:-1,:-1]
         eigenenergies = hamiltonianEnergy(H) / 1e9
         return eigenenergies
 

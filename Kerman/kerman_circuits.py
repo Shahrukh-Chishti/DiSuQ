@@ -1,6 +1,6 @@
 import numpy,utils,sys
 from circuit import Circuit, hamiltonianEnergy, phase
-from components import J,C,L
+from components import J,C,L,pi,h
 from numpy.linalg import det
 from pyvis import network as pvnet
 
@@ -38,23 +38,17 @@ def phaseSlip(basis):
     circuit = Circuit(circuit,basis)
     return circuit
 
-if __name__=='__main__':
+def testPhaseSlip():
     circuit = phaseSlip([1,1,1,1,1,1,1])
-    bias_flux = {'Ltl':.3,'Lbl':.1,'Ltr':.09,'Lbr':.23,'Ll':.45}
-    utils.plotMatPlotGraph(circuit.G,'circuit')
-    utils.plotMatPlotGraph(circuit.spanning_tree,'spanning_tree')
-    eigenenergies = circuit.circuitEnergy(bias_flux)
-    print(eigenenergies)
-    sys.exit(0)
-    circuit = oscillatorLC([2])
-    eigenenergies = circuit.circuitEnergy(dict())
-    print(eigenenergies[1])
-    sys.exit(0)
-    circuit = transmon([2],False)
-    eigenenergies = circuit.circuitEnergy(dict())
-    print(eigenenergies[0])
-    sys.exit(0)
-    circuit = transmon([2])
-    flux_manifold = zip(numpy.arange(0,1,.01))
-    E0,spectrum = circuit.spectrumManifold(['I'],flux_manifold)
+    flux_range = numpy.arange(0,1,.01)
+    flux_static = [.01]*len(flux_range)
+    flux_static = [flux_static]*4
+    flux_manifold = zip(*flux_static,flux_range) # variation in Ll
+    E0,spectrum = circuit.spectrumManifold(['Ltl','Lbl','Ltr','Lbr','Ll'],flux_manifold)
     utils.plotCompare(numpy.arange(0,1,.01),{'excitation':spectrum,'ground_state':E0})
+
+if __name__=='__main__':
+    circuit = shuntedQubit([4,4,4])
+    flux_manifold = zip(numpy.arange(0,1,.05))
+    E0,spectrum = circuit.spectrumManifold(['I'],flux_manifold)
+    utils.plotCompare(numpy.arange(0,1,.05),{'excitation':spectrum,'ground_state':E0})

@@ -23,6 +23,6 @@ def Lj(phi):
 
 if __name__ == '__main__':
     circuit = oscillatorLC()
-    H = circuit.hamiltonian()
-    ee = H.eigenenergies()
-    print(ee[1])
+    H = circuit.hamiltonian(taylor=5,excitations=[5])
+    ee = H.eigenenergies() / 1e9 
+    print(ee)
