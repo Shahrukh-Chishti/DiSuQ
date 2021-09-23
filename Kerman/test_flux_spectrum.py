@@ -110,8 +110,17 @@ def chargeBasisLC(n):
     return H
 
 def oscillatorLC(n):
-    L,C = 1000e-12,4000e-15
+    L,C = 1000e-12,4000e-15 # SI units
+    L *= 1e9 # GHz
+    C *= 1e9 # GHz
+    print(numpy.sqrt(L/C))
+    # energy  units
+    L = L * 2 * h / flux_quanta**2
+    C = C * 2 * h / 4 / e / e
+    print(C)
+    print(L)
     impedance = numpy.sqrt(L/C)
+    print(impedance*Z0)
     flux = basisPo(n,impedance)
     flux2 = numpy.dot(flux,flux)
 
@@ -143,8 +152,8 @@ def basisTransformation(n):
 
 if __name__ == "__main__":
     H = oscillatorLC(15)
-    E = hamiltonianEnergy(H[:-1,:-1]) / 1e9
-    print(E)
+    E = hamiltonianEnergy(H[:-1,:-1])# / 1e9
+    print(numpy.diff(E))
     import ipdb; ipdb.set_trace()
     sys.exit(0)
     flux_manifold = numpy.arange(0,3,.01)

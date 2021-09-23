@@ -11,7 +11,7 @@ def plotCompare(x,plot):
     fig = []
     for name,values in plot.items():
         fig.append(go.Scatter(x=x,y=values,name=name))
-    py.plot(fig)
+    py.iplot(fig)
 
 def view_pydot(G):
     #import ipdb; ipdb.set_trace()

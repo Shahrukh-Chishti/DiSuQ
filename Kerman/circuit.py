@@ -102,7 +102,8 @@ class Circuit:
         self.nodes,self.nodes_ = self.nodeIndex()
         self.edges = self.edgesIndex()
         self.Nn = len(self.nodes)
-        self.Nb = len(self.edges)
+        self.edges_inductive = self.edgesInductance()
+        self.Nb = len(self.edges_inductive)
         self.Cn_,self.Ln_ = self.componentMatrix()
 
     def parseCircuit(self):
@@ -200,6 +201,14 @@ class Circuit:
                     L_ext.append(component.inductance)
         return edges,L_ext
 
+    def edgesInductance(self):
+        edges_inductive = dict()
+        for index,(u,v,key) in self.edges.items():
+            component = self.G[u][v][key]['component']
+            if component.__class__ == L:
+                edges_inductive[index] = (u,v,key)
+        return edges_inductive
+
     def nodeCapacitance(self):
         Cn = numpy.zeros((self.Nn,self.Nn))
         for i,node in self.nodes.items():
@@ -215,12 +224,12 @@ class Circuit:
 
     def branchInductance(self):
         Lb = numpy.zeros((self.Nb,self.Nb))
-        numpy.fill_diagonal(Lb,L_limit)
-        for index,(u,v,key) in self.edges.items():
+        #numpy.fill_diagonal(Lb,L_limit)
+        for index,(u,v,key) in self.edges_inductive.items():
             component = self.G[u][v][key]['component']
             if component.__class__ == L:
-                if not component.external:
-                    Lb[index,index] = component.inductance
+                #if not component.external:
+                Lb[index,index] = component.inductance
         return Lb
 
     def mutualInductance(self):
@@ -229,7 +238,7 @@ class Circuit:
 
     def connectionPolarity(self):
         Rbn = numpy.zeros((self.Nb,self.Nn),int)
-        for index,(u,v) in enumerate(self.G.edges()):
+        for index,(u,v,key) in self.edges_inductive.items():
             if not u==0:
                 Rbn[index][self.nodes_[u]] = 1
             if not v==0:
@@ -359,7 +368,43 @@ class Circuit:
             H += dotProduct(P,P) / 2 / L
         return H
 
-    def hamiltonianLC(self):
+    def oscillatorHamiltonianLC(self):
+        """
+            basis : [basis_size] charge
+        """
+        Cn_,Ln_ = self.Cn_,self.Ln_
+        basis = self.basis
+
+        impedance = [sqrt(Cn_[i,i]/Ln_[i,i]) for i in range(len(basis))]
+        Q = [basisQo(2*basis_max+1,impedance[index]) for index,basis_max in enumerate(basis)]
+        P = [basisPo(2*basis_max+1,impedance[index]) for index,basis_max in enumerate(basis)]
+
+        H_C = modeMatrixProduct(Q,Cn_,Q)
+        H_L = modeMatrixProduct(P,Ln_,P)
+
+        H = (H_C+H_L)/2
+
+        return H
+
+    def fluxHamiltonianLC(self):
+        """
+            basis : [basis_size] charge
+        """
+        Cn_,Ln_ = self.Cn_,self.Ln_
+        basis = self.basis
+
+        impedance = [sqrt(Cn_[i,i]/Ln_[i,i]) for i in range(len(basis))]
+        Q = [chargeFlux(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
+        P = [fluxFlux(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
+
+        H_C = modeMatrixProduct(Q,Cn_,Q)
+        H_L = modeMatrixProduct(P,Ln_,P)
+
+        H = (H_C+H_L)/2
+
+        return H
+
+    def chargeHamiltonianLC(self):
         """
             basis : [basis_size] charge
         """
@@ -377,7 +422,7 @@ class Circuit:
 
         return H
 
-    def hamiltonianLC(self):
+    def kermanHamiltonianLC(self):
         """
             basis : [basis_size] charge
         """
@@ -386,37 +431,37 @@ class Circuit:
 
         Q = [basisQji(basis_max) for basis_max in basis]
         P = [basisPj(basis_max) for basis_max in basis]
-        C = modeMatrixProduct(Q,Cn_,Q)
-        L = modeMatrixProduct(P,Ln_,P)
+        H_C = modeMatrixProduct(Q,Cn_,Q)
+        H_L = modeMatrixProduct(P,Ln_,P)
 
-        H = (C+L)/2
+        H = (H_C+H_L)/2
 
         return H
 
-    def circuitEnergy(self,external_fluxes=dict(),exclude=False):
-        H_LC = self.hamiltonianLC()
-        H_ext = self.fluxInducerEnergy()
+    def circuitEnergy(self,H_LC=0,external_fluxes=dict(),exclude=False):
+        #H_LC = self.hamiltonianLC()
+        #H_ext = self.fluxInducerEnergy()
         H_J = self.josephsonEnergy(external_fluxes)
-        H = H_LC + H_ext + H_J
+        H = H_LC + H_J
         if exclude:
             H = H[:-1,:-1]
-        eigenenergies = hamiltonianEnergy(H) / 1e9
+        eigenenergies = hamiltonianEnergy(H)
         return eigenenergies
 
-    def spectrumManifold(self,flux_points,flux_manifold,excitation=1):
+    def spectrumManifold(self,flux_points,flux_manifold,H_LC=0,excitation=1):
         """
             flux_points : inductor identifier for external introduction
             flux_manifold : [(fluxes)]
         """
         #manifold of flux space M
         energy_spectrum,E0 = [],[]
-        H_LC = self.hamiltonianLC()
-        H_ext = self.fluxInducerEnergy()
+        #H_LC = self.hamiltonianLC()
+        #H_ext = self.fluxInducerEnergy()
         for fluxes in flux_manifold:
             external_fluxes = dict(zip(flux_points,fluxes))
             H_J = self.josephsonEnergy(external_fluxes)
-            H = H_LC + H_ext + H_J
-            eigenenergies = hamiltonianEnergy(H) / 1e9
+            H = H_LC + H_J
+            eigenenergies = hamiltonianEnergy(H)
             E0.append(eigenenergies[0])
             energy_spectrum.append(eigenenergies[excitation]-eigenenergies[0])
         return E0,energy_spectrum

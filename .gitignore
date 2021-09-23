@@ -6,6 +6,10 @@ __pycache__/
 # C extensions
 *.so
 
+# Temp files
+temp.*
+temp-plot.html
+
 # Plots
 *.html
 

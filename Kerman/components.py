@@ -4,15 +4,13 @@ from numpy.linalg import det,norm
 numpy.set_printoptions(precision=2)
 
 im = 1.0j
+root2 = numpy.sqrt(2)
 e = 1.60217662 * 10**(-19)
 h = 6.62607004 * 10**(-34)
 hbar = h/2/pi
 flux_quanta = h/2/e
 Z0 = h/4/e/e
-
-# parasitic statics
-C_limit = 1e-15 * Z0
-L_limit = 1e-6 / Z0
+Z0 = flux_quanta / 2 / e
 
 def diagonalisation(M):
     eig,vec = numpy.linalg.eig(M)
@@ -31,23 +29,25 @@ def basisQo(n,impedance):
     Qo = numpy.arange(1,n)
     Qo = numpy.sqrt(Qo)
     Qo = -numpy.diag(Qo,k=1) + numpy.diag(Qo,k=-1)
-    return Qo*im*numpy.sqrt(1/4/pi/impedance/Z0))
+    return Qo*im*numpy.sqrt(1/pi/impedance*2)/2
 
 def basisPo(n,impedance):
     Po = numpy.arange(1,n)
     Po = numpy.sqrt(Po)
     Po = numpy.diag(Po,k=1) + numpy.diag(Po,k=-1)
-    return Po*numpy.sqrt(impedance/4/pi*Z0)
+    return Po*numpy.sqrt(impedance/pi*2)/2
 
 def fluxFlux(n,impedance):
-    Po = basisPo(n,impedance)
+    N = 2*n+1
+    Po = basisPo(N,impedance)
     D = diagonalisation(Po)
     Pp = unitaryTransformation(Po,D)
     return Pp
 
 def chargeFlux(n,impedance):
-    Po = basisPo(n,impedance)
-    Qo = basisQo(n,impedance)
+    N = 2*n+1
+    Po = basisPo(N,impedance)
+    Qo = basisQo(N,impedance)
     D = diagonalisation(Po)
     Qp = unitaryTransformation(Qo,D)
     return Qp
@@ -72,7 +72,7 @@ def basisQji(n):
     charge = numpy.linspace(n,-n,2*n+1,dtype=int)
     Qji = numpy.zeros((len(charge),len(charge)),numpy.complex128)
     numpy.fill_diagonal(Qji,charge)
-    return Qji
+    return Qji * root2
 
 def basisPj(n):
     # charge basis
@@ -84,7 +84,7 @@ def basisPj(n):
             if not p==q:
                 P[q,p] = (-(n+1)*sin(2*pi*(q-p)*n/N) + n*sin(2*pi*(q-p)*(n+1)/N))
                 P[q,p] /= -im*N*(1-cos(2*pi*(q-p)/N))*N
-    return P
+    return P * root2
 
 def basisFj(n):
     # verification module for basisPj
@@ -95,7 +95,7 @@ def basisFj(n):
         for p in charge:
             P[q,p] = sum([k*sin(2*pi/N*(q-p)*k) for k in range(1,n+1)])
     P *= 2*im/(N*N)
-    return P
+    return P * root2
 
 def chargeDisplacePlus(n):
     """n : charge basis truncation"""
@@ -120,17 +120,17 @@ class Elements:
 class J(Elements):
     def __init__(self,plus,minus,energy,ID=None):
         super().__init__(plus,minus,ID)
-        self.energy = energy * 10.**9
+        self.energy = energy # GHz
 
 class C(Elements):
     def __init__(self,plus,minus,capacitance,ID=None):
         super().__init__(plus,minus,ID)
-        self.capacitance = capacitance * 10.**(-15)
+        self.capacitance = capacitance
 
 class L(Elements):
     def __init__(self,plus,minus,inductance,ID=None,external=False):
         super().__init__(plus,minus,ID)
-        self.inductance = inductance * 10.**(-12)
+        self.inductance = inductance
         self.external = external
 
 if __name__=='__main__':
