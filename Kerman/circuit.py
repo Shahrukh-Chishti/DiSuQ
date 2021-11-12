@@ -1,8 +1,8 @@
 import networkx,copy
 import matplotlib.pyplot as plt
-from components import *
 from numpy.linalg import det
 from numpy import kron
+from components import *
 
 def modeTensorProduct(pre,M,post):
     """
@@ -100,18 +100,18 @@ class Circuit:
         self.spanning_tree = self.spanningTree()
         self.basis = basis
         self.nodes,self.nodes_ = self.nodeIndex()
-        self.edges = self.edgesIndex()
+        self.edges,self.edges_inductive = self.edgesIndex()
         self.Nn = len(self.nodes)
-        self.edges_inductive = self.edgesInductance()
+        self.Ne = len(self.edges)
         self.Nb = len(self.edges_inductive)
         self.Cn_,self.Ln_ = self.componentMatrix()
 
     def parseCircuit(self):
         G = networkx.MultiGraph()
         for component in self.network:
-            weight = 1
+            weight = 1e-3
             if component.__class__ == J:
-                weight = component.energy * 1e-9
+                weight = component.energy
             G.add_edge(component.plus,component.minus,key=component.ID,weight=weight,component=component)
         return G
 
@@ -128,9 +128,21 @@ class Circuit:
     def edgesIndex(self):
         """
             {(u,v):[,,,]} : MultiGraph edges
+            inductive edges ... josephson/capactive edges
         """
-        edges = dict([*enumerate([*self.G.edges(keys=True)])])
-        return edges
+        edges_G = self.G.edges(keys=True)
+        index_plus,index_minus = 0, len(edges_G)-1
+        edges,edges_inductive = dict(), dict()
+        for u,v,key in edges_G:
+            component = self.G[u][v][key]['component']
+            if component.__class__ == L:
+                edges_inductive[index_plus] = (u,v,key)
+                edges[index_plus] = (u,v,key)
+                index_plus += 1
+            else:
+                edges[index_minus] = (u,v,key)
+                index_minus -= 1
+        return edges,edges_inductive
 
     def spanningTree(self):
         GL = self.graphGL()
@@ -200,14 +212,6 @@ class Circuit:
                     edges.append((u,v,key))
                     L_ext.append(component.inductance)
         return edges,L_ext
-
-    def edgesInductance(self):
-        edges_inductive = dict()
-        for index,(u,v,key) in self.edges.items():
-            component = self.G[u][v][key]['component']
-            if component.__class__ == L:
-                edges_inductive[index] = (u,v,key)
-        return edges_inductive
 
     def nodeCapacitance(self):
         Cn = numpy.zeros((self.Nn,self.Nn))
@@ -282,6 +286,11 @@ class Circuit:
 
         return Lo_,C_
 
+    def oscillatorImpedance(self):
+        Cn_,Ln_,basis = self.Cn_,self.Ln_,self.basis
+        impedance = [sqrt(Cn_[i,i]/Ln_[i,i]) for i in range(len(basis))]
+        return impedance
+
     def hamiltonianKerman(self,basis):
         """
             basis : {O:(,,,),I:(,,,),J:(,,,)}
@@ -327,7 +336,31 @@ class Circuit:
 
         return Ho+Hint+Hi+Hj
 
-    def josephsonEnergy(self,external_fluxes=dict()):
+    def josephsonOscillator(self,external_fluxes=dict()):
+        basis = self.basis
+        Z = self.oscillatorImpedance() * 2 # cooper pair factor
+        Dplus = [displacementOscillator(basis_max,z,1) for z,basis_max in zip(Z,basis)]
+        Dminus = [displacementOscillator(basis_max,z,-1) for z,basis_max in zip(Z,basis)]
+        edges,Ej = self.josephsonComponents()
+        H = 0
+        for (u,v,key),E in zip(edges,Ej):
+            i,j = self.nodes_[u],self.nodes_[v]
+            flux = self.loopFlux(u,v,key,external_fluxes)
+            if i<0 or j<0 :
+                # grounded josephson
+                i = max(i,j)
+                Jplus = basisProduct(Dplus,[i])
+                Jminus = basisProduct(Dminus,[i])
+            else:
+                Jplus = crossBasisProduct(Dplus,Dminus,i,j)
+                Jminus = crossBasisProduct(Dplus,Dminus,j,i)
+                #assert (Jminus == Jplus.conj().T).all()
+            Hj = E*(Jplus*phase(flux) + Jminus*phase(-flux))
+            H -= Hj
+
+        return H/2
+
+    def josephsonCharge(self,external_fluxes=dict()):
         basis = self.basis
         Dplus = [chargeDisplacePlus(basis_max) for basis_max in basis]
         Dminus = [chargeDisplaceMinus(basis_max) for basis_max in basis]
@@ -336,7 +369,6 @@ class Circuit:
         for (u,v,key),E in zip(edges,Ej):
             i,j = self.nodes_[u],self.nodes_[v]
             flux = self.loopFlux(u,v,key,external_fluxes)
-            #print(u,v,i,j,flux)
             if i<0 or j<0 :
                 # grounded josephson
                 i = max(i,j)
@@ -375,9 +407,9 @@ class Circuit:
         Cn_,Ln_ = self.Cn_,self.Ln_
         basis = self.basis
 
-        impedance = [sqrt(Cn_[i,i]/Ln_[i,i]) for i in range(len(basis))]
-        Q = [basisQo(2*basis_max+1,impedance[index]) for index,basis_max in enumerate(basis)]
-        P = [basisPo(2*basis_max+1,impedance[index]) for index,basis_max in enumerate(basis)]
+        impedance = self.oscillatorImpedance()
+        Q = [basisQo(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
+        P = [basisPo(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
 
         H_C = modeMatrixProduct(Q,Cn_,Q)
         H_L = modeMatrixProduct(P,Ln_,P)
@@ -438,33 +470,32 @@ class Circuit:
 
         return H
 
-    def circuitEnergy(self,H_LC=0,external_fluxes=dict(),exclude=False):
+    def circuitEnergy(self,H_LC=0,H_J=null,external_fluxes=dict(),exclude=False):
         #H_LC = self.hamiltonianLC()
         #H_ext = self.fluxInducerEnergy()
-        H_J = self.josephsonEnergy(external_fluxes)
-        H = H_LC + H_J
+        H = H_LC + H_J(external_fluxes)
         if exclude:
             H = H[:-1,:-1]
         eigenenergies = hamiltonianEnergy(H)
         return eigenenergies
 
-    def spectrumManifold(self,flux_points,flux_manifold,H_LC=0,excitation=1):
+    def spectrumManifold(self,flux_points,flux_manifold,H_LC=0,H_J=null,excitation=1):
         """
             flux_points : inductor identifier for external introduction
             flux_manifold : [(fluxes)]
         """
         #manifold of flux space M
-        energy_spectrum,E0 = [],[]
+        Ex,E0 = [],[]
         #H_LC = self.hamiltonianLC()
         #H_ext = self.fluxInducerEnergy()
         for fluxes in flux_manifold:
             external_fluxes = dict(zip(flux_points,fluxes))
-            H_J = self.josephsonEnergy(external_fluxes)
-            H = H_LC + H_J
+            #H_J = self.josephsonEnergy(external_fluxes)
+            H = H_LC + H_J(external_fluxes)
             eigenenergies = hamiltonianEnergy(H)
             E0.append(eigenenergies[0])
-            energy_spectrum.append(eigenenergies[excitation]-eigenenergies[0])
-        return E0,energy_spectrum
+            Ex.append(eigenenergies[excitation]-eigenenergies[0])
+        return E0,Ex
 
 if __name__=='__main__':
     circuit = shuntedQubit([2,2,2])

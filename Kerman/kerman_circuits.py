@@ -4,22 +4,29 @@ from components import J,C,L,pi,h
 from numpy.linalg import det
 from pyvis import network as pvnet
 
-def transmon(basis,tunable=True):
-    transmon = [J(0,1,20),C(0,1,.3)]
-    if tunable:
-        transmon += [L(0,1,30,'I',True)]
+def transmon(basis,Ej=10,Ec=0.3):
+    transmon = [J(0,1,Ej)]
+    transmon += [C(0,1,Ec)]
+
     transmon = Circuit(transmon,basis)
     return transmon
 
-def oscillatorLC(basis):
-    oscillator = [L(0,1,.00031),C(0,1,51.6256)]
+def splitTransmon(basis):
+    transmon = [J(0,1,10),C(0,1,100)]
+    transmon += [L(1,2,.0003,'I',True)]
+    transmon += [J(2,0,10),C(2,0,100)]
+    transmon = Circuit(transmon,basis)
+    return transmon
+
+def oscillatorLC(basis,El=.00031,Ec=51.6256):
+    oscillator = [L(0,1,El),C(0,1,Ec)]
     return Circuit(oscillator,basis)
 
 def shuntedQubit(basis):
-    circuit = [J(1,2,10),C(1,2,10)]
-    circuit += [J(2,3,10),C(2,3,5)]
-    circuit += [J(3,0,10),C(3,0,2)]
-    circuit += [L(0,1,10,'I',True)]
+    circuit = [J(1,2,10),C(1,2,100)]
+    circuit += [J(2,3,10),C(2,3,500)]
+    circuit += [J(3,0,10),C(3,0,200)]
+    circuit += [L(0,1,.0001,'I',True)]
 
     circuit = Circuit(circuit,basis)
     return circuit
@@ -39,7 +46,8 @@ def phaseSlip(basis):
     return circuit
 
 if __name__=='__main__':
-    circuit = shuntedQubit([3,3,3])
+    circuit = shuntedQubit([5,5,5])
     flux_manifold = zip(numpy.arange(0,1,.05))
-    E0,spectrum = circuit.spectrumManifold(['I'],flux_manifold)
-    utils.plotCompare(numpy.arange(0,1,.05),{'excitation':spectrum,'ground_state':E0})
+    import ipdb; ipdb.set_trace()
+    E0,Ex = circuit.spectrumManifold(['I'],flux_manifold,H_LC=circuit.kermanHamiltonianLC())
+    utils.plotCompare(numpy.arange(0,1,.05),{'excitation':Ex,'ground_state':E0})

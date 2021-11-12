@@ -27,7 +27,7 @@ def hamiltonianKerman(n,flux):
     H = kronecker([I,Dp,Dm])*phase(flux) + kronecker([I,Dm,Dp])*phase(-flux)
     H += kronecker([Dp,Dm,I]) + kronecker([Dm,Dp,I])
     H += kronecker([Dp,I,I]) + kronecker([Dm,I,I])
-    H -= kronecker([I,I,P2]) / 100 / h
+    H -= kronecker([I,I,P2])
     return H
 
 def josephsonE(n,flux):
@@ -155,7 +155,6 @@ if __name__ == "__main__":
     E = hamiltonianEnergy(H[:-1,:-1])# / 1e9
     print(numpy.diff(E))
     import ipdb; ipdb.set_trace()
-    sys.exit(0)
     flux_manifold = numpy.arange(0,3,.01)
     spectrum = spectrumFlux(flux_manifold)
     utils.plotCompare(numpy.arange(0,3,.01),{'I':spectrum})

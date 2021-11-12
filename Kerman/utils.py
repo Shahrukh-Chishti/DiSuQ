@@ -32,6 +32,5 @@ def plotMatPlotGraph(G,filename):
 def plotDOTGraph(G,filename='temp'):
     pdot = to_pydot(G)
     #DOT = nx.nx_agraph.write_dot(G,filename+'.png')
-    import ipdb; ipdb.set_trace()
     pdot.write_png(filename+'.png')
     #view_pydot(pdot)

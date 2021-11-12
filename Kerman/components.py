@@ -1,6 +1,7 @@
 import numpy,uuid
 from numpy import cos,sin,pi,exp,sqrt
 from numpy.linalg import det,norm
+from scipy.linalg import expm
 numpy.set_printoptions(precision=2)
 
 im = 1.0j
@@ -29,13 +30,13 @@ def basisQo(n,impedance):
     Qo = numpy.arange(1,n)
     Qo = numpy.sqrt(Qo)
     Qo = -numpy.diag(Qo,k=1) + numpy.diag(Qo,k=-1)
-    return Qo*im*numpy.sqrt(1/pi/impedance*2)/2
+    return Qo*im*numpy.sqrt(1/2/pi/impedance)
 
 def basisPo(n,impedance):
     Po = numpy.arange(1,n)
     Po = numpy.sqrt(Po)
     Po = numpy.diag(Po,k=1) + numpy.diag(Po,k=-1)
-    return Po*numpy.sqrt(impedance/pi*2)/2
+    return Po*numpy.sqrt(impedance/2/pi)
 
 def fluxFlux(n,impedance):
     N = 2*n+1
@@ -67,24 +68,28 @@ def fluxCharge(n,impedance):
     Pq = unitaryTransformation(Po,D)
     return Pq
 
+def chargeStates(n):
+    charge = numpy.linspace(n,-n,2*n+1,dtype=int)
+    return charge
+
 def basisQji(n):
     # charge basis
-    charge = numpy.linspace(n,-n,2*n+1,dtype=int)
+    charge = chargeStates(n)
     Qji = numpy.zeros((len(charge),len(charge)),numpy.complex128)
     numpy.fill_diagonal(Qji,charge)
-    return Qji * root2
+    return Qji * 2
 
 def basisPj(n):
     # charge basis
     N = 2*n+1
     P = numpy.zeros((N,N),dtype=numpy.complex128)
-    charge = numpy.linspace(n,-n,N,dtype=int)
+    charge = chargeStates(n)
     for q in charge:
         for p in charge:
             if not p==q:
                 P[q,p] = (-(n+1)*sin(2*pi*(q-p)*n/N) + n*sin(2*pi*(q-p)*(n+1)/N))
                 P[q,p] /= -im*N*(1-cos(2*pi*(q-p)/N))*N
-    return P * root2
+    return P
 
 def basisFj(n):
     # verification module for basisPj
@@ -109,6 +114,14 @@ def chargeDisplaceMinus(n):
     D = numpy.diag(diagonal,k=1)
     return D
 
+def displacementOscillator(n,z,a):
+    D = basisPo(n,z)
+    D = expm(im*2*pi*a*D)
+    return D
+
+def null(*args):
+    return 0
+
 class Elements:
     def __init__(self,plus,minus,ID=None):
         self.plus = plus
@@ -118,19 +131,19 @@ class Elements:
         self.ID = ID
 
 class J(Elements):
-    def __init__(self,plus,minus,energy,ID=None):
+    def __init__(self,plus,minus,Ej,ID=None):
         super().__init__(plus,minus,ID)
-        self.energy = energy # GHz
+        self.energy = Ej # GHz
 
 class C(Elements):
-    def __init__(self,plus,minus,capacitance,ID=None):
+    def __init__(self,plus,minus,Ec,ID=None):
         super().__init__(plus,minus,ID)
-        self.capacitance = capacitance
+        self.capacitance = 1/Ec/2
 
 class L(Elements):
-    def __init__(self,plus,minus,inductance,ID=None,external=False):
+    def __init__(self,plus,minus,El,ID=None,external=False):
         super().__init__(plus,minus,ID)
-        self.inductance = inductance
+        self.inductance = 1/El/4/pi/pi
         self.external = external
 
 if __name__=='__main__':
