@@ -7,10 +7,13 @@ from pyvis import network as pvnet
 import networkx as nx
 from networkx.drawing.nx_pydot import write_dot
 
-def plotCompare(x,plot):
-    fig = []
+def plotCompare(x,plot,title=None,x_label=None,y_label=None):
+    fig = go.Figure()
     for name,values in plot.items():
-        fig.append(go.Scatter(x=x,y=values,name=name))
+        fig.add_trace(go.Scatter(x=x,y=values,name=name))
+    fig.update_layout(title=title,
+    xaxis_title=x_label,
+    yaxis_title=y_label)
     py.iplot(fig)
 
 def view_pydot(G):

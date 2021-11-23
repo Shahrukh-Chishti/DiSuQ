@@ -1,5 +1,5 @@
 import numpy,uuid
-from numpy import cos,sin,pi,exp,sqrt
+from numpy import cos,sin,pi,exp,sqrt,array
 from numpy.linalg import det,norm
 from scipy.linalg import expm
 numpy.set_printoptions(precision=2)
@@ -12,6 +12,10 @@ hbar = h/2/pi
 flux_quanta = h/2/e
 Z0 = h/4/e/e
 Z0 = flux_quanta / 2 / e
+
+def normalize(state):
+    state = abs(state)
+    return state/norm(state)
 
 def diagonalisation(M):
     eig,vec = numpy.linalg.eig(M)
@@ -72,6 +76,18 @@ def chargeStates(n):
     charge = numpy.linspace(n,-n,2*n+1,dtype=int)
     return charge
 
+def fluxStates(N_flux,n_flux=1):
+    flux = numpy.linspace(n_flux,-n_flux,N_flux)
+    return flux
+
+def transformationMatrix(n_charge,N_flux,n_flux=1):
+    charge_states = numpy.linspace(n_charge,-n_charge,2*n_charge+1,dtype=numpy.complex128)
+    flux_states = numpy.linspace(n_flux,-n_flux,N_flux,dtype=numpy.complex128)
+    T = numpy.matrix(flux_states).T @ numpy.matrix(charge_states)
+    T *= pi*im
+    T = exp(T)/sqrt(N_flux)
+    return array(T)
+
 def basisQji(n):
     # charge basis
     charge = chargeStates(n)
@@ -118,6 +134,12 @@ def displacementOscillator(n,z,a):
     D = basisPo(n,z)
     D = expm(im*2*pi*a*D)
     return D
+
+def wavefunction(H,level=[0]):
+    eig,vec = numpy.linalg.eigh(H)
+    indices = numpy.argsort(eig)
+    states = vec.T[indices[level]]
+    return states
 
 def null(*args):
     return 0
