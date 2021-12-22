@@ -78,9 +78,10 @@ def phase(phi):
 def transformation(M,T):
     return dotProduct(T.T,dotProduct(M,T))
 
-def hamiltonianEnergy(H):
+def hamiltonianEnergy(H,sort=True):
     eigenenergies = numpy.real(numpy.linalg.eigvals(H))
-    eigenenergies.sort()
+    if sort:
+        eigenenergies.sort()
     return eigenenergies
 
 class Circuit:
@@ -336,6 +337,30 @@ class Circuit:
 
         return Ho+Hint+Hi+Hj
 
+    def josephsonFlux(self,external_fluxes=dict()):
+        basis = self.basis
+        Z = self.oscillatorImpedance() * 2 # cooper pair factor
+        Dplus = [displacementFlux(basis_max,1) for z,basis_max in zip(Z,basis)]
+        Dminus = [displacementFlux(basis_max,-1) for z,basis_max in zip(Z,basis)]
+        edges,Ej = self.josephsonComponents()
+        H = 0
+        for (u,v,key),E in zip(edges,Ej):
+            i,j = self.nodes_[u],self.nodes_[v]
+            flux = self.loopFlux(u,v,key,external_fluxes)
+            if i<0 or j<0 :
+                # grounded josephson
+                i = max(i,j)
+                Jplus = basisProduct(Dplus,[i])
+                Jminus = basisProduct(Dminus,[i])
+            else:
+                Jplus = crossBasisProduct(Dplus,Dminus,i,j)
+                Jminus = crossBasisProduct(Dplus,Dminus,j,i)
+                #assert (Jminus == Jplus.conj().T).all()
+            Hj = E*(Jplus*phase(flux) + Jminus*phase(-flux))
+            H -= Hj
+
+        return H/2
+
     def josephsonOscillator(self,external_fluxes=dict()):
         basis = self.basis
         Z = self.oscillatorImpedance() * 2 # cooper pair factor
@@ -409,7 +434,7 @@ class Circuit:
 
         impedance = self.oscillatorImpedance()
         Q = [basisQo(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
-        P = [basisPo(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
+        P = [basisFo(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
 
         H_C = modeMatrixProduct(Q,Cn_,Q)
         H_L = modeMatrixProduct(P,Ln_,P)
@@ -436,6 +461,22 @@ class Circuit:
 
         return H
 
+    def fluxHamiltonianLC(self):
+        """
+            basis : [basis_size] charge
+        """
+        Cn_,Ln_ = self.Cn_,self.Ln_
+        basis = self.basis
+
+        Q = [basisQf(basis_max) for basis_max in basis]
+        P = [basisFf(basis_max) for basis_max in basis]
+        H_C = modeMatrixProduct(Q,Cn_,Q)
+        H_L = modeMatrixProduct(P,Ln_,P)
+
+        H = (H_C+H_L)/2
+
+        return H
+
     def chargeHamiltonianLC(self):
         """
             basis : [basis_size] charge
@@ -454,21 +495,49 @@ class Circuit:
 
         return H
 
-    def kermanHamiltonianLC(self):
+    def chargeHamiltonianLC(self):
         """
             basis : [basis_size] charge
         """
         Cn_,Ln_ = self.Cn_,self.Ln_
         basis = self.basis
 
-        Q = [basisQji(basis_max) for basis_max in basis]
-        P = [basisPj(basis_max) for basis_max in basis]
+        Q = [basisQq(basis_max) for basis_max in basis]
+        P = [basisFq(basis_max) for basis_max in basis]
         H_C = modeMatrixProduct(Q,Cn_,Q)
         H_L = modeMatrixProduct(P,Ln_,P)
 
         H = (H_C+H_L)/2
 
         return H
+
+    def potentialOscillator(self,external_fluxes=dict()):
+        Ln_ = self.Ln_
+        basis = self.basis
+
+        impedance = self.oscillatorImpedance()
+        P = [basisFo(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
+        H_L = modeMatrixProduct(P,Ln_,P)/2
+        H_J = self.josephsonOscillator(external_fluxes)
+        return H_L+H_J
+
+    def potentialCharge(self,external_fluxes=dict()):
+        Ln_ = self.Ln_
+        basis = self.basis
+
+        P = [basisFq(basis_max) for basis_max in basis]
+        H_L = modeMatrixProduct(P,Ln_,P)/2
+        H_J = self.josephsonCharge(external_fluxes)
+        return H_L+H_J
+
+    def potentialFlux(self,external_fluxes=dict()):
+        Ln_ = self.Ln_
+        basis = self.basis
+
+        P = [basisFf(basis_max) for basis_max in basis]
+        H_L = modeMatrixProduct(P,Ln_,P)/2
+        H_J = self.josephsonFlux(external_fluxes)
+        return H_L+H_J
 
     def circuitEnergy(self,H_LC=0,H_J=null,external_fluxes=dict(),exclude=False):
         #H_LC = self.hamiltonianLC()
