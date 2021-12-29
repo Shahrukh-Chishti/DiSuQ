@@ -7,6 +7,15 @@ from pyvis import network as pvnet
 import networkx as nx
 from networkx.drawing.nx_pydot import write_dot
 
+def plotCombine(plot,title=None,x_label=None,y_label=None):
+    fig = go.Figure()
+    for name,(x,y) in plot.items():
+        fig.add_trace(go.Scatter(x=x,y=y,name=name))
+    fig.update_layout(title=title,
+    xaxis_title=x_label,
+    yaxis_title=y_label)
+    py.iplot(fig)
+
 def plotCompare(x,plot,title=None,x_label=None,y_label=None):
     fig = go.Figure()
     for name,values in plot.items():
