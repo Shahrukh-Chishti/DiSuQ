@@ -434,10 +434,10 @@ class Circuit:
 
         impedance = self.oscillatorImpedance()
         Q = [basisQo(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
-        P = [basisFo(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
+        F = [basisFo(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
 
         H_C = modeMatrixProduct(Q,Cn_,Q)
-        H_L = modeMatrixProduct(P,Ln_,P)
+        H_L = modeMatrixProduct(F,Ln_,F)
 
         H = (H_C+H_L)/2
 
@@ -452,10 +452,10 @@ class Circuit:
 
         impedance = [sqrt(Cn_[i,i]/Ln_[i,i]) for i in range(len(basis))]
         Q = [chargeFlux(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
-        P = [fluxFlux(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
+        F = [fluxFlux(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
 
         H_C = modeMatrixProduct(Q,Cn_,Q)
-        H_L = modeMatrixProduct(P,Ln_,P)
+        H_L = modeMatrixProduct(F,Ln_,F)
 
         H = (H_C+H_L)/2
 
@@ -469,9 +469,9 @@ class Circuit:
         basis = self.basis
 
         Q = [basisQf(basis_max) for basis_max in basis]
-        P = [basisFf(basis_max) for basis_max in basis]
+        F = [basisFf(basis_max) for basis_max in basis]
         H_C = modeMatrixProduct(Q,Cn_,Q)
-        H_L = modeMatrixProduct(P,Ln_,P)
+        H_L = modeMatrixProduct(F,Ln_,F)
 
         H = (H_C+H_L)/2
 
@@ -486,10 +486,10 @@ class Circuit:
 
         impedance = [sqrt(Cn_[i,i]/Ln_[i,i]) for i in range(len(basis))]
         Q = [chargeCharge(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
-        P = [fluxCharge(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
+        F = [fluxCharge(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
 
         H_C = modeMatrixProduct(Q,Cn_,Q)
-        H_L = modeMatrixProduct(P,Ln_,P)
+        H_L = modeMatrixProduct(F,Ln_,F)
 
         H = (H_C+H_L)/2
 
@@ -503,9 +503,9 @@ class Circuit:
         basis = self.basis
 
         Q = [basisQq(basis_max) for basis_max in basis]
-        P = [basisFq(basis_max) for basis_max in basis]
+        F = [basisFq(basis_max) for basis_max in basis]
         H_C = modeMatrixProduct(Q,Cn_,Q)
-        H_L = modeMatrixProduct(P,Ln_,P)
+        H_L = modeMatrixProduct(F,Ln_,F)
 
         H = (H_C+H_L)/2
 
@@ -516,8 +516,8 @@ class Circuit:
         basis = self.basis
 
         impedance = self.oscillatorImpedance()
-        P = [basisFo(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
-        H_L = modeMatrixProduct(P,Ln_,P)/2
+        F = [basisFo(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
+        H_L = modeMatrixProduct(F,Ln_,F)/2
         H_J = self.josephsonOscillator(external_fluxes)
         return H_L+H_J
 
@@ -525,8 +525,8 @@ class Circuit:
         Ln_ = self.Ln_
         basis = self.basis
 
-        P = [basisFq(basis_max) for basis_max in basis]
-        H_L = modeMatrixProduct(P,Ln_,P)/2
+        F = [basisFq(basis_max) for basis_max in basis]
+        H_L = modeMatrixProduct(F,Ln_,F)/2
         H_J = self.josephsonCharge(external_fluxes)
         return H_L+H_J
 
@@ -534,8 +534,8 @@ class Circuit:
         Ln_ = self.Ln_
         basis = self.basis
 
-        P = [basisFf(basis_max) for basis_max in basis]
-        H_L = modeMatrixProduct(P,Ln_,P)/2
+        F = [basisFf(basis_max) for basis_max in basis]
+        H_L = modeMatrixProduct(F,Ln_,F)/2
         H_J = self.josephsonFlux(external_fluxes)
         return H_L+H_J
 
