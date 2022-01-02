@@ -1,6 +1,5 @@
 import networkx,copy
 import matplotlib.pyplot as plt
-from numpy.linalg import det
 from numpy import kron
 from components import *
 
@@ -11,10 +10,10 @@ def modeTensorProduct(pre,M,post):
     """
     H = 1
     for dim in pre:
-        H = numpy.kron(H,numpy.identity(dim))
-    H = numpy.kron(H,M)
+        H = kron(H,identity(dim))
+    H = kron(H,M)
     for dim in post:
-        H = numpy.kron(H,numpy.identity(dim))
+        H = kron(H,identity(dim))
     return H
 
 def crossBasisProduct(A,B,a,b):
@@ -23,11 +22,11 @@ def crossBasisProduct(A,B,a,b):
     product = 1
     for i in range(n):
         if i==a:
-            product = numpy.kron(product,A[i])
+            product = kron(product,A[i])
         elif i==b:
-            product = numpy.kron(product,B[i])
+            product = kron(product,B[i])
         else:
-            product = numpy.kron(product,numpy.identity(len(A[i])))
+            product = kron(product,identity(len(A[i])))
     return product
 
 def basisProduct(O,indices=None):
@@ -37,9 +36,9 @@ def basisProduct(O,indices=None):
         indices = arange(n)
     for i in range(n):
         if i in indices:
-            B = numpy.kron(B,O[i])
+            B = kron(B,O[i])
         else:
-            B = numpy.kron(B,numpy.identity(len(O[i])))
+            B = kron(B,identity(len(O[i])))
     return B
 
 def modeMatrixProduct(A,M,B,mode=(0,0)):
@@ -59,27 +58,27 @@ def modeMatrixProduct(A,M,B,mode=(0,0)):
             left = basisProduct(A,[i+a])
             right = basisProduct(B,[j+b])
             #if cross_mode:
-            #    left = numpy.kron(left,numpy.identity(len(right)))
-            #    right = numpy.kron(numpy.identity(len(left)),right)
+            #    left = kron(left,identity(len(right)))
+            #    right = kron(identity(len(left)),right)
 
             H += M[i,j]*dotProduct(left,right)
 
     return H
 
 def dotProduct(left,right):
-    return numpy.dot(left,right)
+    return dot(left,right)
 
 def inverse(A):
-    if numpy.linalg.det(A) == 0:
-        return numpy.zeros_like(A)
-    return numpy.linalg.inv(A)
+    if det(A) == 0:
+        return zeros_like(A)
+    return inv(A)
 
 def phase(phi):
     # phi = flux/flux_quanta
     return exp(im*2*pi*phi)
 
 def hamiltonianEnergy(H,sort=True):
-    eigenenergies = numpy.real(numpy.linalg.eigvals(H))
+    eigenenergies = real(eigvals(H))
     if sort:
         eigenenergies.sort()
     return eigenenergies
@@ -222,7 +221,7 @@ class Circuit:
         return edges,L_ext
 
     def nodeCapacitance(self):
-        Cn = numpy.zeros((self.Nn,self.Nn))
+        Cn = zeros((self.Nn,self.Nn))
         for i,node in self.nodes.items():
             for u,v,component in self.G.edges(node,data=True):
                 component = component['component']
@@ -235,8 +234,8 @@ class Circuit:
         return Cn
 
     def branchInductance(self):
-        Lb = numpy.zeros((self.Nb,self.Nb))
-        #numpy.fill_diagonal(Lb,L_limit)
+        Lb = zeros((self.Nb,self.Nb))
+        #fill_diagonal(Lb,L_limit)
         for index,(u,v,key) in self.edges_inductive.items():
             component = self.G[u][v][key]['component']
             if component.__class__ == L:
@@ -245,11 +244,11 @@ class Circuit:
         return Lb
 
     def mutualInductance(self):
-        M = numpy.zeros((self.Nb,self.Nb))
+        M = zeros((self.Nb,self.Nb))
         return M
 
     def connectionPolarity(self):
-        Rbn = numpy.zeros((self.Nb,self.Nn),int)
+        Rbn = zeros((self.Nb,self.Nn),int)
         for index,(u,v,key) in self.edges_inductive.items():
             if not u==0:
                 Rbn[index][self.nodes_[u]] = 1
@@ -259,16 +258,16 @@ class Circuit:
         return Rbn
 
     def modeBasisSize(self,basis):
-        n_baseO = numpy.prod(array(basis['O']))
-        n_baseI = numpy.prod(array(basis['I']))
-        n_baseJ = numpy.prod(array(basis['J']))
+        n_baseO = prod(array(basis['O']))
+        n_baseI = prod(array(basis['I']))
+        n_baseJ = prod(array(basis['J']))
 
         return n_baseO,n_baseI,n_baseJ
 
     def modeDistribution(self):
         Ln_ = self.Ln_
         Ni = 0 # default
-        No = numpy.linalg.matrix_rank(Ln_)
+        No = matrix_rank(Ln_)
         Nj = self.Nn - Ni - No
         return No,Ni,Nj
 
@@ -370,7 +369,7 @@ class Circuit:
         Co_,Coi_,Coj_,Ci_,Cij_,Cj_ = self.C_
         n_baseO,n_baseI,n_baseJ = self.modeBasisSize(basis)
 
-        Z = numpy.sqrt(numpy.diagonal(Co_)/numpy.diagonal(Lo_))
+        Z = sqrt(diagonal(Co_)/diagonal(Lo_))
         Qo = [basisQo(basis_max,Zi) for Zi,basis_max in zip(Z,basis['O'])]
         Qi = [basisQq(basis_max) for basis_max in basis['I']]
         Qj = [basisQq(basis_max) for basis_max in basis['J']]
@@ -645,7 +644,7 @@ if __name__=='__main__':
     circuit = shuntedQubit([2,2,2])
     utils.plotMatPlotGraph(circuit.G,'circuit')
     utils.plotMatPlotGraph(circuit.spanning_tree,'spanning_tree')
-    flux_manifold = zip(numpy.arange(0,1,.01))
+    flux_manifold = zip(arange(0,1,.01))
     from test_flux_spectrum import josephsonE
     Ej0 = josephsonE(1,.125)
     Ej1 = circuit.josephsonEnergy({'I':.125})

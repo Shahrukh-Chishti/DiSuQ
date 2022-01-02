@@ -1,11 +1,13 @@
 import numpy,uuid
-from numpy import cos,sin,pi,exp,sqrt,array,arange
-from numpy.linalg import det,norm
+from numpy import cos,sin,pi,exp,sqrt,array,arange,argsort,asarray,eye
+from numpy import diag,linspace,matrix,complex128,zeros,fill_diagonal,ones
+from numpy import dot,zeros_like,real,prod,diagonal
+from numpy.linalg import det,norm,eig as eigsolve,eigh,inv,eigvals,matrix_rank
 from scipy.linalg import expm
 numpy.set_printoptions(precision=2)
 
 im = 1.0j
-root2 = numpy.sqrt(2)
+root2 = sqrt(2)
 e = 1.60217662 * 10**(-19)
 h = 6.62607004 * 10**(-34)
 hbar = h/2/pi
@@ -22,11 +24,11 @@ def normalize(state,square=True):
     return state
 
 def diagonalisation(M,inverse=False):
-    eig,vec = numpy.linalg.eig(M)
+    eig,vec = eigsolve(M)
     if inverse:
         eig = -eig
-    indices = numpy.argsort(eig)
-    D = numpy.asarray(vec[:,indices])
+    indices = argsort(eig)
+    D = asarray(vec[:,indices])
     return D
 
 def unitaryTransformation(M,U):
@@ -34,19 +36,19 @@ def unitaryTransformation(M,U):
     return M
 
 def identity(n):
-    return numpy.eye(n)
+    return eye(n)
 
 def basisQo(n,impedance):
-    Qo = numpy.arange(1,n)
-    Qo = numpy.sqrt(Qo)
-    Qo = -numpy.diag(Qo,k=1) + numpy.diag(Qo,k=-1)
-    return Qo*im*numpy.sqrt(1/2/pi/impedance)
+    Qo = arange(1,n)
+    Qo = sqrt(Qo)
+    Qo = -diag(Qo,k=1) + diag(Qo,k=-1)
+    return Qo*im*sqrt(1/2/pi/impedance)
 
 def basisFo(n,impedance):
-    Po = numpy.arange(1,n)
-    Po = numpy.sqrt(Po)
-    Po = numpy.diag(Po,k=1) + numpy.diag(Po,k=-1)
-    return Po*numpy.sqrt(impedance/2/pi)
+    Po = arange(1,n)
+    Po = sqrt(Po)
+    Po = diag(Po,k=1) + diag(Po,k=-1)
+    return Po*sqrt(impedance/2/pi)
 
 def fluxFlux(n,impedance):
     N = 2*n+1
@@ -79,18 +81,18 @@ def fluxCharge(n,impedance):
     return Pq
 
 def chargeStates(n):
-    charge = numpy.linspace(n,-n,2*n+1,dtype=int)
+    charge = linspace(n,-n,2*n+1,dtype=int)
     return charge
 
 def fluxStates(N_flux,n_flux=1):
-    flux = numpy.linspace(n_flux,-n_flux,N_flux)
+    flux = linspace(n_flux,-n_flux,N_flux)
     return flux/N_flux
 
 def transformationMatrix(n_charge,N_flux,n_flux=1):
-    charge_states = numpy.linspace(n_charge,-n_charge,2*n_charge+1,dtype=numpy.complex128)
-    flux_states = numpy.linspace(n_flux,-n_flux,N_flux,dtype=numpy.complex128)
+    charge_states = linspace(n_charge,-n_charge,2*n_charge+1,dtype=complex128)
+    flux_states = linspace(n_flux,-n_flux,N_flux,dtype=complex128)
 
-    T = numpy.matrix(flux_states).T @ numpy.matrix(charge_states)
+    T = matrix(flux_states).T @ matrix(charge_states)
     T *= 2*pi*im/N_flux
     T = exp(T)/sqrt(N_flux)
     return array(T)
@@ -98,14 +100,14 @@ def transformationMatrix(n_charge,N_flux,n_flux=1):
 def basisQq(n):
     # charge basis
     charge = chargeStates(n)
-    Q = numpy.zeros((len(charge),len(charge)),numpy.complex128)
-    numpy.fill_diagonal(Q,charge)
+    Q = zeros((len(charge),len(charge)),complex128)
+    fill_diagonal(Q,charge)
     return Q * 2
 
 def basisFq(n):
     # charge basis
     N = 2*n+1
-    P = numpy.zeros((N,N),dtype=numpy.complex128)
+    P = zeros((N,N),dtype=complex128)
     charge = chargeStates(n)
     for q in charge:
         for p in charge:
@@ -121,8 +123,8 @@ def basisFq(n):
 
 def basisFf(n):
     flux = fluxStates(2*n+1,n)
-    F = numpy.zeros((len(flux),len(flux)),numpy.complex128)
-    numpy.fill_diagonal(F,flux)
+    F = zeros((len(flux),len(flux)),complex128)
+    fill_diagonal(F,flux)
     return F
 
 def basisQf(n):
@@ -132,14 +134,14 @@ def basisQf(n):
 
 def chargeDisplacePlus(n):
     """n : charge basis truncation"""
-    diagonal = numpy.ones((2*n+1)-1,dtype=numpy.complex)
-    D = numpy.diag(diagonal,k=-1)
+    diagonal = ones((2*n+1)-1,dtype=complex128)
+    D = diag(diagonal,k=-1)
     return D
 
 def chargeDisplaceMinus(n):
     """n : charge basis truncation"""
-    diagonal = numpy.ones((2*n+1)-1,dtype=numpy.complex)
-    D = numpy.diag(diagonal,k=1)
+    diagonal = ones((2*n+1)-1,dtype=complex128)
+    D = diag(diagonal,k=1)
     return D
 
 def displacementCharge(n,a):
@@ -158,8 +160,8 @@ def displacementFlux(n,a):
     return D
 
 def wavefunction(H,level=[0]):
-    eig,vec = numpy.linalg.eigh(H)
-    indices = numpy.argsort(eig)
+    eig,vec = eigh(H)
+    indices = argsort(eig)
     states = vec.T[indices[level]]
     return states
 
