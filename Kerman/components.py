@@ -1,5 +1,5 @@
 import numpy,uuid
-from numpy import cos,sin,pi,exp,sqrt,array
+from numpy import cos,sin,pi,exp,sqrt,array,arange
 from numpy.linalg import det,norm
 from scipy.linalg import expm
 numpy.set_printoptions(precision=2)
@@ -21,8 +21,10 @@ def normalize(state,square=True):
         state = abs(state)**2
     return state
 
-def diagonalisation(M):
+def diagonalisation(M,inverse=False):
     eig,vec = numpy.linalg.eig(M)
+    if inverse:
+        eig = -eig
     indices = numpy.argsort(eig)
     D = numpy.asarray(vec[:,indices])
     return D
@@ -138,6 +140,11 @@ def chargeDisplaceMinus(n):
     """n : charge basis truncation"""
     diagonal = numpy.ones((2*n+1)-1,dtype=numpy.complex)
     D = numpy.diag(diagonal,k=1)
+    return D
+
+def displacementCharge(n,a):
+    D = basisFq(n)
+    D = expm(im*2*pi*a*D)
     return D
 
 def displacementOscillator(n,z,a):

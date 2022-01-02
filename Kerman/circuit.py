@@ -30,9 +30,11 @@ def crossBasisProduct(A,B,a,b):
             product = numpy.kron(product,numpy.identity(len(A[i])))
     return product
 
-def basisProduct(O,indices):
+def basisProduct(O,indices=None):
     n = len(O)
     B = 1
+    if indices is None:
+        indices = arange(n)
     for i in range(n):
         if i in indices:
             B = numpy.kron(B,O[i])
@@ -40,24 +42,25 @@ def basisProduct(O,indices):
             B = numpy.kron(B,numpy.identity(len(O[i])))
     return B
 
-def modeMatrixProduct(A,M,B,cross_product=False):
+def modeMatrixProduct(A,M,B,mode=(0,0)):
     """
         M : mode operator, implementing mode interactions
         B : list : basis operators
         A : list : basis operators(transpose)
-        cross_product : indicates if A!=B, assumed ordering : AxB
+        cross_mode : indicates if A!=B, assumed ordering : AxB
         returns : prod(nA) x prod(nB) mode state Hamiltonian matrix
     """
     H = 0
     nA,nB = len(A),len(B)
+    a,b = mode
     assert M.shape==(nA,nB)
     for i in range(nA):
         for j in range(nB):
-            left = basisProduct(A,[i])
-            right = basisProduct(B,[j])
-            if cross_product:
-                left = numpy.kron(left,numpy.identity(1,len(right)))
-                right = numpy.kron(numpy.identity(len(left),1),right)
+            left = basisProduct(A,[i+a])
+            right = basisProduct(B,[j+b])
+            #if cross_mode:
+            #    left = numpy.kron(left,numpy.identity(len(right)))
+            #    right = numpy.kron(numpy.identity(len(left)),right)
 
             H += M[i,j]*dotProduct(left,right)
 
@@ -74,9 +77,6 @@ def inverse(A):
 def phase(phi):
     # phi = flux/flux_quanta
     return exp(im*2*pi*phi)
-
-def transformation(M,T):
-    return dotProduct(T.T,dotProduct(M,T))
 
 def hamiltonianEnergy(H,sort=True):
     eigenenergies = numpy.real(numpy.linalg.eigvals(H))
@@ -99,13 +99,20 @@ class Circuit:
         self.network = network
         self.G = self.parseCircuit()
         self.spanning_tree = self.spanningTree()
-        self.basis = basis
         self.nodes,self.nodes_ = self.nodeIndex()
         self.edges,self.edges_inductive = self.edgesIndex()
         self.Nn = len(self.nodes)
         self.Ne = len(self.edges)
         self.Nb = len(self.edges_inductive)
+
         self.Cn_,self.Ln_ = self.componentMatrix()
+        self.No,self.Ni,self.Nj = self.modeDistribution()
+        self.R = self.modeTransformation()
+        self.Lo_,self.C_ = self.transformComponents()
+
+        self.basis = basis
+        # basis : list of basis_size of ith mode
+        # basis : dict of O,I,J : list of basis_size
 
     def parseCircuit(self):
         G = networkx.MultiGraph()
@@ -167,7 +174,7 @@ class Circuit:
         Rbn = self.connectionPolarity()
         Lb = self.branchInductance()
         M = self.mutualInductance()
-        Ln_ = transformation(inverse(Lb+M),Rbn)
+        Ln_ = unitaryTransformation(inverse(Lb+M),Rbn)
 
         return Cn_,Ln_
 
@@ -252,30 +259,33 @@ class Circuit:
         return Rbn
 
     def modeBasisSize(self,basis):
-        n_baseO *= numpy.prod(basis['O'])
-        n_baseI *= numpy.prod(basis['I'])
-        n_baseJ *= numpy.prod(basis['J'])
+        n_baseO = numpy.prod(array(basis['O']))
+        n_baseI = numpy.prod(array(basis['I']))
+        n_baseJ = numpy.prod(array(basis['J']))
 
         return n_baseO,n_baseI,n_baseJ
 
-    def modeDistribution(self,Ln_):
-        Ni = 1 # defaulted
+    def modeDistribution(self):
+        Ln_ = self.Ln_
+        Ni = 0 # default
         No = numpy.linalg.matrix_rank(Ln_)
         Nj = self.Nn - Ni - No
         return No,Ni,Nj
 
-    def modeTransformation(self,Ln_):
-        No,Ni,Nj = self.modeDistribution(Ln_)
-        return R,No,Ni,Nj
+    def modeTransformation(self):
+        Ln_ = self.Ln_
+        R = diagonalisation(Ln_,True)
+        return R
 
     def transformComponents(self):
         Cn_,Ln_ = self.componentMatrix()
 
-        R,No,Ni,Nj = self.modeTransformation(Ln_)
-        L_ = transformation(Ln_,inverse(R))
+        R = self.R
+        No,Ni,Nj = self.No,self.Ni,self.Nj
+        L_ = unitaryTransformation(Ln_,R)
 
         Lo_ = L_[:No,:No]
-        C_ = transformation(Cn_,R.t)
+        C_ = unitaryTransformation(Cn_,R.conj().T)
         Co_ = C_[:No,:No]
         Coi_ = C_[:No,No:-Nj]
         Coj_ = C_[:No,-Nj:]
@@ -287,59 +297,124 @@ class Circuit:
 
         return Lo_,C_
 
+    def modeImpedance(self):
+        Cn_,Ln_,basis = self.Cn_,self.Ln_,self.basis
+        impedance = [sqrt(Cn_[i,i]/Ln_[i,i]) for i in range(len(basis))]
+        return impedance
+
     def oscillatorImpedance(self):
         Cn_,Ln_,basis = self.Cn_,self.Ln_,self.basis
         impedance = [sqrt(Cn_[i,i]/Ln_[i,i]) for i in range(len(basis))]
         return impedance
 
-    def hamiltonianKerman(self,basis):
+    def linearCombination(index):
+        assert len(combination) == self.Nn
+        invR = R.conj().T
+        combination = invR[index]
+        return combination
+
+    def displacementCombination(combination):
+        basis = self.basis_size
+        O = combination[:No]
+        I = combination[No:-Nj]
+        J = combination[-Nj:]
+        #assert I==0
+        #assert J==1 or 0
+
+        Z = self.oscillatorImpedance() * 2 # cooper pair factor
+
+        DO_plus = [displacementOscillator(basis_max,z,o) for o,z,basis_max in zip(O,Z,basis['O'])]
+        DO_minus = [displacementOscillator(basis_max,z,-o) for o,z,basis_max in zip(O,Z,basis['O'])]
+        DI_plus = [displacementCharge(basis_max,i) for i,basis_max in zip(I,basis['I'])]
+        DI_minus = [displacementCharge(basis_max,-i) for i,basis_max in zip(I,basis['I'])]
+        DJ_plus = [displacementCharge(basis_max,j) for j,basis_max in zip(J,basis['J'])]
+        DJ_minus = [displacementCharge(basis_max,-j) for j,basis_max in zip(J,basis['J'])]
+
+        Dplus = DO_plus+DI_plus+DJ_plus
+        Dminus = DO_minus+DI_minus+DJ_minus
+        assert len(combination)==len(Dplus)
+        assert len(combination)==len(Dminus)
+        return Dplus,Dminus
+
+    def kermanHamiltonianJosephson(self):
+        edges,Ej = self.josephsonComponents()
+        H = 0
+        for (u,v,key),E in zip(edges,Ej):
+            i,j = self.nodes_[u],self.nodes_[v]
+            flux = self.loopFlux(u,v,key,external_fluxes)
+            if i<0 or j<0 :
+                # grounded josephson
+                i = max(i,j)
+                combination = linearCombination(i)
+                Dplus,Dminus = self.displacementCombination(combination)
+
+                Jplus = basisProduct(Dplus)
+                Jminus = basisProduct(Dminus)
+            else:
+                combination = self.linearCombination(i) - self.linearCombination(j)
+                Dplus,Dminus = self.displacementCombination(combination)
+
+                Jplus = basisProduct(Dplus)
+                Jminus = basisProduct(Dminus)
+            Hj = E*(Jplus*phase(flux) + Jminus*phase(-flux))
+            H -= Hj
+
+        return Hj
+
+    def kermanHamiltonianLC(self):
         """
             basis : {O:(,,,),I:(,,,),J:(,,,)}
         """
-        Lo_,C_ = self.transformComponents()
-        Co_,Coi_,Coj_,Ci_,Cij_,Cj_ = C_
+        basis = self.basis
+        Lo_ = self.Lo_
+        Co_,Coi_,Coj_,Ci_,Cij_,Cj_ = self.C_
         n_baseO,n_baseI,n_baseJ = self.modeBasisSize(basis)
 
         Z = numpy.sqrt(numpy.diagonal(Co_)/numpy.diagonal(Lo_))
         Qo = [basisQo(basis_max,Zi) for Zi,basis_max in zip(Z,basis['O'])]
-        Qi = [basisQji(basis_max) for basis_max in basis['I']]
-        Qj = [basisQji(basis_max) for basis_max in basis['J']]
+        Qi = [basisQq(basis_max) for basis_max in basis['I']]
+        Qj = [basisQq(basis_max) for basis_max in basis['J']]
+        Q = Qo + Qi + Qj
 
-        Co = modeMatrixProduct(Qo,Co_,Qo)
-        Co = modeTensorProduct(((n_baseJ,n_baseJ),(n_baseI,n_baseI)),Co,(1,1))
+        Co = modeMatrixProduct(Q,Co_,Q,(0,0))
+        #Co = modeTensorProduct((n_baseJ,n_baseI),Co,(1))
 
-        Po = [basisPo(basis_max,Zi) for Zi,basis_max in zip(Z,basis['O'])]
-        Lo = modeMatrixProduct(Po,Lo_,Po)
-        Lo = modeTensorProduct(((n_baseJ,n_baseJ),(n_baseI,n_baseI)),Lo,(1,1))
+        Fo = [basisFo(basis_max,Zi) for Zi,basis_max in zip(Z,basis['O'])]
+        Fi = [basisFq(basis_max) for basis_max in basis['O']]
+        Fj = [basisFq(basis_max) for basis_max in basis['O']]
+        F = Fo + Fi + Fj
 
-        Ho = Co + Lo + Uo
+        Lo = modeMatrixProduct(F,Lo_,F,(0,0))
+        #Lo = modeTensorProduct((n_baseJ,n_baseI),Lo,(1))
 
-        Coi = modeMatrixProduct(Qo,Coi_,delQi)
-        Coi = modeTensorProduct()
+        Ho = (Co + Lo)/2
 
-        Coj = modeMatrixProduct(Qo,Coj_,delQj)
-        Coj = modeTensorProduct()
+        Coi = modeMatrixProduct(Q,Coi_,Q,(0,n_baseO))
+        #Coi = modeTensorProduct((n_baseJ),Coi,(1))
 
-        Cij = modeMatrixProduct(delQi,Cij_,delQj)
-        Cij = modeTensorProduct()
+        Coj = modeMatrixProduct(Q,Coj_,Q,(0,n_baseO+n_baseI))
+        #Coj = modeTensorProduct()
 
-        Hint = Coi + Coj + Cij + Uint
+        Cij = modeMatrixProduct(Q,Cij_,Q,(n_baseO,n_baseO+n_baseI))
+        #Cij = modeTensorProduct()
 
-        Ci = modeMatrixProduct(delQi,Ci_,delQi)
-        Ci = modeTensorProduct()
+        Hint = Coi + Coj + Cij
 
-        Hi = Ci
+        Ci = modeMatrixProduct(Q,Ci_,Q,(n_baseO,n_baseO))
+        #Ci = modeTensorProduct()
 
-        Cj = modeMatrixProduct(delQj,Ci_delQj)
-        Cj = modeTensorProduct()
+        Hi = Ci/2
 
-        Hj = Cj + Uj
+        Cj = modeMatrixProduct(Qj,Ci_Qj,(n_baseO+n_baseI,n_baseO+n_baseI))
+        #Cj = modeTensorProduct()
+
+        Hj = Cj/2
 
         return Ho+Hint+Hi+Hj
 
     def josephsonFlux(self,external_fluxes=dict()):
         basis = self.basis
-        Z = self.oscillatorImpedance() * 2 # cooper pair factor
+        Z = self.modeImpedance() * 2 # cooper pair factor
         Dplus = [displacementFlux(basis_max,1) for z,basis_max in zip(Z,basis)]
         Dminus = [displacementFlux(basis_max,-1) for z,basis_max in zip(Z,basis)]
         edges,Ej = self.josephsonComponents()
@@ -363,7 +438,7 @@ class Circuit:
 
     def josephsonOscillator(self,external_fluxes=dict()):
         basis = self.basis
-        Z = self.oscillatorImpedance() * 2 # cooper pair factor
+        Z = self.modeImpedance() * 2 # cooper pair factor
         Dplus = [displacementOscillator(basis_max,z,1) for z,basis_max in zip(Z,basis)]
         Dminus = [displacementOscillator(basis_max,z,-1) for z,basis_max in zip(Z,basis)]
         edges,Ej = self.josephsonComponents()
@@ -432,7 +507,7 @@ class Circuit:
         Cn_,Ln_ = self.Cn_,self.Ln_
         basis = self.basis
 
-        impedance = self.oscillatorImpedance()
+        impedance = self.modeImpedance()
         Q = [basisQo(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
         F = [basisFo(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
 
@@ -515,7 +590,7 @@ class Circuit:
         Ln_ = self.Ln_
         basis = self.basis
 
-        impedance = self.oscillatorImpedance()
+        impedance = self.modeImpedance()
         F = [basisFo(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
         H_L = modeMatrixProduct(F,Ln_,F)/2
         H_J = self.josephsonOscillator(external_fluxes)
