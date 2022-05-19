@@ -15,6 +15,14 @@ flux_quanta = h/2/e
 Z0 = h/4/e/e
 Z0 = flux_quanta / 2 / e
 
+def sparsity(M,tol=10):
+    M = numpy.around(M,tol)
+    return 1-numpy.count_nonzero(M)/prod(M.shape)
+
+def isHermitian(M,tol=10):
+    M = numpy.around(M,tol)
+    return (M==M.conjugate().T).all()
+
 def normalize(state,square=True):
     state = abs(state)
     norm_state = norm(state)
@@ -45,23 +53,23 @@ def basisQo(n,impedance):
     return Qo*im*sqrt(1/2/pi/impedance)
 
 def basisFo(n,impedance):
-    Po = arange(1,n)
-    Po = sqrt(Po)
-    Po = diag(Po,k=1) + diag(Po,k=-1)
-    return Po*sqrt(impedance/2/pi)
+    Fo = arange(1,n)
+    Fo = sqrt(Fo)
+    Fo = diag(Fo,k=1) + diag(Fo,k=-1)
+    return Fo*sqrt(impedance/2/pi)
 
 def fluxFlux(n,impedance):
     N = 2*n+1
-    Po = basisPo(N,impedance)
-    D = diagonalisation(Po)
-    Pp = unitaryTransformation(Po,D)
+    Fo = basisFo(N,impedance)
+    D = diagonalisation(Fo)
+    Pp = unitaryTransformation(Fo,D)
     return Pp
 
 def chargeFlux(n,impedance):
     N = 2*n+1
-    Po = basisPo(N,impedance)
+    Fo = basisFo(N,impedance)
     Qo = basisQo(N,impedance)
-    D = diagonalisation(Po)
+    D = diagonalisation(Fo)
     Qp = unitaryTransformation(Qo,D)
     return Qp
 
@@ -74,10 +82,10 @@ def chargeCharge(n,impedance):
 
 def fluxCharge(n,impedance):
     N = 2*n+1
-    Po = basisPo(N,impedance)
+    Fo = basisFo(N,impedance)
     Qo = basisQo(N,impedance)
     D = diagonalisation(Qo)
-    Pq = unitaryTransformation(Po,D)
+    Pq = unitaryTransformation(Fo,D)
     return Pq
 
 def chargeStates(n):
@@ -193,6 +201,6 @@ class L(Elements):
         self.external = external
 
 if __name__=='__main__':
-    Po = basisPo(5,1)
+    Fo = basisFo(5,1)
     F = fluxCharge(2,1)
     import ipdb;ipdb.set_trace()
