@@ -30,6 +30,7 @@ def crossBasisProduct(A,B,a,b):
     return product
 
 def basisProduct(O,indices=None):
+    # indices :: modes
     n = len(O)
     B = 1
     if indices is None:
@@ -44,15 +45,14 @@ def basisProduct(O,indices=None):
 def modeMatrixProduct(A,M,B,mode=(0,0)):
     """
         M : mode operator, implementing mode interactions
-        B : list : basis operators
-        A : list : basis operators(transpose)
-        cross_mode : indicates if A!=B, assumed ordering : AxB
-        returns : prod(nA) x prod(nB) mode state Hamiltonian matrix
+        A,B : complete list of basis operators
+        mode : demarcates subset of interacting mode
     """
     H = 0
-    nA,nB = len(A),len(B)
+    N = len(A)
+    assert len(A)==len(B)
+    nA,nB = M.shape
     a,b = mode
-    assert M.shape==(nA,nB)
     for i in range(nA):
         for j in range(nB):
             left = basisProduct(A,[i+a])
@@ -259,8 +259,8 @@ class Circuit:
 
     def modeBasisSize(self,basis):
         n_baseO = prod(array(basis['O']))
-        n_baseI = prod(array(basis['I']))
-        n_baseJ = prod(array(basis['J']))
+        n_baseI = prod(2*array(basis['I'])+1)
+        n_baseJ = prod(2*array(basis['J'])+1)
 
         return n_baseO,n_baseI,n_baseJ
 
@@ -303,20 +303,20 @@ class Circuit:
 
     def oscillatorImpedance(self):
         Cn_,Ln_,basis = self.Cn_,self.Ln_,self.basis
-        impedance = [sqrt(Cn_[i,i]/Ln_[i,i]) for i in range(len(basis))]
+        impedance = [sqrt(Cn_[i,i]/Ln_[i,i]) for i in range(len(basis['O']))]
         return impedance
 
-    def linearCombination(index):
-        assert len(combination) == self.Nn
-        invR = R.conj().T
+    def linearCombination(self,index):
+        invR = self.R.conj().T
         combination = invR[index]
+        assert len(combination) == self.Nn
         return combination
 
-    def displacementCombination(combination):
-        basis = self.basis_size
-        O = combination[:No]
-        I = combination[No:-Nj]
-        J = combination[-Nj:]
+    def displacementCombination(self,combination):
+        basis = self.basis
+        O = combination[:self.No]
+        I = combination[self.No:-self.Nj]
+        J = combination[-self.Nj:]
         #assert I==0
         #assert J==1 or 0
 
@@ -335,7 +335,7 @@ class Circuit:
         assert len(combination)==len(Dminus)
         return Dplus,Dminus
 
-    def kermanHamiltonianJosephson(self):
+    def kermanHamiltonianJosephson(self,external_fluxes=dict()):
         edges,Ej = self.josephsonComponents()
         H = 0
         for (u,v,key),E in zip(edges,Ej):
@@ -344,7 +344,7 @@ class Circuit:
             if i<0 or j<0 :
                 # grounded josephson
                 i = max(i,j)
-                combination = linearCombination(i)
+                combination = self.linearCombination(i)
                 Dplus,Dminus = self.displacementCombination(combination)
 
                 Jplus = basisProduct(Dplus)
@@ -358,7 +358,7 @@ class Circuit:
             Hj = E*(Jplus*phase(flux) + Jminus*phase(-flux))
             H -= Hj
 
-        return Hj
+        return H/2
 
     def kermanHamiltonianLC(self):
         """
@@ -368,6 +368,7 @@ class Circuit:
         Lo_ = self.Lo_
         Co_,Coi_,Coj_,Ci_,Cij_,Cj_ = self.C_
         n_baseO,n_baseI,n_baseJ = self.modeBasisSize(basis)
+        No,Ni,Nj = self.No,self.Ni,self.Nj
 
         Z = sqrt(diagonal(Co_)/diagonal(Lo_))
         Qo = [basisQo(basis_max,Zi) for Zi,basis_max in zip(Z,basis['O'])]
@@ -376,36 +377,29 @@ class Circuit:
         Q = Qo + Qi + Qj
 
         Co = modeMatrixProduct(Q,Co_,Q,(0,0))
-        #Co = modeTensorProduct((n_baseJ,n_baseI),Co,(1))
 
         Fo = [basisFo(basis_max,Zi) for Zi,basis_max in zip(Z,basis['O'])]
-        Fi = [basisFq(basis_max) for basis_max in basis['O']]
-        Fj = [basisFq(basis_max) for basis_max in basis['O']]
+        Fi = [basisFq(basis_max) for basis_max in basis['I']]
+        Fj = [basisFq(basis_max) for basis_max in basis['J']]
         F = Fo + Fi + Fj
 
         Lo = modeMatrixProduct(F,Lo_,F,(0,0))
-        #Lo = modeTensorProduct((n_baseJ,n_baseI),Lo,(1))
 
         Ho = (Co + Lo)/2
 
-        Coi = modeMatrixProduct(Q,Coi_,Q,(0,n_baseO))
-        #Coi = modeTensorProduct((n_baseJ),Coi,(1))
+        Coi = modeMatrixProduct(Q,Coi_,Q,(0,No))
 
-        Coj = modeMatrixProduct(Q,Coj_,Q,(0,n_baseO+n_baseI))
-        #Coj = modeTensorProduct()
+        Coj = modeMatrixProduct(Q,Coj_,Q,(0,No+Ni))
 
-        Cij = modeMatrixProduct(Q,Cij_,Q,(n_baseO,n_baseO+n_baseI))
-        #Cij = modeTensorProduct()
+        Cij = modeMatrixProduct(Q,Cij_,Q,(No,No+Ni))
 
         Hint = Coi + Coj + Cij
 
-        Ci = modeMatrixProduct(Q,Ci_,Q,(n_baseO,n_baseO))
-        #Ci = modeTensorProduct()
+        Ci = modeMatrixProduct(Q,Ci_,Q,(No,No))
 
         Hi = Ci/2
 
-        Cj = modeMatrixProduct(Qj,Ci_Qj,(n_baseO+n_baseI,n_baseO+n_baseI))
-        #Cj = modeTensorProduct()
+        Cj = modeMatrixProduct(Q,Cj_,Q,(No+Ni,No+Ni))
 
         Hj = Cj/2
 
