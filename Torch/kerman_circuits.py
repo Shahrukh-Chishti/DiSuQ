@@ -22,13 +22,13 @@ def oscillatorLC(basis,El=.00031,Ec=51.6256):
     oscillator = [L(0,1,El),C(0,1,Ec)]
     return Circuit(oscillator,basis)
 
-def shuntedQubit():
+def shuntedQubit(basis):
     circuit = [J(1,2,10.0),C(1,2,100.0)]
     circuit += [J(2,3,10.0),C(2,3,500.0)]
     circuit += [J(3,0,10.0),C(3,0,200.0)]
     circuit += [L(0,1,.0001,'I',True)]
 
-    circuit = Circuit(circuit)
+    circuit = Circuit(circuit,basis)
     return circuit
 
 def phaseSlip(basis,inductance=[.001,.0005,.00002,.00035,.0005],capacitance=[100,30,30,30,30,40,10]):

@@ -1,5 +1,6 @@
-import networkx,copy,torch
+import networkx,copy,torch,utils
 import matplotlib.pyplot as plt
+import kerman_circuits
 from components import *
 
 def modeTensorProduct(pre,M,post):
@@ -7,25 +8,26 @@ def modeTensorProduct(pre,M,post):
         extend mode to full system basis
         sequentially process duplication
     """
-    H = 1
+    H = tensor(1.0)
     for dim in pre:
-        H = kron(H,identity(dim))
+        H = kron(H,eye(dim))
     H = kron(H,M)
     for dim in post:
-        H = kron(H,identity(dim))
+        H = kron(H,eye(dim))
     return H
 
 def crossBasisProduct(A,B,a,b):
     assert len(A)==len(B)
     n = len(A)
-    product = 1
+    product = tensor(1.0)
     for i in range(n):
         if i==a:
             product = kron(product,A[i])
         elif i==b:
             product = kron(product,B[i])
         else:
-            product = kron(product,identity(len(A[i])))
+            product = kron(product,eye(len(A[i])))
+    product = sparsify(product)
     return product
 
 def basisProduct(O,indices=None):
@@ -50,14 +52,14 @@ def modeMatrixProduct(A,M,B,mode=(0,0)):
         returns : prod(nA) x prod(nB) mode state Hamiltonian matrix
     """
     shape = prod([len(a) for a in A])
-    H = torch.sparse_coo_tensor([[],[]],[],[shape]*2,dtype=complex128)
+    H = torch.sparse_coo_tensor([[],[]],[],[shape]*2,dtype=complex64)
     a,b = mode
     nA,nB = M.shape
     for i in range(nA):
         for j in range(nB):
             left = basisProduct(A,[i+a])
             right = basisProduct(B,[j+b])
-            H += M[i,j]*torch.sparse.mm(left,right)
+            H += M[i,j]*sparse.mm(left,right)
 
     return H
 
@@ -71,9 +73,10 @@ def phase(phi):
     return exp(im*2*pi*phi)
 
 def hamiltonianEnergy(H,sort=True):
-    eigenenergies = real(eigvals(H))
+    eigenenergies,_ = eigsolve(H)
+    eigenenergies = eigenenergies.real
     if sort:
-        eigenenergies.sort()
+        eigenenergies = eigenenergies.sort()[0]
     return eigenenergies
 
 class Circuit:
@@ -87,7 +90,7 @@ class Circuit:
         * i,j : indices of indexed graph : mode correspondence
     """
 
-    def __init__(self,network):
+    def __init__(self,network,basis):
         self.network = network
         self.G = self.parseCircuit()
         self.spanning_tree = self.spanningTree()
@@ -99,10 +102,10 @@ class Circuit:
 
         self.Cn_,self.Ln_ = self.componentMatrix()
         self.No,self.Ni,self.Nj = self.modeDistribution()
-        self.R = self.modeTransformation()
+        self.R = self.modeTransformation().real
         self.Lo_,self.C_ = self.transformComponents()
 
-        self.basis = None
+        self.basis = basis
         # basis : list of basis_size of ith mode
         # basis : dict of O,I,J : list of basis_size
 
@@ -174,7 +177,7 @@ class Circuit:
         """
             external_fluxes : {identifier:flux_value}
         """
-        flux = 0
+        flux = tensor(0.0)
         external = set(external_fluxes.keys())
         S = self.spanning_tree
         path = networkx.shortest_path(S,u,v)
@@ -227,7 +230,7 @@ class Circuit:
         return Cn
 
     def branchInductance(self):
-        Lb = torch.zeros((self.Nb,self.Nb))
+        Lb = zeros((self.Nb,self.Nb))
         #fill_diagonal(Lb,L_limit)
         for index,(u,v,key) in self.edges_inductive.items():
             component = self.G[u][v][key]['component']
@@ -257,6 +260,18 @@ class Circuit:
 
         return n_baseO,n_baseI,n_baseJ
 
+    def kermanBasisSize(self):
+        N = 1
+        basis = self.basis
+        N *= prod([size for size in basis['O']])
+        N *= prod([2*size+1 for size in basis['I']])
+        N *= prod([2*size+1 for size in basis['J']])
+        return int(N)
+
+    def canonBasisSize(self):
+        N = prod([2*size+1 for size in self.basis])
+        return N
+
     def modeDistribution(self):
         Ln_ = self.Ln_
         Ni = 0 # default
@@ -266,8 +281,8 @@ class Circuit:
 
     def modeTransformation(self):
         Ln_ = self.Ln_
-        R = diagonalisation(Ln_.detach().numpy(),True)
-        return tensor(R)
+        R = diagonalisation(Ln_.detach(),True)
+        return R
 
     def transformComponents(self):
         Cn_,Ln_ = self.componentMatrix()
@@ -295,26 +310,25 @@ class Circuit:
         return impedance
 
     def oscillatorImpedance(self):
-        Co_,Lo_,basis = self.C_[0],self.Lo_,self.basis
-        impedance = [sqrt(Co_[i,i]/Lo_[i,i]) for i in range(len(basis['O']))]
+        Cn_,Ln_,basis = self.Cn_,self.Ln_,self.basis
+        impedance = [sqrt(Cn_[i,i]/Ln_[i,i]) for i in range(len(basis['O']))]
         return impedance
 
-    def linearCombination(index):
-        assert len(combination) == self.Nn
-        invR = R.conj().T
+    def linearCombination(self,index):
+        invR = self.R.conj().T
         combination = invR[index]
+        assert len(combination) == self.Nn
         return combination
 
-    def displacementCombination(combination):
-        basis = self.basis_size
+    def displacementCombination(self,combination):
+        basis = self.basis
         No,Ni,Nj = self.No,self.Ni,self.Nj
         O = combination[:No]
         I = combination[No:-Nj]
         J = combination[-Nj:]
         #assert I==0
         #assert J==1 or 0
-
-        Z = self.modeImpedance() * 2 # cooper pair factor
+        Z = self.oscillatorImpedance() * 2 # cooper pair factor
         # re-calculation with parameter iteration
         DO_plus = [displacementOscillator(basis_max,z,o) for o,z,basis_max in zip(O,Z,basis['O'])]
         DO_minus = [displacementOscillator(basis_max,z,-o) for o,z,basis_max in zip(O,Z,basis['O'])]
@@ -329,16 +343,17 @@ class Circuit:
         assert len(combination)==len(Dminus)
         return Dplus,Dminus
 
-    def kermanHamiltonianJosephson(self):
+    def kermanHamiltonianJosephson(self,external_fluxes=dict()):
         edges,Ej = self.josephsonComponents()
-        H = 0
+        N = self.kermanBasisSize()
+        H = sparsify(zeros(N,N))
         for (u,v,key),E in zip(edges,Ej):
             i,j = self.nodes_[u],self.nodes_[v]
             flux = self.loopFlux(u,v,key,external_fluxes)
             if i<0 or j<0 :
                 # grounded josephson
                 i = max(i,j)
-                combination = linearCombination(i)
+                combination = self.linearCombination(i)
                 Dplus,Dminus = self.displacementCombination(combination)
 
                 Jplus = basisProduct(Dplus)
@@ -350,9 +365,9 @@ class Circuit:
                 Jplus = basisProduct(Dplus)
                 Jminus = basisProduct(Dminus)
             Hj = E*(Jplus*phase(flux) + Jminus*phase(-flux))
-            H -= Hj
+            H = H-Hj
 
-        return Hj
+        return H
 
     def kermanHamiltonianLC(self):
         """
@@ -362,6 +377,7 @@ class Circuit:
         Lo_ = self.Lo_
         Co_,Coi_,Coj_,Ci_,Cij_,Cj_ = self.C_
         n_baseO,n_baseI,n_baseJ = self.modeBasisSize(basis)
+        No,Ni,Nj = self.No,self.Ni,self.Nj
 
         Z = sqrt(diagonal(Co_)/diagonal(Lo_))
         Qo = [basisQo(basis_max,Zi) for Zi,basis_max in zip(Z,basis['O'])]
@@ -369,26 +385,32 @@ class Circuit:
         Qj = [basisQq(basis_max) for basis_max in basis['J']]
         Q = Qo + Qi + Qj
 
+        Co = modeMatrixProduct(Q,Co_,Q,(0,0))
+
         Fo = [basisFo(basis_max,Zi) for Zi,basis_max in zip(Z,basis['O'])]
         Fi = [basisFq(basis_max) for basis_max in basis['O']]
         Fj = [basisFq(basis_max) for basis_max in basis['O']]
         F = Fo + Fi + Fj
-        import ipdb; ipdb.set_trace()
-        Co = modeMatrixProduct(Q,Co_,Q,(0,0))
+
         Lo = modeMatrixProduct(F,Lo_,F,(0,0))
+
         Ho = (Co + Lo)/2
 
-        Coi = modeMatrixProduct(Q,Coi_,Q,(0,n_baseO))
-        Coj = modeMatrixProduct(Q,Coj_,Q,(0,n_baseO+n_baseI))
-        Cij = modeMatrixProduct(Q,Cij_,Q,(n_baseO,n_baseO+n_baseI))
+        Coi = modeMatrixProduct(Q,Coi_,Q,(0,No))
+
+        Coj = modeMatrixProduct(Q,Coj_,Q,(0,No+Ni))
+
+        Cij = modeMatrixProduct(Q,Cij_,Q,(No,No+Ni))
+
         Hint = Coi + Coj + Cij
 
-        Ci = modeMatrixProduct(Q,Ci_,Q,(n_baseO,n_baseO))
+        Ci = modeMatrixProduct(Q,Ci_,Q,(No,No))
         Hi = Ci/2
 
-        Cj = modeMatrixProduct(Qj,Ci_Qj,(n_baseO+n_baseI,n_baseO+n_baseI))
+        Cj = modeMatrixProduct(Q,Ci_,Q,(No+Ni,No+Ni))
         Hj = Cj/2
 
+        import ipdb; ipdb.set_trace()
         return Ho+Hint+Hi+Hj
 
     def josephsonFlux(self,external_fluxes=dict()):
@@ -397,7 +419,8 @@ class Circuit:
         Dplus = [displacementFlux(basis_max,1) for z,basis_max in zip(Z,basis)]
         Dminus = [displacementFlux(basis_max,-1) for z,basis_max in zip(Z,basis)]
         edges,Ej = self.josephsonComponents()
-        H = 0
+        N = self.canonBasisSize()
+        H = sparsify(zeros(N,N))
         for (u,v,key),E in zip(edges,Ej):
             i,j = self.nodes_[u],self.nodes_[v]
             flux = self.loopFlux(u,v,key,external_fluxes)
@@ -411,7 +434,7 @@ class Circuit:
                 Jminus = crossBasisProduct(Dplus,Dminus,j,i)
                 #assert (Jminus == Jplus.conj().T).all()
             Hj = E*(Jplus*phase(flux) + Jminus*phase(-flux))
-            H -= Hj
+            H = H - Hj
 
         return H/2
 
@@ -421,7 +444,8 @@ class Circuit:
         Dplus = [displacementOscillator(basis_max,z,1) for z,basis_max in zip(Z,basis)]
         Dminus = [displacementOscillator(basis_max,z,-1) for z,basis_max in zip(Z,basis)]
         edges,Ej = self.josephsonComponents()
-        H = 0
+        N = prod(basis)
+        H = sparsify(zeros(N,N))
         for (u,v,key),E in zip(edges,Ej):
             i,j = self.nodes_[u],self.nodes_[v]
             flux = self.loopFlux(u,v,key,external_fluxes)
@@ -435,7 +459,7 @@ class Circuit:
                 Jminus = crossBasisProduct(Dplus,Dminus,j,i)
                 #assert (Jminus == Jplus.conj().T).all()
             Hj = E*(Jplus*phase(flux) + Jminus*phase(-flux))
-            H -= Hj
+            H = H - Hj
 
         return H/2
 
@@ -444,7 +468,8 @@ class Circuit:
         Dplus = [chargeDisplacePlus(basis_max) for basis_max in basis]
         Dminus = [chargeDisplaceMinus(basis_max) for basis_max in basis]
         edges,Ej = self.josephsonComponents()
-        H = 0
+        N = self.canonBasisSize()
+        H = sparsify(zeros(N,N))
         for (u,v,key),E in zip(edges,Ej):
             i,j = self.nodes_[u],self.nodes_[v]
             flux = self.loopFlux(u,v,key,external_fluxes)
@@ -458,7 +483,7 @@ class Circuit:
                 Jminus = crossBasisProduct(Dplus,Dminus,j,i)
                 #assert (Jminus == Jplus.conj().T).all()
             Hj = E*(Jplus*phase(flux) + Jminus*phase(-flux))
-            H -= Hj
+            H = H-Hj
 
         return H/2
 
@@ -466,7 +491,7 @@ class Circuit:
         basis = self.basis
         fluxModes = [basisPj(basis_max) for basis_max in basis]
         edges,L_ext = self.fluxBiasComponents()
-        H = 0
+        H = tensor([[0.0]])
         for (u,v,key),L in zip(edges,L_ext):
             i,j = self.nodes_[u],self.nodes_[v]
             #print(u,v,i,j,L)
@@ -476,7 +501,7 @@ class Circuit:
                 P = basisProduct(fluxModes,[i])
             else:
                 P = basisProduct(fluxModes,[i]) - basisProduct(fluxModes,[j])
-            H += P@P / 2 / L
+            H = H + P@P / 2 / L
         return H
 
     def oscillatorHamiltonianLC(self):
@@ -602,7 +627,7 @@ class Circuit:
         eigenenergies = hamiltonianEnergy(H)
         return eigenenergies
 
-    def spectrumManifold(self,flux_points,flux_manifold,H_LC=0,H_J=null,excitation=1):
+    def spectrumManifold(self,flux_points,flux_manifold,H_LC=tensor(0.0),H_J=null,excitation=1):
         """
             flux_points : inductor identifier for external introduction
             flux_manifold : [(fluxes)]
@@ -622,13 +647,15 @@ class Circuit:
 
 if __name__=='__main__':
     circuit = kerman_circuits.shuntedQubit([2,2,2])
-    utils.plotMatPlotGraph(circuit.G,'circuit')
-    utils.plotMatPlotGraph(circuit.spanning_tree,'spanning_tree')
+    #utils.plotMatPlotGraph(circuit.G,'circuit')
+    #utils.plotMatPlotGraph(circuit.spanning_tree,'spanning_tree')
     flux_manifold = zip(arange(0,1,.01))
-    from test_flux_spectrum import josephsonE
-    Ej0 = josephsonE(1,.125)
-    Ej1 = circuit.josephsonEnergy({'I':.125})
-    e1 = hamiltonianEnergy(Ej1)
-    Ej2 = circuit.josephsonEnergy({'I':.0003})
-    e2 = hamiltonianEnergy(Ej2)
+    H_LC = circuit.chargeHamiltonianLC()
+    H_J = circuit.josephsonCharge({'I':tensor(.125)})
+    circuit.basis = {'O':[2],'I':[],'J':[2,2]}
+    H_J = circuit.kermanHamiltonianJosephson({'I':tensor(.225)})
     import ipdb; ipdb.set_trace()
+    H_LC = circuit.kermanHamiltonianLC()
+    e1 = hamiltonianEnergy(H_J)
+    Ej2 = circuit.josephsonCharge({'I':tensor(.0003)})
+    e2 = hamiltonianEnergy(Ej2)
