@@ -46,3 +46,10 @@ def plotDOTGraph(G,filename='temp'):
     #DOT = nx.nx_agraph.write_dot(G,filename+'.png')
     pdot.write_png(filename+'.png')
     #view_pydot(pdot)
+    
+def plotHeatmap(z,x,y,title=None,xaxis=None,yaxis=None):
+    fig = go.Figure()
+    heatmap = go.Heatmap(z=z,y=y,x=x)
+    fig.add_trace(heatmap)
+    fig.update_layout(title=title,xaxis_title=xaxis,yaxis_title=yaxis)
+    py.iplot(fig)
