@@ -21,8 +21,22 @@ flux_quanta = h/2/e
 Z0 = h/4/e/e
 Z0 = flux_quanta / 2 / e
 
+def indicesSparse(A):
+    return A.coalesce().indices().T
+
+def valuesSparse(A):
+    return A.coalesce().values()
+
 def kronSparse(A,B):
-    return A,B
+    nA,nB = A.shape[0],B.shape[0]
+    N = nA*nB
+    values = kron(valuesSparse(A),valuesSparse(B))
+    idA = indicesSparse(A)*nB
+    idB = indicesSparse(B)
+    rows = (idA[:,0][:,None] + idB[:,0][None,:]).ravel()
+    cols = (idA[:,1][:,None] + idB[:,1][None,:]).ravel()
+    indices = vstack((rows,cols))
+    return torch.sparse_coo_tensor(indices,values,(N,N))
 
 def sparsify(T):
     indices = nonzero(T,as_tuple=True)
@@ -52,7 +66,7 @@ def unitaryTransformation(M,U):
     return M
 
 def identity(n):
-    return eye(n)
+    return sparsify(eye(n))
 
 def basisQo(n,impedance):
     Qo = torch.arange(1,n)

@@ -8,38 +8,38 @@ def modeTensorProduct(pre,M,post):
         extend mode to full system basis
         sequentially process duplication
     """
-    H = tensor(1.0)
+    H = identity(1)
     for dim in pre:
-        H = kron(H,eye(dim))
-    H = kron(H,M)
+        H = kronSparse(H,identity(dim))
+    H = kronSparse(H,M)
     for dim in post:
-        H = kron(H,eye(dim))
+        H = kronSparse(H,identity(dim))
     return H
 
 def crossBasisProduct(A,B,a,b):
     assert len(A)==len(B)
     n = len(A)
-    product = tensor(1.0)
+    product = identity(1)
     for i in range(n):
         if i==a:
-            product = kron(product,A[i])
+            product = kronSparse(product,A[i])
         elif i==b:
-            product = kron(product,B[i])
+            product = kronSparse(product,B[i])
         else:
-            product = kron(product,eye(len(A[i])))
+            product = kronSparse(product,identity(len(A[i])))
     product = sparsify(product)
     return product
 
 def basisProduct(O,indices=None):
     n = len(O)
-    B = tensor(1.0)
+    B = identity(1)
     if indices is None:
         indices = arange(n)
     for i in range(n):
         if i in indices:
-            B = kron(B,O[i])
+            B = kronSparse(B,O[i])
         else:
-            B = kron(B,eye(len(O[i])))
+            B = kronSparse(B,identity(len(O[i])))
     B = sparsify(B)
     return B
 
@@ -410,7 +410,6 @@ class Circuit:
         Cj = modeMatrixProduct(Q,Ci_,Q,(No+Ni,No+Ni))
         Hj = Cj/2
 
-        import ipdb; ipdb.set_trace()
         return Ho+Hint+Hi+Hj
 
     def josephsonFlux(self,external_fluxes=dict()):
