@@ -22,11 +22,12 @@ def oscillatorLC(basis,El=.00031,Ec=51.6256):
     oscillator = [L(0,1,El),C(0,1,Ec)]
     return Circuit(oscillator,basis)
 
-def shuntedQubit(basis):
-    circuit = [J(1,2,10),C(1,2,100)]
-    circuit += [J(2,3,10),C(2,3,500)]
-    circuit += [J(3,0,10),C(3,0,200)]
-    circuit += [L(0,1,.0001,'I',True)]
+def shuntedQubit(basis,josephson=[10,10,10],ind=.0001):
+    Ej1,Ej2,Ej3 = josephson
+    circuit = [J(1,2,Ej1),C(1,2,100)]
+    circuit += [J(2,3,Ej2),C(2,3,500)]
+    circuit += [J(3,0,Ej3),C(3,0,200)]
+    circuit += [L(0,1,ind,'I',True)]
 
     circuit = Circuit(circuit,basis)
     return circuit
