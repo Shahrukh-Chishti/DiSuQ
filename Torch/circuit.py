@@ -2,6 +2,7 @@ import networkx,copy,torch,utils
 import matplotlib.pyplot as plt
 import kerman_circuits
 from components import *
+from components_sparse import identity,kron,null,mul
 
 def modeTensorProduct(pre,M,post):
     """
@@ -10,10 +11,10 @@ def modeTensorProduct(pre,M,post):
     """
     H = identity(1)
     for dim in pre:
-        H = kronSparse(H,identity(dim))
-    H = kronSparse(H,M)
+        H = kron(H,identity(dim))
+    H = kron(H,M)
     for dim in post:
-        H = kronSparse(H,identity(dim))
+        H = kron(H,identity(dim))
     return H
 
 def crossBasisProduct(A,B,a,b):
@@ -22,12 +23,11 @@ def crossBasisProduct(A,B,a,b):
     product = identity(1)
     for i in range(n):
         if i==a:
-            product = kronSparse(product,A[i])
+            product = kron(product,A[i])
         elif i==b:
-            product = kronSparse(product,B[i])
+            product = kron(product,B[i])
         else:
-            product = kronSparse(product,identity(len(A[i])))
-    product = sparsify(product)
+            product = kron(product,identity(len(A[i])))
     return product
 
 def basisProduct(O,indices=None):
@@ -37,10 +37,9 @@ def basisProduct(O,indices=None):
         indices = arange(n)
     for i in range(n):
         if i in indices:
-            B = kronSparse(B,O[i])
+            B = kron(B,O[i])
         else:
-            B = kronSparse(B,identity(len(O[i])))
-    B = sparsify(B)
+            B = kron(B,identity(len(O[i])))
     return B
 
 def modeMatrixProduct(A,M,B,mode=(0,0)):
@@ -52,14 +51,14 @@ def modeMatrixProduct(A,M,B,mode=(0,0)):
         returns : prod(nA) x prod(nB) mode state Hamiltonian matrix
     """
     shape = prod([len(a) for a in A])
-    H = torch.sparse_coo_tensor([[],[]],[],[shape]*2,dtype=complex64)
+    H = null(shape)
     a,b = mode
     nA,nB = M.shape
     for i in range(nA):
         for j in range(nB):
             left = basisProduct(A,[i+a])
             right = basisProduct(B,[j+b])
-            H += M[i,j]*sparse.mm(left,right)
+            H += M[i,j]*mul(left,right)
 
     return H
 
@@ -169,7 +168,8 @@ class Circuit:
         Rbn = self.connectionPolarity()
         Lb = self.branchInductance()
         M = self.mutualInductance()
-        Ln_ = unitaryTransformation(inverse(Lb+M),Rbn)
+        L_inv = inverse(Lb+M)
+        Ln_ = Rbn.conj().T @ L_inv @ Rbn
 
         return Cn_,Ln_
 
@@ -268,7 +268,7 @@ class Circuit:
         N *= prod([2*size+1 for size in basis['J']])
         return int(N)
 
-    def canonBasisSize(self):
+    def canonincalBasisSize(self):
         N = prod([2*size+1 for size in self.basis])
         return N
 
@@ -289,10 +289,10 @@ class Circuit:
 
         R = self.R
         No,Ni,Nj = self.No,self.Ni,self.Nj
-        L_ = unitaryTransformation(Ln_,R)
+        L_ = R.conj().T @ Ln_ @ R
 
         Lo_ = L_[:No,:No]
-        C_ = unitaryTransformation(Cn_,R.conj().T)
+        C_ = R @ Cn_ @ R.conj().T
         Co_ = C_[:No,:No]
         Coi_ = C_[:No,No:-Nj]
         Coj_ = C_[:No,-Nj:]
@@ -384,7 +384,7 @@ class Circuit:
         Qi = [basisQq(basis_max) for basis_max in basis['I']]
         Qj = [basisQq(basis_max) for basis_max in basis['J']]
         Q = Qo + Qi + Qj
-
+        import ipdb; ipdb.set_trace()
         Co = modeMatrixProduct(Q,Co_,Q,(0,0))
 
         Fo = [basisFo(basis_max,Zi) for Zi,basis_max in zip(Z,basis['O'])]
@@ -418,8 +418,8 @@ class Circuit:
         Dplus = [displacementFlux(basis_max,1) for z,basis_max in zip(Z,basis)]
         Dminus = [displacementFlux(basis_max,-1) for z,basis_max in zip(Z,basis)]
         edges,Ej = self.josephsonComponents()
-        N = self.canonBasisSize()
-        H = sparsify(zeros(N,N))
+        N = self.canonincalBasisSize()
+        H = null(N)
         for (u,v,key),E in zip(edges,Ej):
             i,j = self.nodes_[u],self.nodes_[v]
             flux = self.loopFlux(u,v,key,external_fluxes)
@@ -444,7 +444,7 @@ class Circuit:
         Dminus = [displacementOscillator(basis_max,z,-1) for z,basis_max in zip(Z,basis)]
         edges,Ej = self.josephsonComponents()
         N = prod(basis)
-        H = sparsify(zeros(N,N))
+        H = null(N)
         for (u,v,key),E in zip(edges,Ej):
             i,j = self.nodes_[u],self.nodes_[v]
             flux = self.loopFlux(u,v,key,external_fluxes)
@@ -467,8 +467,8 @@ class Circuit:
         Dplus = [chargeDisplacePlus(basis_max) for basis_max in basis]
         Dminus = [chargeDisplaceMinus(basis_max) for basis_max in basis]
         edges,Ej = self.josephsonComponents()
-        N = self.canonBasisSize()
-        H = sparsify(zeros(N,N))
+        N = self.canonincalBasisSize()
+        H = null(N)
         for (u,v,key),E in zip(edges,Ej):
             i,j = self.nodes_[u],self.nodes_[v]
             flux = self.loopFlux(u,v,key,external_fluxes)
@@ -528,44 +528,8 @@ class Circuit:
         Cn_,Ln_ = self.Cn_,self.Ln_
         basis = self.basis
 
-        impedance = [sqrt(Cn_[i,i]/Ln_[i,i]) for i in range(len(basis))]
-        Q = [chargeFlux(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
-        F = [fluxFlux(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
-
-        H_C = modeMatrixProduct(Q,Cn_,Q)
-        H_L = modeMatrixProduct(F,Ln_,F)
-
-        H = (H_C+H_L)/2
-
-        return H
-
-    def fluxHamiltonianLC(self):
-        """
-            basis : [basis_size] charge
-        """
-        Cn_,Ln_ = self.Cn_,self.Ln_
-        basis = self.basis
-
         Q = [basisQf(basis_max) for basis_max in basis]
         F = [basisFf(basis_max) for basis_max in basis]
-        H_C = modeMatrixProduct(Q,Cn_,Q)
-        H_L = modeMatrixProduct(F,Ln_,F)
-
-        H = (H_C+H_L)/2
-
-        return H
-
-    def chargeHamiltonianLC(self):
-        """
-            basis : [basis_size] charge
-        """
-        Cn_,Ln_ = self.Cn_,self.Ln_
-        basis = self.basis
-
-        impedance = [sqrt(Cn_[i,i]/Ln_[i,i]) for i in range(len(basis))]
-        Q = [chargeCharge(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
-        F = [fluxCharge(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
-
         H_C = modeMatrixProduct(Q,Cn_,Q)
         H_L = modeMatrixProduct(F,Ln_,F)
 
