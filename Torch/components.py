@@ -1,17 +1,27 @@
 import uuid,numpy
-from numpy import pi
-from torch import tensor,norm,abs,zeros,zeros_like
+from numpy import matrix
+from numpy import sqrt as sqroot,pi
 
-numpy.set_printoptions(precision=3)
+from torch import tensor,norm,abs,ones,zeros,zeros_like,argsort
+from torch import linspace,arange,diagonal,diag,sqrt,eye
+from torch.linalg import det,inv,eig as eigsolve
+from torch import matrix_exp as expm,exp
+from torch import complex64,sin,cos,sigmoid
 
 im = 1.0j
-root2 = numpy.sqrt(2)
+root2 = sqroot(2)
 e = 1.60217662 * 10**(-19)
 h = 6.62607004 * 10**(-34)
 hbar = h/2/pi
 flux_quanta = h/2/e
 Z0 = h/4/e/e
 Z0 = flux_quanta / 2 / e
+
+# upper limit of circuit elements
+J0,C0,L0 = 100,1500,.01
+
+def sigmoidInverse(x):
+    return -numpy.log(1/x -1)
 
 def normalize(state,square=True):
     state = abs(state)
@@ -38,20 +48,36 @@ class Elements:
         self.ID = ID
 
 class J(Elements):
-    def __init__(self,plus,minus,Ej,ID=None):
+    def __init__(self,plus,minus,jo,ID=None):
         super().__init__(plus,minus,ID)
-        self.energy = tensor(Ej/1.0,requires_grad=True)
+        self.jo = tensor(sigmoidInverse(jo/J0),requires_grad=True)
+
+    def energy(self):
+        return sigmoid(self.jo)/1.0 * J0
 
 class C(Elements):
-    def __init__(self,plus,minus,Ec,ID=None):
+    def __init__(self,plus,minus,cap,ID=None):
         super().__init__(plus,minus,ID)
-        self.capacitance = tensor(1/Ec/2,requires_grad=True)
+        self.cap = tensor(sigmoidInverse(cap/C0),requires_grad=True)
+
+    def capacitance(self):
+        return sigmoid(self.cap)*C0
+
+    def energy(self):
+        return 1/self.capacitance()/2.0
 
 class L(Elements):
-    def __init__(self,plus,minus,El,ID=None,external=False):
+    def __init__(self,plus,minus,ind,ID=None,external=False):
         super().__init__(plus,minus,ID)
-        self.inductance = tensor(1/El/4/pi/pi,requires_grad=True)
+        self.ind = tensor(sigmoidInverse(ind/L0),requires_grad=True)
         self.external = external # duplication : doesn't requires_grad
+
+    def inductance(self):
+        return sigmoid(self.ind)*L0
+
+    def energy(self):
+        return 1/self.inductance()/4/pi/pi
+
 
 if __name__=='__main__':
     Qo = basisQo(30,tensor(4))

@@ -2,6 +2,7 @@ import networkx,copy,torch,utils
 import matplotlib.pyplot as plt
 import kerman_circuits
 
+import components
 from components_dense import *
 
 from numpy.linalg import matrix_rank
@@ -122,7 +123,7 @@ class Circuit:
         for component in self.network:
             weight = 1e-3
             if component.__class__ == J:
-                weight = component.energy
+                weight = component.energy().item() # scalar value
             G.add_edge(component.plus,component.minus,key=component.ID,weight=weight,component=component)
         return G
 
@@ -171,6 +172,17 @@ class Circuit:
 
         return GL
 
+    def circuitComponents(self):
+        circuit_components = []
+        for component in self.network:
+            if component.__class__ == components.C :
+                circuit_components.append({'C':component.capacitance().item()})
+            elif component.__class__ == components.L :
+                circuit_components.append({'L':component.inductance().item()})
+            elif component.__class__ == components.J :
+                circuit_components.append({'J':component.energy().item()})
+        return circuit_components
+
     def componentMatrix(self):
         Cn = self.nodeCapacitance()
         Cn_ = inverse(Cn)
@@ -209,7 +221,7 @@ class Circuit:
             component = self.G[u][v][key]['component']
             if component.__class__ == J:
                 edges.append((u,v,key))
-                Ej.append(component.energy)
+                Ej.append(component.energy())
         return edges,Ej
 
     def fluxBiasComponents(self):
@@ -231,7 +243,7 @@ class Circuit:
             for u,v,component in self.G.edges(node,data=True):
                 component = component['component']
                 if component.__class__ == C:
-                    capacitance = component.capacitance
+                    capacitance = component.energy()
                     Cn[i,i] += capacitance
                     if not (u==0 or v==0):
                         Cn[self.nodes_[u],self.nodes_[v]] = -capacitance
@@ -245,7 +257,7 @@ class Circuit:
             component = self.G[u][v][key]['component']
             if component.__class__ == L:
                 #if not component.external:
-                Lb[index,index] = component.inductance
+                Lb[index,index] = component.energy()
         return Lb
 
     def mutualInductance(self):
@@ -277,7 +289,7 @@ class Circuit:
         N *= prod([2*size+1 for size in basis['J']])
         return int(N)
 
-    def canonincalBasisSize(self):
+    def canonicalBasisSize(self):
         N = prod([2*size+1 for size in self.basis])
         return N
 
@@ -427,7 +439,7 @@ class Circuit:
         Dplus = [displacementFlux(basis_max,1) for z,basis_max in zip(Z,basis)]
         Dminus = [displacementFlux(basis_max,-1) for z,basis_max in zip(Z,basis)]
         edges,Ej = self.josephsonComponents()
-        N = self.canonincalBasisSize()
+        N = self.canonicalBasisSize()
         H = null(N)
         for (u,v,key),E in zip(edges,Ej):
             i,j = self.nodes_[u],self.nodes_[v]
@@ -476,7 +488,7 @@ class Circuit:
         Dplus = [chargeDisplacePlus(basis_max) for basis_max in basis]
         Dminus = [chargeDisplaceMinus(basis_max) for basis_max in basis]
         edges,Ej = self.josephsonComponents()
-        N = self.canonincalBasisSize()
+        N = self.canonicalBasisSize()
         H = null(N)
         for (u,v,key),E in zip(edges,Ej):
             i,j = self.nodes_[u],self.nodes_[v]
