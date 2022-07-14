@@ -3,8 +3,15 @@ from circuit import Circuit, hamiltonianEnergy, phase
 from components import J,C,L,pi,h
 from numpy.linalg import det
 from pyvis import network as pvnet
+from torch import tensor
 
-def transmon(basis,Ej=10,Ec=0.3):
+def tensorize(values,variable=True):
+    tensors = []
+    for val in values:
+        tensors.append(tensor(val,requires_grad=variable))
+    return tensors
+
+def transmon(basis,Ej=10.,Ec=0.3):
     transmon = [J(0,1,Ej)]
     transmon += [C(0,1,Ec)]
 
@@ -22,11 +29,12 @@ def oscillatorLC(basis,El=.00031,Ec=51.6256):
     oscillator = [L(0,1,El),C(0,1,Ec)]
     return Circuit(oscillator,basis)
 
-def shuntedQubit(basis):
-    circuit = [J(1,2,10.0),C(1,2,100.0)]
-    circuit += [J(2,3,10.0),C(2,3,500.0)]
-    circuit += [J(3,0,10.0),C(3,0,200.0)]
-    circuit += [L(0,1,.0001,'I',True)]
+def shuntedQubit(basis,josephson=[0.,0.,0.],ind=.0001,variable=True):
+    Ej1,Ej2,Ej3 = josephson
+    circuit = [J(1,2,Ej1),C(1,2,100.0)]
+    circuit += [J(2,3,Ej2),C(2,3,500.0)]
+    circuit += [J(3,0,Ej3),C(3,0,200.0)]
+    circuit += [L(0,1,ind,'I',True)]
 
     circuit = Circuit(circuit,basis)
     return circuit
