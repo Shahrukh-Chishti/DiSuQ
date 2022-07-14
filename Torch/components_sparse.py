@@ -1,29 +1,15 @@
-import numpy,uuid,torch
-from numpy import cos,sin,pi,array, abs as absolute
+from numpy import abs as absolute
 
-from torch.linalg import det,inv,eig as eigsolve
-from torch import matrix_exp as expm,kron as kronecker
-from torch import arange,diagonal,diag,sqrt,vstack
-from torch import eye,tensor,matmul as mul,zeros,zeros_like,nonzero,exp
-from torch import ones,complex64,norm,argsort,linspace
+from torch import kron as kronecker
+from torch import vstack,transpose
+from torch import matmul as mul,nonzero
 from torch import sparse,sparse_coo_tensor
 from torch.sparse import mm as mul
 
 from components import *
 
-numpy.set_printoptions(precision=3)
-
-im = 1.0j
-root2 = numpy.sqrt(2)
-e = 1.60217662 * 10**(-19)
-h = 6.62607004 * 10**(-34)
-hbar = h/2/pi
-flux_quanta = h/2/e
-Z0 = h/4/e/e
-Z0 = flux_quanta / 2 / e
-
 def unitaryTransformation(M,U):
-    M = mul( U.conj().T, mul(M, U))
+    M = mul( transpose(U.conj(),0,1), mul(M, U))
     return M
 
 def indicesSparse(A):
@@ -53,8 +39,8 @@ def sparsify(T):
 def identity(n):
     return sparsify(eye(n))
 
-def null(shape=1):
-    return sparse_coo_tensor([[],[]],[],[shape]*2,dtype=complex64)
+def null(shape=1,dtype=complex64):
+    return sparse_coo_tensor([[],[]],[],[shape]*2,dtype=dtype)
 
 def diagSparse(values,diagonal=0):
     N = len(values)+absolute(diagonal)
@@ -78,7 +64,7 @@ def basisQo(n,impedance):
     return Qo*im*sqrt(1/2/pi/impedance)
 
 def basisFo(n,impedance):
-    Po = torch.arange(1,n)
+    Po = arange(1,n)
     Po = sqrt(Po)
     Po = diagSparse(Po,diagonal=1) + diagSparse(Po,diagonal=-1)
     return Po*sqrt(impedance/2/pi)
@@ -98,7 +84,7 @@ def transformationMatrix(n_charge,N_flux,n_flux=1):
     T = matrix(flux_states).T @ matrix(charge_states)
     T = tensor(T,dtype=complex64)
     T *= 2*pi*im/N_flux
-    T = exp(T)/numpy.sqrt(N_flux)
+    T = expm(T)/sqroot(N_flux)
     return sparsify(T)
 
 def basisQq(n):
@@ -122,7 +108,7 @@ def basisFq(n):
 def basisFq(n):
     Q = basisQq(n).to(complex64)
     U = transformationMatrix(n,2*n+1,n)
-    return U@Q@U.conj().T/(2.0*n+1.0)/2.0
+    return unitaryTransformation(Q,transpose(U.conj(),0,1))/(2.0*n+1.0)/2.0
 
 def basisFf(n):
     flux = fluxStates(2*n+1,n)
@@ -163,18 +149,12 @@ def displacementFlux(n,a):
     D = expm(im*2*pi*a*D)
     return sparsify(D)
 
-def wavefunction(H,level=[0]):
-    eig,vec = eigsolve(H)
-    indices = argsort(eig)
-    states = vec.T[indices[level]]
-    return states
-
 if __name__=='__main__':
     Qo = basisQo(30,tensor(4.0))
     Fq = basisFq(30)
     Qf = basisQf(30)
-    S1 = torch.sparse_coo_tensor([[0],[0]],[1.0],[3,3])
-    S2 = torch.sparse_coo_tensor([[0],[0]],[4.0],[3,3])
+    S1 = sparse_coo_tensor([[0],[0]],[1.0],[3,3])
+    S2 = sparse_coo_tensor([[0],[0]],[4.0],[3,3])
     s1 = zeros(3,3);s1[0,0]=1;s1[1,2]=234
     s2 = zeros(3,3);s2[0,0]=4
     Sp1 = sparsify(s1)

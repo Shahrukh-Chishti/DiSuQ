@@ -1,8 +1,11 @@
 import networkx,copy,torch,utils
 import matplotlib.pyplot as plt
 import kerman_circuits
-from components import *
-from components_sparse import identity,kron,null,mul
+
+from components_dense import *
+
+from numpy.linalg import matrix_rank
+from numpy import prod,array
 
 def modeTensorProduct(pre,M,post):
     """
@@ -77,6 +80,12 @@ def hamiltonianEnergy(H,sort=True):
     if sort:
         eigenenergies = eigenenergies.sort()[0]
     return eigenenergies
+
+def wavefunction(H,level=[0]):
+    eig,vec = eigsolve(H)
+    indices = argsort(eig)
+    states = vec.T[indices[level]]
+    return states
 
 class Circuit:
     """
@@ -346,7 +355,7 @@ class Circuit:
     def kermanHamiltonianJosephson(self,external_fluxes=dict()):
         edges,Ej = self.josephsonComponents()
         N = self.kermanBasisSize()
-        H = sparsify(zeros(N,N))
+        H = null(N)
         for (u,v,key),E in zip(edges,Ej):
             i,j = self.nodes_[u],self.nodes_[v]
             flux = self.loopFlux(u,v,key,external_fluxes)
@@ -384,12 +393,12 @@ class Circuit:
         Qi = [basisQq(basis_max) for basis_max in basis['I']]
         Qj = [basisQq(basis_max) for basis_max in basis['J']]
         Q = Qo + Qi + Qj
-        import ipdb; ipdb.set_trace()
+
         Co = modeMatrixProduct(Q,Co_,Q,(0,0))
 
         Fo = [basisFo(basis_max,Zi) for Zi,basis_max in zip(Z,basis['O'])]
-        Fi = [basisFq(basis_max) for basis_max in basis['O']]
-        Fj = [basisFq(basis_max) for basis_max in basis['O']]
+        Fi = [basisFq(basis_max) for basis_max in basis['I']]
+        Fj = [basisFq(basis_max) for basis_max in basis['J']]
         F = Fo + Fi + Fj
 
         Lo = modeMatrixProduct(F,Lo_,F,(0,0))

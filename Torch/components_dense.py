@@ -1,23 +1,5 @@
-import numpy
-from numpy import matrix
-from numpy import sqrt as sqroot,pi
-
-from torch.linalg import det,inv,eig as eigsolve
-from torch import matrix_exp as expm,kron,diagonal,sqrt,linspace,sin,cos
-from torch import eye,tensor,norm,abs,arange,argsort,diag,zeros,ones
-
+from torch import kron
 from components import *
-
-numpy.set_printoptions(precision=3)
-
-im = 1.0j
-root2 = sqroot(2)
-e = 1.60217662 * 10**(-19)
-h = 6.62607004 * 10**(-34)
-hbar = h/2/pi
-flux_quanta = h/2/e
-Z0 = h/4/e/e
-Z0 = flux_quanta / 2 / e
 
 def unitaryTransformation(M,U):
     M = U.conj().T@ M@ U
@@ -26,8 +8,8 @@ def unitaryTransformation(M,U):
 def identity(n):
     return eye(n)
 
-def null(*args):
-    return tensor(0.0)
+def null(N=1,dtype=complex64):
+    return zeros(N,N,dtype=complex64)
 
 def mul(A,B):
     return A@B
@@ -89,7 +71,7 @@ def transformationMatrix(n_charge,N_flux,n_flux=1):
     T = matrix(flux_states).T @ matrix(charge_states)
     T = tensor(T,dtype=complex64)
     T *= 2*pi*im/N_flux
-    T = exp(T)/sqroot(N_flux)
+    T = expm(T)/sqroot(N_flux)
     return T
 
 def basisQq(n):
@@ -152,15 +134,9 @@ def displacementFlux(n,a):
     D = expm(im*2*pi*a*D)
     return D
 
-def wavefunction(H,level=[0]):
-    eig,vec = eigsolve(H)
-    indices = argsort(eig)
-    states = vec.T[indices[level]]
-    return states
-
 if __name__=='__main__':
     Qo = basisQo(30,tensor(4))
     Fq = basisFq(30)
     Qf = basisQf(30)
-    
+
     import ipdb;ipdb.set_trace()
