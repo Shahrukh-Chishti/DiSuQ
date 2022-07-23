@@ -1,6 +1,6 @@
 import uuid,numpy
 from numpy import matrix
-from numpy import sqrt as sqroot,pi
+from numpy import sqrt as sqroot,pi,prod
 
 from torch import tensor,norm,abs,ones,zeros,zeros_like,argsort
 from torch import linspace,arange,diagonal,diag,sqrt,eye

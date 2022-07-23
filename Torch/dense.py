@@ -1,6 +1,68 @@
 from torch import kron
 from components import *
 
+""" Operator Computation """
+
+def modeTensorProduct(pre,M,post):
+    """
+        extend mode to full system basis
+        sequentially process duplication
+    """
+    H = identity(1)
+    for dim in pre:
+        H = kron(H,identity(dim))
+    H = kron(H,M)
+    for dim in post:
+        H = kron(H,identity(dim))
+    return H
+
+def crossBasisProduct(A,B,a,b):
+    assert len(A)==len(B)
+    n = len(A)
+    product = identity(1)
+    for i in range(n):
+        if i==a:
+            product = kron(product,A[i])
+        elif i==b:
+            product = kron(product,B[i])
+        else:
+            product = kron(product,identity(len(A[i])))
+    return product
+
+def basisProduct(O,indices=None):
+    n = len(O)
+    B = identity(1)
+    if indices is None:
+        indices = arange(n)
+    for i in range(n):
+        if i in indices:
+            B = kron(B,O[i])
+        else:
+            B = kron(B,identity(len(O[i])))
+    return B
+
+def modeMatrixProduct(A,M,B,mode=(0,0)):
+    """
+        M : mode operator, implementing mode interactions
+        B : list : basis operators
+        A : list : basis operators(transpose)
+        cross_mode : indicates if A!=B, assumed ordering : AxB
+        returns : prod(nA) x prod(nB) mode state Hamiltonian matrix
+    """
+    shape = prod([len(a) for a in A])
+    H = null(shape)
+    a,b = mode
+    nA,nB = M.shape
+    for i in range(nA):
+        for j in range(nB):
+            left = basisProduct(A,[i+a])
+            right = basisProduct(B,[j+b])
+            H += M[i,j]*mul(left,right)
+
+    return H
+
+""" Operator Objects """
+
 def unitaryTransformation(M,U):
     M = U.conj().T@ M@ U
     return M

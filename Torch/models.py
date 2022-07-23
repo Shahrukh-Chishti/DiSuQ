@@ -33,7 +33,7 @@ def oscillatorLC(basis,El=.00031,Ec=51.6256):
     oscillator = [L(0,1,El),C(0,1,Ec)]
     return Circuit(oscillator,basis)
 
-def shuntedQubit(basis,josephson=[10.,15.,20.],cap=[100.,500.,200.],ind=.0001,variable=True):
+def shuntedQubit(basis,josephson=[10.,15.,20.],cap=[100.,500.,200.],ind=.0001,sparse=True):
     Ej1,Ej2,Ej3 = josephson
     C1,C2,C3 = cap
 
@@ -42,7 +42,7 @@ def shuntedQubit(basis,josephson=[10.,15.,20.],cap=[100.,500.,200.],ind=.0001,va
     circuit += [J(3,0,Ej3),C(3,0,C3)]
     circuit += [L(0,1,ind,'I',True)]
 
-    circuit = Circuit(circuit,basis)
+    circuit = Circuit(circuit,basis,sparse)
     return circuit
 
 def phaseSlip(basis,inductance=[.001,.0005,.00002,.00035,.0005],capacitance=[100,30,30,30,30,40,10]):

@@ -1,68 +1,12 @@
 import networkx,copy,torch,utils
 import matplotlib.pyplot as plt
 
-import components
+import components,dense as Dense,sparse as Sparse
+from components import exp,inv,det,tensor,arange,zeros,sqrt,diagonal
+from components import diagonalisation,arange,J,L,C,im,pi
 
 from numpy.linalg import matrix_rank
 from numpy import prod,array
-
-def modeTensorProduct(pre,M,post):
-    """
-        extend mode to full system basis
-        sequentially process duplication
-    """
-    H = identity(1)
-    for dim in pre:
-        H = kron(H,identity(dim))
-    H = kron(H,M)
-    for dim in post:
-        H = kron(H,identity(dim))
-    return H
-
-def crossBasisProduct(A,B,a,b):
-    assert len(A)==len(B)
-    n = len(A)
-    product = identity(1)
-    for i in range(n):
-        if i==a:
-            product = kron(product,A[i])
-        elif i==b:
-            product = kron(product,B[i])
-        else:
-            product = kron(product,identity(len(A[i])))
-    return product
-
-def basisProduct(O,indices=None):
-    n = len(O)
-    B = identity(1)
-    if indices is None:
-        indices = arange(n)
-    for i in range(n):
-        if i in indices:
-            B = kron(B,O[i])
-        else:
-            B = kron(B,identity(len(O[i])))
-    return B
-
-def modeMatrixProduct(A,M,B,mode=(0,0)):
-    """
-        M : mode operator, implementing mode interactions
-        B : list : basis operators
-        A : list : basis operators(transpose)
-        cross_mode : indicates if A!=B, assumed ordering : AxB
-        returns : prod(nA) x prod(nB) mode state Hamiltonian matrix
-    """
-    shape = prod([len(a) for a in A])
-    H = null(shape)
-    a,b = mode
-    nA,nB = M.shape
-    for i in range(nA):
-        for j in range(nB):
-            left = basisProduct(A,[i+a])
-            right = basisProduct(B,[j+b])
-            H += M[i,j]*mul(left,right)
-
-    return H
 
 def inverse(A):
     if det(A) == 0:
@@ -97,7 +41,7 @@ class Circuit:
         * i,j : indices of indexed graph : mode correspondence
     """
 
-    def __init__(self,network,basis):
+    def __init__(self,network,basis,sparse=True):
         self.network = network
         self.G = self.parseCircuit()
         self.spanning_tree = self.spanningTree()
@@ -115,6 +59,11 @@ class Circuit:
         self.basis = basis
         # basis : list of basis_size of ith mode
         # basis : dict of O,I,J : list of basis_size
+        self.sparse = sparse
+        if sparse:
+            self.backend = Sparse
+        else:
+            self.backend = Dense
 
     def parseCircuit(self):
         G = networkx.MultiGraph()
@@ -349,12 +298,12 @@ class Circuit:
         #assert J==1 or 0
         Z = self.oscillatorImpedance() * 2 # cooper pair factor
         # re-calculation with parameter iteration
-        DO_plus = [displacementOscillator(basis_max,z,o) for o,z,basis_max in zip(O,Z,basis['O'])]
-        DO_minus = [displacementOscillator(basis_max,z,-o) for o,z,basis_max in zip(O,Z,basis['O'])]
-        DI_plus = [displacementCharge(basis_max,i) for i,basis_max in zip(I,basis['I'])]
-        DI_minus = [displacementCharge(basis_max,-i) for i,basis_max in zip(I,basis['I'])]
-        DJ_plus = [displacementCharge(basis_max,j) for j,basis_max in zip(J,basis['J'])]
-        DJ_minus = [displacementCharge(basis_max,-j) for j,basis_max in zip(J,basis['J'])]
+        DO_plus = [self.backend.displacementOscillator(basis_max,z,o) for o,z,basis_max in zip(O,Z,basis['O'])]
+        DO_minus = [self.backend.displacementOscillator(basis_max,z,-o) for o,z,basis_max in zip(O,Z,basis['O'])]
+        DI_plus = [self.backend.displacementCharge(basis_max,i) for i,basis_max in zip(I,basis['I'])]
+        DI_minus = [self.backend.displacementCharge(basis_max,-i) for i,basis_max in zip(I,basis['I'])]
+        DJ_plus = [self.backend.displacementCharge(basis_max,j) for j,basis_max in zip(J,basis['J'])]
+        DJ_minus = [self.backend.displacementCharge(basis_max,-j) for j,basis_max in zip(J,basis['J'])]
 
         Dplus = DO_plus+DI_plus+DJ_plus
         Dminus = DO_minus+DI_minus+DJ_minus
@@ -365,7 +314,7 @@ class Circuit:
     def kermanHamiltonianJosephson(self,external_fluxes=dict()):
         edges,Ej = self.josephsonComponents()
         N = self.kermanBasisSize()
-        H = null(N)
+        H = self.backend.null(N)
         for (u,v,key),E in zip(edges,Ej):
             i,j = self.nodes_[u],self.nodes_[v]
             flux = self.loopFlux(u,v,key,external_fluxes)
@@ -375,14 +324,14 @@ class Circuit:
                 combination = self.linearCombination(i)
                 Dplus,Dminus = self.displacementCombination(combination)
 
-                Jplus = basisProduct(Dplus)
-                Jminus = basisProduct(Dminus)
+                Jplus = self.backend.basisProduct(Dplus)
+                Jminus = self.backend.basisProduct(Dminus)
             else:
                 combination = self.linearCombination(i) - self.linearCombination(j)
                 Dplus,Dminus = self.displacementCombination(combination)
 
-                Jplus = basisProduct(Dplus)
-                Jminus = basisProduct(Dminus)
+                Jplus = self.backend.basisProduct(Dplus)
+                Jminus = self.backend.basisProduct(Dminus)
             Hj = E*(Jplus*phase(flux) + Jminus*phase(-flux))
             H = H-Hj
 
@@ -399,34 +348,34 @@ class Circuit:
         No,Ni,Nj = self.No,self.Ni,self.Nj
 
         Z = sqrt(diagonal(Co_)/diagonal(Lo_))
-        Qo = [basisQo(basis_max,Zi) for Zi,basis_max in zip(Z,basis['O'])]
-        Qi = [basisQq(basis_max) for basis_max in basis['I']]
-        Qj = [basisQq(basis_max) for basis_max in basis['J']]
+        Qo = [self.backend.basisQo(basis_max,Zi) for Zi,basis_max in zip(Z,basis['O'])]
+        Qi = [self.backend.basisQq(basis_max) for basis_max in basis['I']]
+        Qj = [self.backend.basisQq(basis_max) for basis_max in basis['J']]
         Q = Qo + Qi + Qj
 
-        Co = modeMatrixProduct(Q,Co_,Q,(0,0))
+        Co = self.backend.modeMatrixProduct(Q,Co_,Q,(0,0))
 
-        Fo = [basisFo(basis_max,Zi) for Zi,basis_max in zip(Z,basis['O'])]
-        Fi = [basisFq(basis_max) for basis_max in basis['I']]
-        Fj = [basisFq(basis_max) for basis_max in basis['J']]
+        Fo = [self.backend.basisFo(basis_max,Zi) for Zi,basis_max in zip(Z,basis['O'])]
+        Fi = [self.backend.basisFq(basis_max) for basis_max in basis['I']]
+        Fj = [self.backend.basisFq(basis_max) for basis_max in basis['J']]
         F = Fo + Fi + Fj
 
-        Lo = modeMatrixProduct(F,Lo_,F,(0,0))
+        Lo = self.backend.modeMatrixProduct(F,Lo_,F,(0,0))
 
         Ho = (Co + Lo)/2
 
-        Coi = modeMatrixProduct(Q,Coi_,Q,(0,No))
+        Coi = self.backend.modeMatrixProduct(Q,Coi_,Q,(0,No))
 
-        Coj = modeMatrixProduct(Q,Coj_,Q,(0,No+Ni))
+        Coj = self.backend.modeMatrixProduct(Q,Coj_,Q,(0,No+Ni))
 
-        Cij = modeMatrixProduct(Q,Cij_,Q,(No,No+Ni))
+        Cij = self.backend.modeMatrixProduct(Q,Cij_,Q,(No,No+Ni))
 
         Hint = Coi + Coj + Cij
 
-        Ci = modeMatrixProduct(Q,Ci_,Q,(No,No))
+        Ci = self.backend.modeMatrixProduct(Q,Ci_,Q,(No,No))
         Hi = Ci/2
 
-        Cj = modeMatrixProduct(Q,Ci_,Q,(No+Ni,No+Ni))
+        Cj = self.backend.modeMatrixProduct(Q,Ci_,Q,(No+Ni,No+Ni))
         Hj = Cj/2
 
         return Ho+Hint+Hi+Hj
@@ -434,22 +383,22 @@ class Circuit:
     def josephsonFlux(self,external_fluxes=dict()):
         basis = self.basis
         Z = self.modeImpedance() * 2 # cooper pair factor
-        Dplus = [displacementFlux(basis_max,1) for z,basis_max in zip(Z,basis)]
-        Dminus = [displacementFlux(basis_max,-1) for z,basis_max in zip(Z,basis)]
+        Dplus = [self.backend.displacementFlux(basis_max,1) for z,basis_max in zip(Z,basis)]
+        Dminus = [self.backend.displacementFlux(basis_max,-1) for z,basis_max in zip(Z,basis)]
         edges,Ej = self.josephsonComponents()
         N = self.canonicalBasisSize()
-        H = null(N)
+        H = self.backend.null(N)
         for (u,v,key),E in zip(edges,Ej):
             i,j = self.nodes_[u],self.nodes_[v]
             flux = self.loopFlux(u,v,key,external_fluxes)
             if i<0 or j<0 :
                 # grounded josephson
                 i = max(i,j)
-                Jplus = basisProduct(Dplus,[i])
-                Jminus = basisProduct(Dminus,[i])
+                Jplus = self.backend.basisProduct(Dplus,[i])
+                Jminus = self.backend.basisProduct(Dminus,[i])
             else:
-                Jplus = crossBasisProduct(Dplus,Dminus,i,j)
-                Jminus = crossBasisProduct(Dplus,Dminus,j,i)
+                Jplus = self.backend.crossBasisProduct(Dplus,Dminus,i,j)
+                Jminus = self.backend.crossBasisProduct(Dplus,Dminus,j,i)
                 #assert (Jminus == Jplus.conj().T).all()
             Hj = E*(Jplus*phase(flux) + Jminus*phase(-flux))
             H = H - Hj
@@ -459,22 +408,22 @@ class Circuit:
     def josephsonOscillator(self,external_fluxes=dict()):
         basis = self.basis
         Z = self.modeImpedance() * 2 # cooper pair factor
-        Dplus = [displacementOscillator(basis_max,z,1) for z,basis_max in zip(Z,basis)]
-        Dminus = [displacementOscillator(basis_max,z,-1) for z,basis_max in zip(Z,basis)]
+        Dplus = [self.backend.displacementOscillator(basis_max,z,1) for z,basis_max in zip(Z,basis)]
+        Dminus = [self.backend.displacementOscillator(basis_max,z,-1) for z,basis_max in zip(Z,basis)]
         edges,Ej = self.josephsonComponents()
         N = prod(basis)
-        H = null(N)
+        H = self.backend.null(N)
         for (u,v,key),E in zip(edges,Ej):
             i,j = self.nodes_[u],self.nodes_[v]
             flux = self.loopFlux(u,v,key,external_fluxes)
             if i<0 or j<0 :
                 # grounded josephson
                 i = max(i,j)
-                Jplus = basisProduct(Dplus,[i])
-                Jminus = basisProduct(Dminus,[i])
+                Jplus = self.backend.basisProduct(Dplus,[i])
+                Jminus = self.backend.basisProduct(Dminus,[i])
             else:
-                Jplus = crossBasisProduct(Dplus,Dminus,i,j)
-                Jminus = crossBasisProduct(Dplus,Dminus,j,i)
+                Jplus = self.backend.crossBasisProduct(Dplus,Dminus,i,j)
+                Jminus = self.backend.crossBasisProduct(Dplus,Dminus,j,i)
                 #assert (Jminus == Jplus.conj().T).all()
             Hj = E*(Jplus*phase(flux) + Jminus*phase(-flux))
             H = H - Hj
@@ -483,22 +432,22 @@ class Circuit:
 
     def josephsonCharge(self,external_fluxes=dict()):
         basis = self.basis
-        Dplus = [chargeDisplacePlus(basis_max) for basis_max in basis]
-        Dminus = [chargeDisplaceMinus(basis_max) for basis_max in basis]
+        Dplus = [self.backend.chargeDisplacePlus(basis_max) for basis_max in basis]
+        Dminus = [self.backend.chargeDisplaceMinus(basis_max) for basis_max in basis]
         edges,Ej = self.josephsonComponents()
         N = self.canonicalBasisSize()
-        H = null(N)
+        H = self.backend.null(N)
         for (u,v,key),E in zip(edges,Ej):
             i,j = self.nodes_[u],self.nodes_[v]
             flux = self.loopFlux(u,v,key,external_fluxes)
             if i<0 or j<0 :
                 # grounded josephson
                 i = max(i,j)
-                Jplus = basisProduct(Dplus,[i])
-                Jminus = basisProduct(Dminus,[i])
+                Jplus = self.backend.basisProduct(Dplus,[i])
+                Jminus = self.backend.basisProduct(Dminus,[i])
             else:
-                Jplus = crossBasisProduct(Dplus,Dminus,i,j)
-                Jminus = crossBasisProduct(Dplus,Dminus,j,i)
+                Jplus = self.backend.crossBasisProduct(Dplus,Dminus,i,j)
+                Jminus = self.backend.crossBasisProduct(Dplus,Dminus,j,i)
                 #assert (Jminus == Jplus.conj().T).all()
             Hj = E*(Jplus*phase(flux) + Jminus*phase(-flux))
             H = H-Hj
@@ -516,9 +465,9 @@ class Circuit:
             if i<0 or j<0 :
                 # grounded inducer
                 i = max(i,j)
-                P = basisProduct(fluxModes,[i])
+                P = self.backend.basisProduct(fluxModes,[i])
             else:
-                P = basisProduct(fluxModes,[i]) - basisProduct(fluxModes,[j])
+                P = self.backend.basisProduct(fluxModes,[i]) - self.backend.basisProduct(fluxModes,[j])
             H = H + P@P / 2 / L
         return H
 
@@ -530,11 +479,11 @@ class Circuit:
         basis = self.basis
 
         impedance = self.modeImpedance()
-        Q = [basisQo(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
-        F = [basisFo(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
+        Q = [self.backend.basisQo(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
+        F = [self.backend.basisFo(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
 
-        H_C = modeMatrixProduct(Q,Cn_,Q)
-        H_L = modeMatrixProduct(F,Ln_,F)
+        H_C = self.backend.modeMatrixProduct(Q,Cn_,Q)
+        H_L = self.backend.modeMatrixProduct(F,Ln_,F)
 
         H = (H_C+H_L)/2
 
@@ -547,10 +496,10 @@ class Circuit:
         Cn_,Ln_ = self.Cn_,self.Ln_
         basis = self.basis
 
-        Q = [basisQf(basis_max) for basis_max in basis]
-        F = [basisFf(basis_max) for basis_max in basis]
-        H_C = modeMatrixProduct(Q,Cn_,Q)
-        H_L = modeMatrixProduct(F,Ln_,F)
+        Q = [self.backend.basisQf(basis_max) for basis_max in basis]
+        F = [self.backend.basisFf(basis_max) for basis_max in basis]
+        H_C = self.backend.modeMatrixProduct(Q,Cn_,Q)
+        H_L = self.backend.modeMatrixProduct(F,Ln_,F)
 
         H = (H_C+H_L)/2
 
@@ -563,10 +512,10 @@ class Circuit:
         Cn_,Ln_ = self.Cn_,self.Ln_
         basis = self.basis
 
-        Q = [basisQq(basis_max) for basis_max in basis]
-        F = [basisFq(basis_max) for basis_max in basis]
-        H_C = modeMatrixProduct(Q,Cn_,Q)
-        H_L = modeMatrixProduct(F,Ln_,F)
+        Q = [self.backend.basisQq(basis_max) for basis_max in basis]
+        F = [self.backend.basisFq(basis_max) for basis_max in basis]
+        H_C = self.backend.modeMatrixProduct(Q,Cn_,Q)
+        H_L = self.backend.modeMatrixProduct(F,Ln_,F)
 
         H = (H_C+H_L)/2
 
@@ -577,8 +526,8 @@ class Circuit:
         basis = self.basis
 
         impedance = self.modeImpedance()
-        F = [basisFo(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
-        H_L = modeMatrixProduct(F,Ln_,F)/2
+        F = [self.backend.basisFo(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
+        H_L = self.backend.modeMatrixProduct(F,Ln_,F)/2
         H_J = self.josephsonOscillator(external_fluxes)
         return H_L+H_J
 
@@ -586,8 +535,8 @@ class Circuit:
         Ln_ = self.Ln_
         basis = self.basis
 
-        F = [basisFq(basis_max) for basis_max in basis]
-        H_L = modeMatrixProduct(F,Ln_,F)/2
+        F = [self.backend.basisFq(basis_max) for basis_max in basis]
+        H_L = self.backend.modeMatrixProduct(F,Ln_,F)/2
         H_J = self.josephsonCharge(external_fluxes)
         return H_L+H_J
 
@@ -595,12 +544,14 @@ class Circuit:
         Ln_ = self.Ln_
         basis = self.basis
 
-        F = [basisFf(basis_max) for basis_max in basis]
-        H_L = modeMatrixProduct(F,Ln_,F)/2
+        F = [self.backend.basisFf(basis_max) for basis_max in basis]
+        H_L = self.backend.modeMatrixProduct(F,Ln_,F)/2
         H_J = self.josephsonFlux(external_fluxes)
         return H_L+H_J
 
-    def circuitEnergy(self,H_LC=0,H_J=null,external_fluxes=dict(),exclude=False):
+    def circuitEnergy(self,H_LC=0,H_J=None,external_fluxes=dict(),exclude=False):
+        if H_J is None:
+            H_J = self.backend.null
         #H_LC = self.hamiltonianLC()
         #H_ext = self.fluxInducerEnergy()
         H = H_LC + H_J(external_fluxes)
@@ -609,11 +560,13 @@ class Circuit:
         eigenenergies = hamiltonianEnergy(H)
         return eigenenergies
 
-    def spectrumManifold(self,flux_points,flux_manifold,H_LC=tensor(0.0),H_J=null,excitation=1):
+    def spectrumManifold(self,flux_points,flux_manifold,H_LC=tensor(0.0),H_J=None,excitation=1):
         """
             flux_points : inductor identifier for external introduction
             flux_manifold : [(fluxes)]
         """
+        if H_J is None:
+            h_J = self.backend.null
         #manifold of flux space M
         Ex,E0 = [],[]
         #H_LC = self.hamiltonianLC()
@@ -628,8 +581,8 @@ class Circuit:
         return E0,Ex
 
 if __name__=='__main__':
-    import kerman_circuits
-    circuit = kerman_circuits.shuntedQubit([2,2,2])
+    import models
+    circuit = models.shuntedQubit([2,2,2],sparse=False)
     #utils.plotMatPlotGraph(circuit.G,'circuit')
     #utils.plotMatPlotGraph(circuit.spanning_tree,'spanning_tree')
     flux_manifold = zip(arange(0,1,.01))
