@@ -4,7 +4,8 @@ from numpy import diag,linspace,outer,zeros,fill_diagonal,ones
 from numpy import dot,zeros_like,real,prod,diagonal
 from numpy.linalg import det,norm,eig as eigsolve,eigh,inv,eigvals,matrix_rank
 from scipy.linalg import expm
-from numpy import complex128 as complex, complex128
+from numpy import complex128 as complex
+from numpy import float32 as float
 
 im = 1.0j
 root2 = sqrt(2)
@@ -92,13 +93,13 @@ def chargeStates(n,dtype=int):
     charge = linspace(n,-n,2*n+1,dtype=dtype)
     return charge
 
-def fluxStates(N_flux,n_flux=1):
-    flux = linspace(n_flux,-n_flux,N_flux,dtype=complex)
+def fluxStates(N_flux,n_flux=1,dtype=float):
+    flux = linspace(n_flux,-n_flux,N_flux,dtype=dtype)
     return flux/N_flux
 
 def transformationMatrix(n_charge,N_flux,n_flux=1):
-    charge_states = chargeStates(n_charge)
-    flux_states = fluxStates(N_flux,n_flux)*N_flux
+    charge_states = chargeStates(n_charge,complex)
+    flux_states = fluxStates(N_flux,n_flux,complex)*N_flux
 
     T = outer(flux_states,charge_states)
     T *= 2*pi*im/N_flux
@@ -115,7 +116,7 @@ def basisQq(n):
 def basisFq(n):
     # charge basis
     N = 2*n+1
-    P = zeros((N,N),dtype=complex128)
+    P = zeros((N,N),dtype=complex)
     charge = chargeStates(n)
     for q in charge:
         for p in charge:
@@ -130,8 +131,8 @@ def basisFq(n):
     return U@Q@U.conj().T/(2*n+1)/2
 
 def basisFf(n):
-    flux = fluxStates(2*n+1,n)
-    F = zeros((len(flux),len(flux)),complex128)
+    flux = fluxStates(2*n+1,n,complex)
+    F = zeros((len(flux),len(flux)),complex)
     fill_diagonal(F,flux)
     return F
 
@@ -142,13 +143,13 @@ def basisQf(n):
 
 def chargeDisplacePlus(n):
     """n : charge basis truncation"""
-    diagonal = ones((2*n+1)-1,dtype=complex128)
+    diagonal = ones((2*n+1)-1,dtype=complex)
     D = diag(diagonal,k=-1)
     return D
 
 def chargeDisplaceMinus(n):
     """n : charge basis truncation"""
-    diagonal = ones((2*n+1)-1,dtype=complex128)
+    diagonal = ones((2*n+1)-1,dtype=complex)
     D = diag(diagonal,k=1)
     return D
 
