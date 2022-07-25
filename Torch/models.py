@@ -15,11 +15,11 @@ def tensorize(values,variable=True):
 def sigInv(sig,limit):
     return [sigmoidInverse(s/limit) for s in sig]
 
-def transmon(basis,Ej=10.,Ec=0.3):
+def transmon(basis,Ej=10.,Ec=0.3,sparse=True):
     transmon = [J(0,1,Ej)]
     transmon += [C(0,1,Ec)]
 
-    transmon = Circuit(transmon,basis)
+    transmon = Circuit(transmon,basis,sparse)
     return transmon
 
 def splitTransmon(basis):
