@@ -396,11 +396,9 @@ class Circuit:
         Hint = Coi + Coj + Cij
 
         Ci = modeMatrixProduct(Q,Ci_,Q,(No,No))
-
         Hi = Ci/2
 
         Cj = modeMatrixProduct(Q,Cj_,Q,(No+Ni,No+Ni))
-
         Hj = Cj/2
 
         return Ho+Hint+Hi+Hj

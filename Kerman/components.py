@@ -1,10 +1,10 @@
 import numpy,uuid
 from numpy import cos,sin,pi,exp,sqrt,array,arange,argsort,asarray,eye
-from numpy import diag,linspace,matrix,complex128,zeros,fill_diagonal,ones
+from numpy import diag,linspace,outer,zeros,fill_diagonal,ones
 from numpy import dot,zeros_like,real,prod,diagonal
 from numpy.linalg import det,norm,eig as eigsolve,eigh,inv,eigvals,matrix_rank
 from scipy.linalg import expm
-numpy.set_printoptions(precision=2)
+from numpy import complex128 as complex, complex128
 
 im = 1.0j
 root2 = sqrt(2)
@@ -88,27 +88,27 @@ def fluxCharge(n,impedance):
     Pq = unitaryTransformation(Fo,D)
     return Pq
 
-def chargeStates(n):
-    charge = linspace(n,-n,2*n+1,dtype=int)
+def chargeStates(n,dtype=int):
+    charge = linspace(n,-n,2*n+1,dtype=dtype)
     return charge
 
 def fluxStates(N_flux,n_flux=1):
-    flux = linspace(n_flux,-n_flux,N_flux)
+    flux = linspace(n_flux,-n_flux,N_flux,dtype=complex)
     return flux/N_flux
 
 def transformationMatrix(n_charge,N_flux,n_flux=1):
-    charge_states = linspace(n_charge,-n_charge,2*n_charge+1,dtype=complex128)
-    flux_states = linspace(n_flux,-n_flux,N_flux,dtype=complex128)
+    charge_states = chargeStates(n_charge)
+    flux_states = fluxStates(N_flux,n_flux)*N_flux
 
-    T = matrix(flux_states).T @ matrix(charge_states)
+    T = outer(flux_states,charge_states)
     T *= 2*pi*im/N_flux
     T = exp(T)/sqrt(N_flux)
-    return array(T)
+    return T
 
 def basisQq(n):
     # charge basis
     charge = chargeStates(n)
-    Q = zeros((len(charge),len(charge)),complex128)
+    Q = zeros((len(charge),len(charge)),complex)
     fill_diagonal(Q,charge)
     return Q * 2
 
