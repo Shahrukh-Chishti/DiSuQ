@@ -70,8 +70,8 @@ def unitaryTransformation(M,U):
 def identity(n):
     return eye(n)
 
-def null(N=1,dtype=complex64):
-    return zeros(N,N,dtype=complex64)
+def null(N=1,dtype=complex):
+    return zeros(N,N,dtype=complex)
 
 def mul(A,B):
     return A@B
@@ -118,34 +118,33 @@ def fluxCharge(n,impedance):
     Pq = unitaryTransformation(Po,D)
     return Pq
 
-def chargeStates(n):
-    charge = linspace(n,-n,2*n+1)
+def chargeStates(n,dtype=int):
+    charge = linspace(n,-n,2*n+1,dtype=dtype)
     return charge
 
-def fluxStates(N_flux,n_flux=1):
-    flux = linspace(n_flux,-n_flux,N_flux)
+def fluxStates(N_flux,n_flux=1,dtype=complex):
+    flux = linspace(n_flux,-n_flux,N_flux,dtype=dtype)
     return flux/N_flux
 
 def transformationMatrix(n_charge,N_flux,n_flux=1):
-    charge_states = chargeStates(n_charge)
-    flux_states = fluxStates(N_flux,n_flux)
+    charge_states = chargeStates(n_charge,complex)
+    flux_states = fluxStates(N_flux,n_flux,complex)*N_flux
 
-    T = matrix(flux_states).T @ matrix(charge_states)
-    T = tensor(T,dtype=complex64)
+    T = outer(flux_states,charge_states)
     T *= 2*pi*im/N_flux
-    T = expm(T)/sqroot(N_flux)
+    T = exp(T)/sqroot(N_flux)
     return T
 
 def basisQq(n):
     # charge basis
-    charge = chargeStates(n)
-    Q = diag(charge.clone().detach().to(complex64))
+    charge = chargeStates(n,complex)
+    Q = diag(charge.clone().detach())
     return Q * 2
 
 def basisFq(n):
     # charge basis
     N = 2*n+1
-    P = zeros((N,N),dtype=complex64)
+    P = zeros((N,N),dtype=complex)
     charge = chargeStates(n)
     for q in charge:
         for p in charge:
@@ -155,29 +154,29 @@ def basisFq(n):
     return P
 
 def basisFq(n):
-    Q = basisQq(n).to(complex64)
+    Q = basisQq(n)
     U = transformationMatrix(n,2*n+1,n)
     return U@Q@U.conj().T/(2.0*n+1.0)/2.0
 
 def basisFf(n):
-    flux = fluxStates(2*n+1,n)
-    F = diag(tensor(flux))
+    flux = fluxStates(2*n+1,n,complex)
+    F = diag(flux)
     return F
 
 def basisQf(n):
-    F = basisFf(n).to(complex64)
+    F = basisFf(n).to(complex)
     U = transformationMatrix(n,2*n+1,n)
     return U@F@U.conj().T*(2*n+1)*2
 
 def chargeDisplacePlus(n):
     """n : charge basis truncation"""
-    diagonal = ones((2*n+1)-1,dtype=complex64)
+    diagonal = ones((2*n+1)-1,dtype=complex)
     D = diag(diagonal,diagonal=-1)
     return D
 
 def chargeDisplaceMinus(n):
     """n : charge basis truncation"""
-    diagonal = ones((2*n+1)-1,dtype=complex64)
+    diagonal = ones((2*n+1)-1,dtype=complex)
     D = diag(diagonal,diagonal=1)
     return D
 

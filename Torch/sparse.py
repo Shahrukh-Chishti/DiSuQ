@@ -101,7 +101,7 @@ def sparsify(T):
 def identity(n):
     return sparsify(eye(n))
 
-def null(shape=1,dtype=complex64):
+def null(shape=1,dtype=complex):
     return sparse_coo_tensor([[],[]],[],[shape]*2,dtype=dtype)
 
 def diagSparse(values,diagonal=0):
@@ -132,33 +132,32 @@ def basisFo(n,impedance):
     return Po*sqrt(impedance/2/pi)
 
 def chargeStates(n):
-    charge = linspace(n,-n,2*n+1)
+    charge = linspace(n,-n,2*n+1,dtype=complex)
     return charge
 
 def fluxStates(N_flux,n_flux=1):
-    flux = linspace(n_flux,-n_flux,N_flux)
+    flux = linspace(n_flux,-n_flux,N_flux,dtype=complex)
     return flux/N_flux
 
 def transformationMatrix(n_charge,N_flux,n_flux=1):
     charge_states = chargeStates(n_charge)
-    flux_states = fluxStates(N_flux,n_flux)
+    flux_states = fluxStates(N_flux,n_flux)*N_flux
 
-    T = matrix(flux_states).T @ matrix(charge_states)
-    T = tensor(T,dtype=complex64)
+    T = outer(flux_states,charge_states)
     T *= 2*pi*im/N_flux
-    T = expm(T)/sqroot(N_flux)
+    T = exp(T)/sqroot(N_flux)
     return sparsify(T)
 
 def basisQq(n):
     # charge basis
-    charge = chargeStates(n).to(complex64)
+    charge = chargeStates(n).to(complex)
     Q = diagSparse(charge.clone().detach())
     return Q * 2
 
 def basisFq(n):
     # charge basis
     N = 2*n+1
-    P = zeros((N,N),dtype=complex64)
+    P = zeros((N,N),dtype=complex)
     charge = chargeStates(n)
     for q in charge:
         for p in charge:
@@ -168,7 +167,7 @@ def basisFq(n):
     return P
 
 def basisFq(n):
-    Q = basisQq(n).to(complex64)
+    Q = basisQq(n)
     U = transformationMatrix(n,2*n+1,n)
     return unitaryTransformation(Q,transpose(U.conj(),0,1))/(2.0*n+1.0)/2.0
 
@@ -178,19 +177,19 @@ def basisFf(n):
     return F
 
 def basisQf(n):
-    F = basisFf(n).to(complex64)
+    F = basisFf(n).to(complex)
     U = transformationMatrix(n,2*n+1,n)
     return U@F@U.conj().T*(2*n+1)*2
 
 def chargeDisplacePlus(n):
     """n : charge basis truncation"""
-    diagonal = ones((2*n+1)-1,dtype=complex64)
+    diagonal = ones((2*n+1)-1,dtype=complex)
     D = diagSparse(diagonal,diagonal=-1)
     return D
 
 def chargeDisplaceMinus(n):
     """n : charge basis truncation"""
-    diagonal = ones((2*n+1)-1,dtype=complex64)
+    diagonal = ones((2*n+1)-1,dtype=complex)
     D = diagSparse(diagonal,diagonal=1)
     return D
 
