@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 
 import components,dense as Dense,sparse as Sparse
 from components import exp,inv,det,tensor,arange,zeros,sqrt,diagonal
+from components import argsort,eigsolve
 from components import diagonalisation,arange,J,L,C,im,pi
 
 from numpy.linalg import matrix_rank
@@ -335,7 +336,7 @@ class Circuit:
             Hj = E*(Jplus*phase(flux) + Jminus*phase(-flux))
             H = H-Hj
 
-        return H
+        return H/2
 
     def kermanHamiltonianLC(self):
         """
@@ -375,7 +376,7 @@ class Circuit:
         Ci = self.backend.modeMatrixProduct(Q,Ci_,Q,(No,No))
         Hi = Ci/2
 
-        Cj = self.backend.modeMatrixProduct(Q,Ci_,Q,(No+Ni,No+Ni))
+        Cj = self.backend.modeMatrixProduct(Q,Cj_,Q,(No+Ni,No+Ni))
         Hj = Cj/2
 
         return Ho+Hint+Hi+Hj
