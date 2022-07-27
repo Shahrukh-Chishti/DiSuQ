@@ -22,6 +22,14 @@ def oscillatorLC(basis,El=.00031,Ec=51.6256):
     oscillator = [L(0,1,El),C(0,1,Ec)]
     return Circuit(oscillator,basis)
 
+def fluxonium(basis,El=.0003,Ec=100,Ej=20):
+    circuit = [C(0,1,Ec)]
+    circuit += [J(0,1,Ej)]
+    circuit += [L(0,1,El,'I',True)]
+
+    circuit = Circuit(circuit,basis)
+    return circuit
+
 def shuntedQubit(basis,josephson=[10.,15.,20.],cap=[100.,500.,200.],ind=.0001):
     Ej1,Ej2,Ej3 = josephson
     C1,C2,C3 = cap
