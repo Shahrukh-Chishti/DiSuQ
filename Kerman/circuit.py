@@ -287,10 +287,10 @@ class Circuit:
         C_ = unitaryTransformation(Cn_,R.conj().T)
         Co_ = C_[:No,:No]
         Coi_ = C_[:No,No:-Nj]
-        Coj_ = C_[:No,-Nj:]
+        Coj_ = C_[:No,No+Ni:]
         Ci_ = C_[No:-Nj,No:-Nj]
-        Cij_ = C_[No:-Nj,-Nj:]
-        Cj_ = C_[-Nj:,-Nj:]
+        Cij_ = C_[No:-Nj,No+Ni:]
+        Cj_ = C_[No+Ni:,No+Ni:]
 
         C_ = Co_,Coi_,Coj_,Ci_,Cij_,Cj_
 
