@@ -259,7 +259,7 @@ class Circuit:
         R = self.R
         No,Ni,Nj = self.No,self.Ni,self.Nj
         L_ = R.conj().T @ Ln_ @ R
-        
+
         Lo_ = L_[:No,:No]
         C_ = R @ Cn_ @ R.conj().T
         Co_ = C_[:No,:No]

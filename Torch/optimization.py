@@ -1,5 +1,5 @@
 from torch.optim import SGD,RMSprop,Adam
-import kerman_circuits,torch,pandas
+import models,torch,pandas
 from torch import tensor,argsort
 from torch.linalg import det,inv,eig as eigsolve
 from numpy import arange,set_printoptions
@@ -105,6 +105,18 @@ class OrderingOptimization:
                 parameters.append(component.jo)
         return parameters
 
+    def parameterState(self):
+        circuit = self.circuit
+        parameters = {}
+        for component in circuit.network:
+            if component.__class__ == components.C :
+                parameters[component.ID] = component.cap.item()
+            elif component.__class__ == components.L :
+                parameters[component.ID] = component.ind.item()
+            elif component.__class__ == components.J :
+                parameters[component.ID] = component.jo.item()
+        return parameters
+
     def circuitHamiltonian(self,external_fluxes):
         # returns Dense Kerman hamiltonian
         H = self.circuit.kermanHamiltonianLC()
@@ -130,6 +142,7 @@ class OrderingOptimization:
         # flux profile :: list of flux points dict{}
         # loss_function : list of Hamiltonian on all flux points
         logs = []
+        dParams = []
         optimizer = SGD(self.parameters,lr=lr)
         start = perf_counter()
         for epoch in range(iterations):
@@ -138,12 +151,15 @@ class OrderingOptimization:
             #Spectrum = self.spectrumOrdered(flux)
             loss = loss_function(Spectrum,flux_profile)
             logs.append({'loss':loss.detach().item(),'time':perf_counter()-start})
+            dParams.append(self.parameterState())
             loss.backward(retain_graph=True)
             optimizer.step()
 
         dLog = pandas.DataFrame(logs)
         dLog['time'] = dLog['time'].diff()
-        return dLog
+        dLog.dropna(inplace=True)
+        dParams = pandas.DataFrame(dParams)
+        return dLog,dParams
 
 def anHarmonicityProfile(optim,flux_profile):
     anHarmonicity_profile = []
@@ -156,7 +172,7 @@ def anHarmonicityProfile(optim,flux_profile):
 def loss_Anharmonicity(Spectrum,flux_profile):
     loss = tensor(0.0)
     for spectrum,state in Spectrum:
-        loss += MSE(anHarmonicity(spectrum),tensor(.8))
+        loss += MSE(anHarmonicity(spectrum),tensor(10.))
     loss = loss/len(Spectrum)
     return loss
 
@@ -167,7 +183,7 @@ def loss_Anharmonicity(Spectrum,flux_profile):
 
 if __name__=='__main__':
     basis = {'O':[2],'I':[],'J':[2,2]}
-    circuit = kerman_circuits.shuntedQubit(basis)
+    circuit = models.shuntedQubit(basis)
     optim = OrderingOptimization(circuit,sparse=False)
     flux_profile = tensor(arange(0,1,.1))
     flux_profile = [{'I':flux} for flux in flux_profile]

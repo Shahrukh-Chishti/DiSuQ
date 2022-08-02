@@ -18,7 +18,7 @@ Z0 = h/4/e/e
 Z0 = flux_quanta / 2 / e
 
 # upper limit of circuit elements
-J0,C0,L0 = 100,1500,.01
+J0,C0,L0 = 1000,15000,100
 
 def sigmoidInverse(x):
     return -numpy.log(1/x -1)
