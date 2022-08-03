@@ -109,14 +109,14 @@ class Circuit:
         S = networkx.minimum_spanning_tree(GL)
         return S
 
-    def graphGL(self):
+    def graphGL(self,elements=[C]):
         GL = copy.deepcopy(self.G)
-        capacitance_edges = []
+        edges = []
         for u,v,component in GL.edges(data=True):
             component = component['component']
-            if component.__class__ == C:
-                capacitance_edges.append((u,v,component.ID))
-        GL.remove_edges_from(capacitance_edges)
+            if component.__class__ in elements:
+                edges.append((u,v,component.ID))
+        GL.remove_edges_from(edges)
 
         return GL
 
@@ -229,6 +229,16 @@ class Circuit:
 
         return n_baseO,n_baseI,n_baseJ
 
+    def islandModes(self):
+        islands = self.graphGL(elements=[C,J])
+        islands = networkx.connected_components(islands)
+        islands = list(islands)
+        Ni = 0
+        for sub in islands:
+            if 0 not in sub:
+                Ni += 1
+        return Ni
+
     def kermanBasisSize(self):
         N = 1
         basis = self.basis
@@ -243,7 +253,7 @@ class Circuit:
 
     def modeDistribution(self):
         Ln_ = self.Ln_
-        Ni = 0 # default
+        Ni = self.islandModes()
         No = matrix_rank(Ln_.detach().numpy())
         Nj = self.Nn - Ni - No
         return No,Ni,Nj
@@ -258,15 +268,16 @@ class Circuit:
 
         R = self.R
         No,Ni,Nj = self.No,self.Ni,self.Nj
+        N = self.Nn
         L_ = R.conj().T @ Ln_ @ R
 
         Lo_ = L_[:No,:No]
         C_ = R @ Cn_ @ R.conj().T
         Co_ = C_[:No,:No]
-        Coi_ = C_[:No,No:-Nj]
+        Coi_ = C_[:No,No:No+Ni]
         Coj_ = C_[:No,No+Ni:]
-        Ci_ = C_[No:-Nj,No:-Nj]
-        Cij_ = C_[No:-Nj,No+Ni:]
+        Ci_ = C_[No:No+Ni,No:No+Ni]
+        Cij_ = C_[No:No+Ni,No+Ni:]
         Cj_ = C_[No+Ni:,No+Ni:]
 
         C_ = Co_,Coi_,Coj_,Ci_,Cij_,Cj_
