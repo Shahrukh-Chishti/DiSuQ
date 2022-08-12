@@ -11,6 +11,15 @@ def transmon(basis,Ej=10,Ec=0.3):
     transmon = Circuit(transmon,basis)
     return transmon
 
+def twimon(basis,Ej=10,Ec=100,El=.001,factor=.5):
+    twimon = [C(0,1,Ec*factor)]
+    twimon += [C(1,2,Ec)]
+    twimon += [J(1,2,Ej)]
+    twimon += [L(1,2,El)]
+    twimon += [L(2,0,El*factor)]
+    twimon = Circuit(twimon,basis)
+    return twimon
+
 def splitTransmon(basis):
     transmon = [J(0,1,10),C(0,1,100)]
     transmon += [L(1,2,.0003,'I',True)]
