@@ -1,9 +1,10 @@
 from torch.optim import SGD,RMSprop,Adam
 import models,torch,pandas
-from torch import tensor,argsort
+from torch import tensor,argsort,zeros
 from torch.linalg import det,inv,eig as eigsolve
 from numpy import arange,set_printoptions
 from time import perf_counter,sleep
+from non_attacking_rooks import charPoly
 import components
 
 """
@@ -20,73 +21,7 @@ def anHarmonicity(spectrum):
 def groundEnergy(spectrum):
     return spectrum[0]
 
-class PolynomialOptimization:
-    """
-        * multi-initialization starting : single point
-        * sparse Hamiltonian exploration
-        * Characteristic polynomial Root evaluation
-        * variable parameter space : {C,L,J}
-        * loss functions
-        * circuit tuning
-    """
-
-    def __init__(self,circuit):
-        self.circuit = circuit
-        self.parameters = self.circuitParameters()
-
-    def circuitParameters(self):
-        circuit = self.circuit
-        parameters = []
-        for component in circuit.network:
-            if component.__class__ == components.C :
-                parameters.append(component.capacitance)
-            elif component.__class__ == components.L :
-                parameters.append(component.inductance)
-            elif component.__class__ == components.J :
-                parameters.append(component.energy)
-        return parameters
-
-    def characterisiticPoly(self,H):
-        # Non-Attacking Rooks algorithm
-        # Implement multi-threading
-        indices = H.coalesce().indices().T.detach().numpy()
-        values = H.coalesce().values()
-
-        return poly
-
-    def groundEigen(self,poly,start=tensor(-10.0),steps=5):
-        # mid Netwon root minimum for characterisiticPoly
-        # square polynomial
-        # nested iteration
-        return eigen
-
-    def groundState(self,ground_eigen):
-        return state
-
-    def optimization(self,loss_function,flux_profile,iterations=50,lr=.0001):
-        # flux profile :: list of flux points dict{}
-        # loss_function : list of Hamiltonian on all flux points
-        logs = []
-        optimizer = SGD(self.parameters,lr=lr)
-        optimizer.zero_grad()
-        for iter in range(iterations):
-            Spectrum = [self.groundEigen(flux) for flux in flux_profile]
-            loss = loss_function(Spectrum,flux_profile)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            logs.append({'loss':loss.detach().numpy()})
-        return logs
-
-class OrderingOptimization:
-    """
-        * multi-initialization starting : single point
-        * Dense Hamiltonian exploration
-        * Phase space correction
-        * variable parameter space : {C,L,J}
-        * loss functions
-        * circuit tuning
-    """
+class Optimization:
     def __init__(self,circuit,sparse=False):
         self.circuit = circuit
         self.parameters = self.circuitParameters()
@@ -117,16 +52,90 @@ class OrderingOptimization:
                 parameters[component.ID] = component.jo.item()
         return parameters
 
-    def circuitHamiltonian(self,external_fluxes):
+    def circuitHamiltonian(self,external_fluxes,to_dense=False):
         # returns Dense Kerman hamiltonian
         H = self.circuit.kermanHamiltonianLC()
         H += self.circuit.kermanHamiltonianJosephson(external_fluxes)
-        if self.sparse:
+        if to_dense:
             H = H.to_dense()
         return H
 
-    def spectrumOrdered(self,external_fluxes):
-        H = self.circuitHamiltonian(external_fluxes)
+class PolynomialOptimization(Optimization):
+    """
+        * multi-initialization starting : single point
+        * sparse Hamiltonian exploration
+        * Characteristic polynomial Root evaluation
+        * variable parameter space : {C,L,J}
+        * loss functions
+        * circuit tuning
+    """
+
+    def __init__(self,circuit):
+        super().__init__(circuit,sparse=True)
+
+    def characterisiticPoly(self,H):
+        # Non-Attacking Rooks algorithm
+        # Implement multi-threading
+        indices = H.coalesce().indices().T.detach().numpy()
+        values = H.coalesce().values()
+        N = len(H)
+        data = dict(zip([tuple(index) for index in indices],values))
+        coeffs = zeros(N+1); coeffs[0] = tensor(1.)
+        stats = {'terminal':0,'leaf':0}
+        poly = charPoly(coeffs,indices,N,data,stats)
+        return poly
+
+    def groundEigen(self,poly,start=tensor(-10.0),steps=5):
+        # mid Netwon root minimum for characterisiticPoly
+        # square polynomial
+        # nested iteration
+        return eigen
+
+    def eigenState(self,energy,H):
+        return state
+
+    def spectrumOrdered(self,external_flux):
+        H = self.circuitHamiltonian(external_flux)
+        poly = self.characterisiticPoly(H)
+        E0 = self.groundEigen(poly)
+        state0 = self.groundState(E0,H)
+        return E0,state0
+
+    def optimization(self,loss_function,flux_profile,iterations=50,lr=.0001):
+        # flux profile :: list of flux points dict{}
+        # loss_function : list of Hamiltonian on all flux points
+        logs = [];dParams = []
+        optimizer = SGD(self.parameters,lr=lr)
+        start = perf_counter()
+        for iter in range(iterations):
+            optimizer.zero_grad()
+            Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
+            loss = loss_function(Spectrum,flux_profile)
+            logs.append({'loss':loss.detach().item(),'time':perf_counter()-start})
+            dParams.append(self.parameterState())
+            loss.backward()
+            optimizer.step()
+
+        dLog = pandas.DataFrame(logs)
+        dLog['time'] = dLog['time'].diff()
+        dLog.dropna(inplace=True)
+        dParams = pandas.DataFrame(dParams)
+        return logs
+
+class OrderingOptimization(Optimization):
+    """
+        * multi-initialization starting : single point
+        * Dense Hamiltonian exploration
+        * Phase space correction
+        * variable parameter space : {C,L,J}
+        * loss functions
+        * circuit tuning
+    """
+    def __init__(self,circuit,sparse=False):
+        super().__init__(circuit,sparse)
+
+    def spectrumOrdered(self,external_flux):
+        H = self.circuitHamiltonian(external_flux)
         spectrum,state = eigsolve(H)
         spectrum = spectrum.real
         order = argsort(spectrum)#.clone().detach() # break point : retain graph
@@ -141,14 +150,12 @@ class OrderingOptimization:
     def optimization(self,loss_function,flux_profile,iterations=100,lr=1e-5):
         # flux profile :: list of flux points dict{}
         # loss_function : list of Hamiltonian on all flux points
-        logs = []
-        dParams = []
+        logs = []; dParams = []
         optimizer = SGD(self.parameters,lr=lr)
         start = perf_counter()
         for epoch in range(iterations):
             optimizer.zero_grad()
             Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
-            #Spectrum = self.spectrumOrdered(flux)
             loss = loss_function(Spectrum,flux_profile)
             logs.append({'loss':loss.detach().item(),'time':perf_counter()-start})
             dParams.append(self.parameterState())
@@ -182,14 +189,11 @@ def loss_Anharmonicity(Spectrum,flux_profile):
 #    return MSE(anHarmonicity(spectrum),tensor(.5))
 
 if __name__=='__main__':
-    basis = {'O':[2],'I':[],'J':[2,2]}
-    circuit = models.shuntedQubit(basis)
-    optim = OrderingOptimization(circuit,sparse=False)
+    basis = {'O':[15],'I':[],'J':[]}
+    circuit = models.fluxonium(basis,sparse=True)
+    optim = PolynomialOptimization(circuit)
+    print(circuit.circuitComponents())
     flux_profile = tensor(arange(0,1,.1))
     flux_profile = [{'I':flux} for flux in flux_profile]
-    print(circuit.circuitComponents())
-    print(anHarmonicityProfile(optim,flux_profile))
-    dLog = optim.optimization(loss_Anharmonicity,flux_profile,iterations=100,lr=.0001)
-    print(circuit.circuitComponents())
-    print(anHarmonicityProfile(optim,flux_profile))
-    print(dLog)
+    H = optim.circuitHamiltonian(external_fluxes=flux_profile[3])
+    print(optim.characterisiticPoly(H))
