@@ -52,4 +52,5 @@ def plotHeatmap(z,x,y,title=None,xaxis=None,yaxis=None):
     heatmap = go.Heatmap(z=z,y=y,x=x)
     fig.add_trace(heatmap)
     fig.update_layout(title=title,xaxis_title=xaxis,yaxis_title=yaxis)
+    #fig.update_layout(aspectmode='data')
     py.iplot(fig)
