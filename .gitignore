@@ -6,7 +6,7 @@ __pycache__/
 # C extensions
 *.so
 
-Notebooks
+# Notebooks
 *.ipynb_checkpoints/*
 */*.ipynb_checkpoints/*
 *.ipynb_checkpoints/
