@@ -1,7 +1,7 @@
 import networkx,copy
 import matplotlib.pyplot as plt
 from numpy import kron
-from components import *
+from .components import *
 
 def modeTensorProduct(pre,M,post):
     """

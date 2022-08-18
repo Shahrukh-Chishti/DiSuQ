@@ -1,6 +1,6 @@
 import numpy,utils,sys
-from circuit import Circuit, hamiltonianEnergy, phase
-from components import J,C,L,pi,h
+from .circuit import Circuit, hamiltonianEnergy, phase
+from .components import J,C,L,pi,h
 from numpy.linalg import det
 from pyvis import network as pvnet
 

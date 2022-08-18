@@ -1,10 +1,10 @@
 import networkx,copy,torch,utils
 import matplotlib.pyplot as plt
 
-import components,dense as Dense,sparse as Sparse
-from components import exp,inv,det,tensor,arange,zeros,sqrt,diagonal
-from components import argsort,eigsolve
-from components import diagonalisation,arange,J,L,C,im,pi
+import .components,dense as Dense,sparse as Sparse
+from .components import exp,inv,det,tensor,arange,zeros,sqrt,diagonal
+from .components import argsort,eigsolve
+from .components import diagonalisation,arange,J,L,C,im,pi
 
 from numpy.linalg import matrix_rank
 from numpy import prod,array

@@ -1,7 +1,7 @@
 import numpy,sys
-from circuit import Circuit, hamiltonianEnergy, phase
-from components import J,C,L,pi,h
-from components import C0,J0,L0
+from .circuit import Circuit, hamiltonianEnergy, phase
+from .components import J,C,L,pi,h
+from .components import C0,J0,L0
 from numpy.linalg import det
 from pyvis import network as pvnet
 from torch import tensor
