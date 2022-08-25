@@ -1,4 +1,4 @@
-import numpy,utils,sys
+import numpy,sys
 from .circuit import Circuit, hamiltonianEnergy, phase
 from .components import J,C,L,pi,h
 from numpy.linalg import det
@@ -70,6 +70,5 @@ def phaseSlip(basis,inductance=[.001,.0005,.00002,.00035,.0005],capacitance=[100
 if __name__=='__main__':
     circuit = shuntedQubit([5,5,5])
     flux_manifold = zip(numpy.arange(0,1,.05))
-    import ipdb; ipdb.set_trace()
     E0,Ex = circuit.spectrumManifold(['I'],flux_manifold,H_LC=circuit.kermanHamiltonianLC())
-    utils.plotCompare(numpy.arange(0,1,.05),{'excitation':Ex,'ground_state':E0})
+    print(E0,Ex)

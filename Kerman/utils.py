@@ -47,10 +47,12 @@ def plotDOTGraph(G,filename='temp'):
     pdot.write_png(filename+'.png')
     #view_pydot(pdot)
     
-def plotHeatmap(z,x,y,title=None,xaxis=None,yaxis=None):
+def plotHeatmap(z,x,y,title=None,xaxis=None,yaxis=None,aspect=False):
     fig = go.Figure()
     heatmap = go.Heatmap(z=z,y=y,x=x)
     fig.add_trace(heatmap)
     fig.update_layout(title=title,xaxis_title=xaxis,yaxis_title=yaxis)
-    #fig.update_layout(aspectmode='data')
+    if aspect:
+        fig.update_layout(width=600,height=600)
+        fig.update_layout(yaxis={'scaleanchor':'x','scaleratio':1})
     py.iplot(fig)
