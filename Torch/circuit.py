@@ -1,4 +1,4 @@
-import networkx,copy,torch,utils
+import networkx,copy,torch
 import matplotlib.pyplot as plt
 
 import .components,dense as Dense,sparse as Sparse
@@ -595,6 +595,7 @@ class Circuit:
 if __name__=='__main__':
     import models
     circuit = models.shuntedQubit([2,2,2],sparse=False)
+    #from DiSuQ import utils
     #utils.plotMatPlotGraph(circuit.G,'circuit')
     #utils.plotMatPlotGraph(circuit.spanning_tree,'spanning_tree')
     flux_manifold = zip(arange(0,1,.01))
