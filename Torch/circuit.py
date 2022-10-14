@@ -595,9 +595,6 @@ class Circuit:
 if __name__=='__main__':
     import models
     circuit = models.shuntedQubit([2,2,2],sparse=False)
-    #from DiSuQ import utils
-    #utils.plotMatPlotGraph(circuit.G,'circuit')
-    #utils.plotMatPlotGraph(circuit.spanning_tree,'spanning_tree')
     flux_manifold = zip(arange(0,1,.01))
     H_LC = circuit.chargeHamiltonianLC()
     H_J = circuit.josephsonCharge({'I':tensor(.125)})
