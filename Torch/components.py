@@ -6,7 +6,7 @@ from torch import linspace,arange,diagonal,diag,sqrt,eye
 from torch.linalg import det,inv,eig as eigsolve
 from torch import matrix_exp as expm,exp,outer
 from torch import sin,cos,sigmoid
-from torch import complex128 as complex, float32 as float
+from torch import cfloat as complex, float32 as float
 
 im = 1.0j
 root2 = sqroot(2)
@@ -50,7 +50,7 @@ class Elements:
 class J(Elements):
     def __init__(self,plus,minus,jo,ID=None):
         super().__init__(plus,minus,ID)
-        self.jo = tensor(sigmoidInverse(jo/J0),requires_grad=True)
+        self.jo = tensor(sigmoidInverse(jo/J0),dtype=float,requires_grad=True)
 
     def energy(self):
         return sigmoid(self.jo)/1.0 * J0
@@ -58,7 +58,7 @@ class J(Elements):
 class C(Elements):
     def __init__(self,plus,minus,cap,ID=None):
         super().__init__(plus,minus,ID)
-        self.cap = tensor(sigmoidInverse(cap/C0),requires_grad=True)
+        self.cap = tensor(sigmoidInverse(cap/C0),dtype=float,requires_grad=True)
 
     def capacitance(self):
         return sigmoid(self.cap)*C0
@@ -69,7 +69,7 @@ class C(Elements):
 class L(Elements):
     def __init__(self,plus,minus,ind,ID=None,external=False):
         super().__init__(plus,minus,ID)
-        self.ind = tensor(sigmoidInverse(ind/L0),requires_grad=True)
+        self.ind = tensor(sigmoidInverse(ind/L0),dtype=float,requires_grad=True)
         self.external = external # duplication : doesn't requires_grad
 
     def inductance(self):
