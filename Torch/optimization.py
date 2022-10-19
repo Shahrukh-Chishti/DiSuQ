@@ -39,6 +39,13 @@ class Optimization:
             elif component.__class__ == J :
                 parameters.append(component.jo)
         return parameters
+    
+    def circuitState(self):
+        circuit = self.circuit
+        parameters = {}
+        for component in circuit.network:
+            parameters[component.ID] = component.energy().item()
+        return parameters
 
     def parameterState(self):
         circuit = self.circuit
@@ -150,7 +157,7 @@ class OrderingOptimization(Optimization):
     def optimization(self,loss_function,flux_profile,iterations=100,lr=1e-5):
         # flux profile :: list of flux points dict{}
         # loss_function : list of Hamiltonian on all flux points
-        logs = []; dParams = []
+        logs = []; dParams = []; dCircuit = []
         optimizer = SGD(self.parameters,lr=lr)
         start = perf_counter()
         for epoch in range(iterations):
@@ -159,6 +166,7 @@ class OrderingOptimization(Optimization):
             loss = loss_function(Spectrum,flux_profile)
             logs.append({'loss':loss.detach().item(),'time':perf_counter()-start})
             dParams.append(self.parameterState())
+            dCircuit.append(self.circuitState())
             loss.backward(retain_graph=True)
             optimizer.step()
 
@@ -166,7 +174,8 @@ class OrderingOptimization(Optimization):
         dLog['time'] = dLog['time'].diff()
         dLog.dropna(inplace=True)
         dParams = pandas.DataFrame(dParams)
-        return dLog,dParams
+        dCircuit = pandas.DataFrame(dCircuit)
+        return dLog,dParams,dCircuit
 
 def anHarmonicityProfile(optim,flux_profile):
     anHarmonicity_profile = []
