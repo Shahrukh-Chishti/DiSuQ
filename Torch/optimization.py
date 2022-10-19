@@ -1,11 +1,11 @@
 from torch.optim import SGD,RMSprop,Adam
-import models,torch,pandas
+import torch,pandas
 from torch import tensor,argsort,zeros
 from torch.linalg import det,inv,eig as eigsolve
 from numpy import arange,set_printoptions
 from time import perf_counter,sleep
-from non_attacking_rooks import charPoly
-import components
+from .non_attacking_rooks import charPoly
+from .components import L,J,C
 
 """
     * Loss functions
@@ -32,11 +32,11 @@ class Optimization:
         circuit = self.circuit
         parameters = []
         for component in circuit.network:
-            if component.__class__ == components.C :
+            if component.__class__ == C :
                 parameters.append(component.cap)
-            elif component.__class__ == components.L :
+            elif component.__class__ == L :
                 parameters.append(component.ind)
-            elif component.__class__ == components.J :
+            elif component.__class__ == J :
                 parameters.append(component.jo)
         return parameters
 
@@ -44,11 +44,11 @@ class Optimization:
         circuit = self.circuit
         parameters = {}
         for component in circuit.network:
-            if component.__class__ == components.C :
+            if component.__class__ == C :
                 parameters[component.ID] = component.cap.item()
-            elif component.__class__ == components.L :
+            elif component.__class__ == L :
                 parameters[component.ID] = component.ind.item()
-            elif component.__class__ == components.J :
+            elif component.__class__ == J :
                 parameters[component.ID] = component.jo.item()
         return parameters
 
@@ -189,11 +189,4 @@ def loss_Anharmonicity(Spectrum,flux_profile):
 #    return MSE(anHarmonicity(spectrum),tensor(.5))
 
 if __name__=='__main__':
-    basis = {'O':[15],'I':[],'J':[]}
-    circuit = models.fluxonium(basis,sparse=True)
-    optim = PolynomialOptimization(circuit)
-    print(circuit.circuitComponents())
-    flux_profile = tensor(arange(0,1,.1))
-    flux_profile = [{'I':flux} for flux in flux_profile]
-    H = optim.circuitHamiltonian(external_fluxes=flux_profile[3])
-    print(optim.characterisiticPoly(H))
+    print("refer Optimization Verification")

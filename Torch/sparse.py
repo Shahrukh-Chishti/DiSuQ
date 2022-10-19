@@ -6,7 +6,7 @@ from torch import matmul as mul,nonzero
 from torch import sparse,sparse_coo_tensor
 from torch.sparse import mm as mul
 
-from components import *
+from .components import *
 
 """ Operator Computation """
 

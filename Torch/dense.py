@@ -1,5 +1,5 @@
 from torch import kron
-from components import *
+from .components import *
 
 """ Operator Computation """
 

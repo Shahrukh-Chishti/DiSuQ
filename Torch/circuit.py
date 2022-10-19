@@ -1,7 +1,8 @@
 import networkx,copy,torch
 import matplotlib.pyplot as plt
 
-import .components,dense as Dense,sparse as Sparse
+import DiSuQ.Torch.dense as Dense
+import DiSuQ.Torch.sparse as Sparse
 from .components import exp,inv,det,tensor,arange,zeros,sqrt,diagonal
 from .components import argsort,eigsolve
 from .components import diagonalisation,arange,J,L,C,im,pi
@@ -123,11 +124,11 @@ class Circuit:
     def circuitComponents(self):
         circuit_components = []
         for component in self.network:
-            if component.__class__ == components.C :
+            if component.__class__ == C :
                 circuit_components.append({'C':component.capacitance().item()})
-            elif component.__class__ == components.L :
+            elif component.__class__ == L :
                 circuit_components.append({'L':component.inductance().item()})
-            elif component.__class__ == components.J :
+            elif component.__class__ == J :
                 circuit_components.append({'J':component.energy().item()})
         return circuit_components
 
