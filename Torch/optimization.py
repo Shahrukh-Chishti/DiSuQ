@@ -22,11 +22,12 @@ def groundEnergy(spectrum):
     return spectrum[0]
 
 class Optimization:
-    def __init__(self,circuit,sparse=False):
+    def __init__(self,circuit,representation='K',sparse=False):
         self.circuit = circuit
         self.parameters = self.circuitParameters()
         self.levels = [0,1,2]
         self.sparse = sparse
+        self.representation = representation
 
     def circuitParameters(self):
         circuit = self.circuit
@@ -60,9 +61,13 @@ class Optimization:
         return parameters
 
     def circuitHamiltonian(self,external_fluxes,to_dense=False):
-        # returns Dense Kerman hamiltonian
-        H = self.circuit.kermanHamiltonianLC()
-        H += self.circuit.kermanHamiltonianJosephson(external_fluxes)
+        # returns Dense Hamiltonian
+        if self.representation == 'K':
+            H = self.circuit.kermanHamiltonianLC()
+            H += self.circuit.kermanHamiltonianJosephson(external_fluxes)
+        elif self.representation == 'Q':
+            H = self.circuit.chargeHamiltonianLC()
+            H += self.circuit.josephsonCharge(external_fluxes)
         if to_dense:
             H = H.to_dense()
         return H
@@ -77,8 +82,8 @@ class PolynomialOptimization(Optimization):
         * circuit tuning
     """
 
-    def __init__(self,circuit):
-        super().__init__(circuit,sparse=True)
+    def __init__(self,circuit,representation='K',sparse=True):
+        super().__init__(circuit,representation,sparse=True)
 
     def characterisiticPoly(self,H):
         # Non-Attacking Rooks algorithm
@@ -138,8 +143,8 @@ class OrderingOptimization(Optimization):
         * loss functions
         * circuit tuning
     """
-    def __init__(self,circuit,sparse=False):
-        super().__init__(circuit,sparse)
+    def __init__(self,circuit,representation='K',sparse=False):
+        super().__init__(circuit,representation,sparse)
 
     def spectrumOrdered(self,external_flux):
         H = self.circuitHamiltonian(external_flux)
@@ -191,6 +196,15 @@ def loss_Anharmonicity(Spectrum,flux_profile):
         loss += MSE(anHarmonicity(spectrum),tensor(10.))
     loss = loss/len(Spectrum)
     return loss
+
+def loss_Energy(levels):
+    ground = tensor(levels[0])
+    def lossSpectrum(Spectrum,flux_profile):
+        loss = tensor(0.0)
+        for spectrum,state in Spectrum:
+            loss += MSE(Spectrum[0],ground)
+        return loss/len(Spectrum)
+    return lossSpectrum
 
 # Stochastic sample on flux_profile
 #def loss_Anharmonicity(Spectrum,flux):
