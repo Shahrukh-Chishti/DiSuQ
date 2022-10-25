@@ -4,8 +4,8 @@ from torch import tensor,argsort,zeros
 from torch.linalg import det,inv,eig as eigsolve
 from numpy import arange,set_printoptions
 from time import perf_counter,sleep
-from .non_attacking_rooks import charPoly
-from .components import L,J,C
+from DiSuQ.Torch.non_attacking_rooks import charPoly
+from DiSuQ.Torch.components import L,J,C
 
 """
     * Loss functions
@@ -197,14 +197,11 @@ def loss_Anharmonicity(Spectrum,flux_profile):
     loss = loss/len(Spectrum)
     return loss
 
-def loss_Energy(levels):
-    ground = tensor(levels[0])
-    def lossSpectrum(Spectrum,flux_profile):
-        loss = tensor(0.0)
-        for spectrum,state in Spectrum:
-            loss += MSE(Spectrum[0],ground)
-        return loss/len(Spectrum)
-    return lossSpectrum
+def loss_Energy(Spectrum,flux_profile):
+    loss = tensor(0.0)
+    for spectrum,state in Spectrum:
+        loss += MSE(spectrum[0],tensor(100.0)) # ground state energy
+    return loss/len(Spectrum)
 
 # Stochastic sample on flux_profile
 #def loss_Anharmonicity(Spectrum,flux):
@@ -212,4 +209,12 @@ def loss_Energy(levels):
 #    return MSE(anHarmonicity(spectrum),tensor(.5))
 
 if __name__=='__main__':
+    basis = [15]
+    from models import transmon
+    circuit = transmon(basis,sparse=False)
+    optim = OrderingOptimization(circuit,representation='Q')
+    print(circuit.circuitComponents())
+    flux_profile = [dict()]
+    
+    dLogs,dParams,dCircuit = optim.optimization(loss_Energy,flux_profile,lr=.00001)
     print("refer Optimization Verification")

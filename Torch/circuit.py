@@ -3,9 +3,9 @@ import matplotlib.pyplot as plt
 
 import DiSuQ.Torch.dense as Dense
 import DiSuQ.Torch.sparse as Sparse
-from .components import exp,inv,det,tensor,arange,zeros,sqrt,diagonal
-from .components import argsort,eigsolve
-from .components import diagonalisation,arange,J,L,C,im,pi
+from torch import exp,det,tensor,arange,zeros,sqrt,diagonal,argsort
+from torch.linalg import eig as eigsolve,inv
+from DiSuQ.Torch.components import diagonalisation,null,J,L,C,im,pi
 
 from numpy.linalg import matrix_rank
 from numpy import prod,array
@@ -562,14 +562,12 @@ class Circuit:
         H_J = self.josephsonFlux(external_fluxes)
         return H_L+H_J
 
-    def circuitEnergy(self,H_LC=0,H_J=None,external_fluxes=dict(),exclude=False):
+    def circuitEnergy(self,H_LC=tensor(0.0),H_J=None,external_fluxes=dict()):
         if H_J is None:
-            H_J = self.backend.null
+            H_J = null(H_LC)
         #H_LC = self.hamiltonianLC()
         #H_ext = self.fluxInducerEnergy()
         H = H_LC + H_J(external_fluxes)
-        if exclude:
-            H = H[:-1,:-1]
         eigenenergies = hamiltonianEnergy(H)
         return eigenenergies
 
@@ -579,7 +577,7 @@ class Circuit:
             flux_manifold : [(fluxes)]
         """
         if H_J is None:
-            h_J = self.backend.null
+            H_J = null(H_LC)
         #manifold of flux space M
         Ex,E0 = [],[]
         #H_LC = self.hamiltonianLC()

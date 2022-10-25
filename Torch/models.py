@@ -1,7 +1,7 @@
 import numpy,sys
-from .circuit import Circuit, hamiltonianEnergy, phase
-from .components import J,C,L,pi,h
-from .components import C0,J0,L0
+from DiSuQ.Torch.circuit import Circuit, hamiltonianEnergy, phase
+from DiSuQ.Torch.components import J,C,L,pi,h
+from DiSuQ.Torch.components import C0,J0,L0
 from numpy.linalg import det
 from pyvis import network as pvnet
 from torch import tensor
@@ -29,9 +29,9 @@ def splitTransmon(basis):
     transmon = Circuit(transmon,basis)
     return transmon
 
-def oscillatorLC(basis,El=.00031,Ec=51.6256):
+def oscillatorLC(basis,El=.00031,Ec=51.6256,sparse=True):
     oscillator = [L(0,1,El),C(0,1,Ec)]
-    return Circuit(oscillator,basis)
+    return Circuit(oscillator,basis,sparse)
 
 def fluxonium(basis,El=.0003,Ec=100,Ej=20,sparse=True):
     circuit = [C(0,1,Ec)]
