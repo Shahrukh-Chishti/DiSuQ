@@ -200,7 +200,7 @@ def loss_Anharmonicity(Spectrum,flux_profile):
 def loss_Energy(Spectrum,flux_profile):
     loss = tensor(0.0)
     for spectrum,state in Spectrum:
-        loss += MSE(spectrum[0],tensor(100.0)) # ground state energy
+        loss += MSE(spectrum[0],tensor(.01)) # ground state energy
     return loss/len(Spectrum)
 
 # Stochastic sample on flux_profile
