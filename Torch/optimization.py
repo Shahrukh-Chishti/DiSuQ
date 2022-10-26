@@ -1,6 +1,6 @@
 from torch.optim import SGD,RMSprop,Adam
 import torch,pandas
-from torch import tensor,argsort,zeros
+from torch import tensor,argsort,zeros,abs
 from torch.linalg import det,inv,eig as eigsolve
 from numpy import arange,set_printoptions
 from time import perf_counter,sleep
@@ -190,18 +190,33 @@ def anHarmonicityProfile(optim,flux_profile):
     return anHarmonicity_profile
 
 # Full batch of flux_profile
-def loss_Anharmonicity(Spectrum,flux_profile):
-    loss = tensor(0.0)
-    for spectrum,state in Spectrum:
-        loss += MSE(anHarmonicity(spectrum),tensor(10.))
-    loss = loss/len(Spectrum)
-    return loss
+def loss_Anharmonicity(gamma):
+    def lossFunction(Spectrum,flux_profile):
+        loss = tensor(0.0)
+        for spectrum,state in Spectrum:
+            loss += MSE(anHarmonicity(spectrum),tensor(gamma))
+        loss = loss/len(Spectrum)
+        return loss
+    return lossFunction
 
-def loss_Energy(Spectrum,flux_profile):
-    loss = tensor(0.0)
-    for spectrum,state in Spectrum:
-        loss += MSE(spectrum[0],tensor(.01)) # ground state energy
-    return loss/len(Spectrum)
+def loss_Energy(E0):
+    def lossFunction(Spectrum,flux_profile):
+        loss = tensor(0.0)
+        for spectrum,state in Spectrum:
+            loss += MSE(spectrum[0],tensor(E0)) # E0
+        loss = loss/len(Spectrum)
+        return loss
+    return lossFunction
+
+def loss_Transition(E10,E21):
+    def lossFunction(Spectrum,flux_profile):
+        loss = tensor(0.0)
+        for spectrum,state in Spectrum:
+            loss += MSE(spectrum[1]-spectrum[0],tensor(E10)) # E01
+            loss += MSE(spectrum[2]-spectrum[1],tensor(E21)) # E12
+        loss = loss/len(Spectrum)
+        return loss
+    return lossFunction
 
 # Stochastic sample on flux_profile
 #def loss_Anharmonicity(Spectrum,flux):
