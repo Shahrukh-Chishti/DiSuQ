@@ -156,6 +156,7 @@ def chargeDisplaceMinus(n):
 def displacementCharge(n,a):
     D = basisFq(n)
     D = expm(im*2*pi*a*D)
+    D[0,-1] = 0.;D[-1,0]=0. # de-unitarization
     return D
 
 def displacementOscillator(n,z,a):
@@ -165,7 +166,7 @@ def displacementOscillator(n,z,a):
 
 def displacementFlux(n,a):
     D = basisFf(n)
-    D = expm(im*2*pi*a*D)
+    D = expm(im*2*pi*a*D) # diagonal exponentiation
     return D
 
 def wavefunction(H,level=[0]):
