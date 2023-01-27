@@ -325,9 +325,9 @@ class Circuit:
 
     def displacementCombination(self,combination):
         basis = self.basis
-        O = combination[:self.No]
-        I = combination[self.No:-self.Nj]
-        J = combination[-self.Nj:]
+        O = combination[:No]
+        I = combination[No:No+Ni]
+        J = combination[No+Ni:]
         #assert I==0
         #assert J==1 or 0
 
@@ -625,23 +625,25 @@ class Circuit:
         eigenenergies = hamiltonianEnergy(H)
         return eigenenergies
 
-    def spectrumManifold(self,flux_points,flux_manifold,H_LC=0,H_J=null,excitation=1):
+    def spectrumManifold(self,flux_points,flux_manifold,H_LC=0,H_J=null,excitation=[1]):
         """
             flux_points : inductor identifier for external introduction
             flux_manifold : [(fluxes)]
         """
         #manifold of flux space M
-        Ex,E0 = [],[]
+        Ex,E0 = full((len(excitation),len(flux_manifold)),float('nan')),[]
         #H_LC = self.hamiltonianLC()
         #H_ext = self.fluxInducerEnergy()
         for fluxes in flux_manifold:
+            #import pdb;pdb.set_trace()
             external_fluxes = dict(zip(flux_points,fluxes))
             #H_J = self.josephsonEnergy(external_fluxes)
             H = H_LC + H_J(external_fluxes)
             eigenenergies = hamiltonianEnergy(H)
+            
             E0.append(eigenenergies[0])
-            Ex.append(eigenenergies[excitation]-eigenenergies[0])
-        return E0,Ex
+            Ex[:,index] = eigenenergies[excitation]-eigenenergies[0]
+        return array(E0),array(Ex)
 
 if __name__=='__main__':
     circuit = shuntedQubit([2,2,2])

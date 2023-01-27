@@ -34,21 +34,32 @@ def oscillatorLC(basis,El=.00031,Ec=51.6256,sparse=True):
     return Circuit(oscillator,basis,sparse)
 
 def fluxonium(basis,El=.0003,Ec=100,Ej=20,sparse=True):
-    circuit = [C(0,1,Ec)]
-    circuit += [J(0,1,Ej)]
+    circuit = [C(0,1,Ec,'Cap')]
+    circuit += [J(0,1,Ej,'JJ')]
     circuit += [L(0,1,El,'I',True)]
 
     circuit = Circuit(circuit,basis,sparse)
     return circuit
 
-def shuntedQubit(basis,josephson=[10.,15.,20.],cap=[100.,500.,200.],ind=.0001,sparse=True):
+def shuntedQubit(basis,josephson=[450.,15.,20.],cap=[.01,.01,.02],ind=.00001,sparse=True):
     Ej1,Ej2,Ej3 = josephson
     C1,C2,C3 = cap
 
-    circuit = [J(1,2,Ej1),C(1,2,C1)]
-    circuit += [J(2,3,Ej2),C(2,3,C2)]
-    circuit += [J(3,0,Ej3),C(3,0,C3)]
+    circuit = [J(1,2,Ej1,'JJ1'),C(1,2,C1,'C1')]
+    circuit += [J(2,3,Ej2,'JJ2'),C(2,3,C2,'C2')]
+    circuit += [J(3,0,Ej3,'JJ3'),C(3,0,C3,'C3')]
     circuit += [L(0,1,ind,'I',True)]
+
+    circuit = Circuit(circuit,basis,sparse)
+    return circuit
+
+def shuntedQubitFluxFree(basis,josephson=[10.,15.,20.],cap=[100.,500.,200.],sparse=True):
+    Ej1,Ej2,Ej3 = josephson
+    C1,C2,C3 = cap
+
+    circuit = [J(0,1,Ej1,'JJ1'),C(0,1,C1,'C1')]
+    circuit += [J(1,2,Ej2,'JJ2'),C(1,2,C2,'C2')]
+    circuit += [J(2,0,Ej3,'JJ3'),C(2,0,C3,'C3')]
 
     circuit = Circuit(circuit,basis,sparse)
     return circuit

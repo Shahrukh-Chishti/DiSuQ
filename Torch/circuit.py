@@ -3,12 +3,13 @@ import matplotlib.pyplot as plt
 
 import DiSuQ.Torch.dense as Dense
 import DiSuQ.Torch.sparse as Sparse
-from torch import exp,det,tensor,arange,zeros,sqrt,diagonal,argsort
+from torch import exp,det,tensor,arange,zeros,sqrt,diagonal,argsort,set_num_threads,full
 from torch.linalg import eig as eigsolve,inv
 from DiSuQ.Torch.components import diagonalisation,null,J,L,C,im,pi
 
 from numpy.linalg import matrix_rank
 from numpy import prod,array
+
 
 def inverse(A):
     if det(A) == 0:
@@ -21,6 +22,7 @@ def phase(phi):
 
 def hamiltonianEnergy(H,sort=True):
     eigenenergies,_ = eigsolve(H)
+    del _
     eigenenergies = eigenenergies.real
     if sort:
         eigenenergies = eigenenergies.sort()[0]
@@ -305,8 +307,8 @@ class Circuit:
         basis = self.basis
         No,Ni,Nj = self.No,self.Ni,self.Nj
         O = combination[:No]
-        I = combination[No:-Nj]
-        J = combination[-Nj:]
+        I = combination[No:No+Ni]
+        J = combination[No+Ni:]
         #assert I==0
         #assert J==1 or 0
         Z = self.oscillatorImpedance() * 2 # cooper pair factor
@@ -317,7 +319,7 @@ class Circuit:
         DI_minus = [self.backend.displacementCharge(basis_max,-i) for i,basis_max in zip(I,basis['I'])]
         DJ_plus = [self.backend.displacementCharge(basis_max,j) for j,basis_max in zip(J,basis['J'])]
         DJ_minus = [self.backend.displacementCharge(basis_max,-j) for j,basis_max in zip(J,basis['J'])]
-
+        
         Dplus = DO_plus+DI_plus+DJ_plus
         Dminus = DO_minus+DI_minus+DJ_minus
         assert len(combination)==len(Dplus)
@@ -462,6 +464,8 @@ class Circuit:
                 Jplus = self.backend.crossBasisProduct(Dplus,Dminus,i,j)
                 Jminus = self.backend.crossBasisProduct(Dplus,Dminus,j,i)
                 #assert (Jminus == Jplus.conj().T).all()
+                
+            #print(E,flux)
             Hj = E*(Jplus*phase(flux) + Jminus*phase(-flux))
             H = H-Hj
 
@@ -571,7 +575,7 @@ class Circuit:
         eigenenergies = hamiltonianEnergy(H)
         return eigenenergies
 
-    def spectrumManifold(self,flux_points,flux_manifold,H_LC=tensor(0.0),H_J=None,excitation=1):
+    def spectrumManifold(self,flux_points,flux_manifold,H_LC=tensor(0.0),H_J=None,excitation=[1]):
         """
             flux_points : inductor identifier for external introduction
             flux_manifold : [(fluxes)]
@@ -579,17 +583,27 @@ class Circuit:
         if H_J is None:
             H_J = null(H_LC)
         #manifold of flux space M
-        Ex,E0 = [],[]
+        Ex,E0 = full((len(excitation),len(flux_manifold)),float('nan')),[]
         #H_LC = self.hamiltonianLC()
         #H_ext = self.fluxInducerEnergy()
-        for fluxes in flux_manifold:
+        for index,fluxes in enumerate(flux_manifold):
             external_fluxes = dict(zip(flux_points,fluxes))
             #H_J = self.josephsonEnergy(external_fluxes)
             H = H_LC + H_J(external_fluxes)
             eigenenergies = hamiltonianEnergy(H)
+            
             E0.append(eigenenergies[0])
-            Ex.append(eigenenergies[excitation]-eigenenergies[0])
+            Ex[:,index] = eigenenergies[excitation]-eigenenergies[0]
         return E0,Ex
+    
+    def fluxScape(self,flux_points,flux_manifold):
+        H_LC = self.kermanHamiltonianLC()
+        H_J = self.kermanHamiltonianJosephson
+        E0,EI = self.spectrumManifold(flux_point,flux_profile,H_LC,H_J,excitation=1)
+        E0,EII = self.spectrumManifold(flux_point,flux_profile,H_LC,H_J,excitation=2)
+        EI = tensor(EI).detach().numpy()
+        EII = tensor(EII).detach().numpy()
+        return EI,EII
 
 if __name__=='__main__':
     import models

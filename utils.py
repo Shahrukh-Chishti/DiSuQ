@@ -6,6 +6,7 @@ from IPython.display import Image, display
 from pyvis import network as pvnet
 import networkx as nx
 from networkx.drawing.nx_pydot import write_dot
+from numpy import full,nan
 
 def plotCombine(plot,title=None,x_label=None,y_label=None):
     fig = go.Figure()
