@@ -55,6 +55,9 @@ class Elements:
 class J(Elements):
     def __init__(self,plus,minus,jo,ID=None):
         super().__init__(plus,minus,ID)
+        self.initJunc(jo)
+        
+    def initJunc(self,jo):
         self.jo = tensor(sigmoidInverse(jo/J0),dtype=float,requires_grad=True)
 
     def energy(self):
@@ -63,6 +66,9 @@ class J(Elements):
 class C(Elements):
     def __init__(self,plus,minus,cap,ID=None):
         super().__init__(plus,minus,ID)
+        self.initCap(cap)
+        
+    def initCap(self,cap):
         self.cap = tensor(sigmoidInverse(cap/C0),dtype=float,requires_grad=True)
 
     def capacitance(self):
@@ -74,8 +80,11 @@ class C(Elements):
 class L(Elements):
     def __init__(self,plus,minus,ind,ID=None,external=False):
         super().__init__(plus,minus,ID)
-        self.ind = tensor(sigmoidInverse(ind/L0),dtype=float,requires_grad=True)
         self.external = external # duplication : doesn't requires_grad
+        self.initInd(ind)
+        
+    def initInd(self,ind):
+        self.ind = tensor(sigmoidInverse(ind/L0),dtype=float,requires_grad=True)
 
     def inductance(self):
         return sigmoid(self.ind)*L0

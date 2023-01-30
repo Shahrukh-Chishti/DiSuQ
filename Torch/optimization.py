@@ -1,11 +1,13 @@
 from torch.optim import SGD,RMSprop,Adam
 import torch,pandas
-from torch import tensor,argsort,zeros,abs,mean,stack
+from torch import tensor,argsort,zeros,abs,mean,stack,var
 from torch.linalg import det,inv,eig as eigsolve
-from numpy import arange,set_printoptions
+from numpy import arange,set_printoptions,meshgrid,linspace,array
 from time import perf_counter,sleep
 from DiSuQ.Torch.non_attacking_rooks import charPoly
 from DiSuQ.Torch.components import L,J,C
+from DiSuQ.Torch.components import L0,J0,C0
+
 
 """
     * Loss functions
@@ -117,7 +119,7 @@ class PolynomialOptimization(Optimization):
         # flux profile :: list of flux points dict{}
         # loss_function : list of Hamiltonian on all flux points
         logs = [];dParams = []
-        optimizer = SGD(self.parameters,lr=lr)
+        optimizer = Adam(self.parameters,lr=lr)
         start = perf_counter()
         for iter in range(iterations):
             optimizer.zero_grad()
@@ -183,7 +185,28 @@ class OrderingOptimization(Optimization):
         dParams = pandas.DataFrame(dParams)
         dCircuit = pandas.DataFrame(dCircuit)
         return dLog,dParams,dCircuit
-
+    
+def uniformParameters(circuit,N):
+    iDs,domain = [],[]
+    for component in circuit.network:
+        iDs.append(component.ID)
+        if component.__class__ == C :
+            bound = C0
+        elif component.__class__ == L :
+            bound = L0
+        elif component.__class__ == J :
+            bound =J0
+        domain.append(linspace(0,bound,N,endpoint=False)[1:])
+    grid = array(meshgrid(*domain))
+    grid = grid.reshape(len(iDs),-1)
+    return dict(zip(iDs,grid))      
+    
+def initializationParallelism(optimizer,lossFunction,flux_profile,iterations=100,lr=.005):
+    def optimization(parameters):
+        optimizer.circuit.initialization(parameters)
+        return optimizer.optimization(lossFunction,flux_profile,iterations=iterations,lr=lr)
+    return optimization
+    
 def anHarmonicityProfile(optim,flux_profile):
     anHarmonicity_profile = []
     for flux in flux_profile:
@@ -192,6 +215,12 @@ def anHarmonicityProfile(optim,flux_profile):
     return anHarmonicity_profile
 
 # Full batch of flux_profile
+def lossTransitionFlatness(Spectrum,flux_profile):
+    spectrum = stack([spectrum[:3] for spectrum,state in Spectrum])
+    loss = var(spectrum[:,1]-spectrum[:,0])
+    loss += var(spectrum[:,2]-spectrum[:,1])
+    return loss,dict()
+
 def loss_Anharmonicity(alpha):
     def lossFunction(Spectrum,flux_profile):
         anharmonicity = tensor(0.0)
@@ -202,18 +231,17 @@ def loss_Anharmonicity(alpha):
         return loss,{'anharmonicity':anharmonicity.detach().item()}
     return lossFunction
 
-def loss_Energy(E0):
+def loss_E10(E10):
     def lossFunction(Spectrum,flux_profile):
         loss = tensor(0.0)
-        for spectrum,state in Spectrum:
-            loss += MSE(spectrum[0],tensor(E0)) # E0
-        loss = loss/len(Spectrum)
-        return loss
+        spectrum = stack([spectrum[:2] for spectrum,state in Spectrum])
+        e10 = spectrum[:,1]-spectrum[:,0]
+        loss += MSE(e10,tensor(E10))
+        return loss,dict()
     return lossFunction
 
 def loss_Transition(E10,E21):
     def lossFunction(Spectrum,flux_profile):
-        #import pdb;pdb.set_trace()
         spectrum = stack([spectrum[:3] for spectrum,state in Spectrum])
         e10 = spectrum[:,1]-spectrum[:,0]
         e21 = spectrum[:,2]-spectrum[:,1]

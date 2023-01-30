@@ -68,6 +68,18 @@ class Circuit:
             self.backend = Sparse
         else:
             self.backend = Dense
+            
+    def initialization(self,parameters):
+        circuit = self.circuit
+        for component in circuit.network:
+            if component.__class__ == C :
+                component.initCap(parameters[component.ID])
+            elif component.__class__ == L :
+                component.initInd(parameters[component.ID])
+            elif component.__class__ == J :
+                component.initJunc(parameters[component.ID])
+        self.Cn_,self.Ln_ = self.componentMatrix()
+        self.Lo_,self.C_ = self.transformComponents()
 
     def parseCircuit(self):
         G = networkx.MultiGraph()

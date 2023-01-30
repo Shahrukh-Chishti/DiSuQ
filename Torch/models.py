@@ -16,8 +16,8 @@ def sigInv(sig,limit):
     return [sigmoidInverse(s/limit) for s in sig]
 
 def transmon(basis,Ej=10.,Ec=0.3,sparse=True):
-    transmon = [J(0,1,Ej)]
-    transmon += [C(0,1,Ec)]
+    transmon = [J(0,1,Ej,'J')]
+    transmon += [C(0,1,Ec,'C')]
 
     transmon = Circuit(transmon,basis,sparse)
     return transmon
@@ -32,6 +32,14 @@ def splitTransmon(basis):
 def oscillatorLC(basis,El=.00031,Ec=51.6256,sparse=True):
     oscillator = [L(0,1,El),C(0,1,Ec)]
     return Circuit(oscillator,basis,sparse)
+
+def fluxoniumArray(basis,junc=.05,N=2,Ec=100,Ej=150,sparse=True):
+    circuit = [C(0,1,Ec,'Cap')]
+    circuit += [J(0,1,Ej,'Junc')]
+    for i in range(N):
+        circuit += [J(1+i,2+i,junc,'junc'+str(i))]
+    circuit += [J(1+N,0,junc,'junc'+str(N))]
+    return circuit
 
 def fluxonium(basis,El=.0003,Ec=100,Ej=20,sparse=True):
     circuit = [C(0,1,Ec,'Cap')]
