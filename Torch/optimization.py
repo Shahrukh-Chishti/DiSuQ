@@ -199,7 +199,10 @@ def uniformParameters(circuit,N):
         domain.append(linspace(0,bound,N,endpoint=False)[1:])
     grid = array(meshgrid(*domain))
     grid = grid.reshape(len(iDs),-1)
-    return dict(zip(iDs,grid))      
+    parameters = []
+    for point in grid.T:
+        parameters.append(dict(zip(iDs,point)))
+    return parameters     
     
 def initializationParallelism(optimizer,lossFunction,flux_profile,iterations=100,lr=.005):
     def optimization(parameters):

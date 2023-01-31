@@ -70,8 +70,7 @@ class Circuit:
             self.backend = Dense
             
     def initialization(self,parameters):
-        circuit = self.circuit
-        for component in circuit.network:
+        for component in self.network:
             if component.__class__ == C :
                 component.initCap(parameters[component.ID])
             elif component.__class__ == L :
