@@ -53,7 +53,7 @@ def fluxonium(basis,El=.0003,Ec=100,Ej=20,sparse=True):
     circuit = Circuit(circuit,basis,sparse)
     return circuit
 
-def shuntedQubit(basis,josephson=[450.,15.,20.],cap=[.01,.01,.02],ind=.00001,sparse=True):
+def shuntedQubit(basis,josephson=[120.,50,120.],cap=[10.,50.,10.],ind=100.,sparse=True):
     Ej1,Ej2,Ej3 = josephson
     C1,C2,C3 = cap
 
@@ -65,7 +65,7 @@ def shuntedQubit(basis,josephson=[450.,15.,20.],cap=[.01,.01,.02],ind=.00001,spa
     circuit = Circuit(circuit,basis,sparse)
     return circuit
 
-def shuntedQubitFluxFree(basis,josephson=[10.,15.,20.],cap=[100.,500.,200.],sparse=True):
+def shuntedQubitFluxFree(basis,josephson=[120.,50,120.],cap=[10.,50.,10.],sparse=True):
     Ej1,Ej2,Ej3 = josephson
     C1,C2,C3 = cap
 

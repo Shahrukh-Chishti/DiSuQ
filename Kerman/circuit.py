@@ -265,7 +265,7 @@ class Circuit:
         return n_baseO,n_baseI,n_baseJ
 
     def islandModes(self):
-        islands = self.graphGL(elements=[C,J])
+        islands = self.graphGL(elements=[C])
         islands = networkx.connected_components(islands)
         islands = list(islands)
         Ni = 0

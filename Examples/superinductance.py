@@ -10,7 +10,7 @@ set_num_threads(30)
 
 Ec,Ej = 100,20
 gamma = 1.5
-n = 7
+n = 2
 array_range = arange(3,10)
 
 path_array, path_approx = [],[]
@@ -21,14 +21,18 @@ for N in array_range:
     H_J = circuit.josephsonCharge
     E0,E1,E2 = circuit.circuitEnergy(H_LC,H_J,dict()).detach().numpy()[:3]
     path_array.append((E1-E0,E2-E1))
+    del circuit
     
     El = gamma*Ej/N
-    basis = {'O':[500],'I':[],'J':[]}
+    basis = {'O':[1000],'I':[],'J':[]}
     circuit = models.fluxonium(basis,El,Ec,Ej,sparse=False)
     H_LC = circuit.kermanHamiltonianLC()
     H_J = circuit.kermanHamiltonianJosephson
     E0,E1,E2 = circuit.circuitEnergy(H_LC,H_J,{'I':tensor(0.0)}).detach().numpy()[:3]
     path_approx.append((E1-E0,E2-E1))
+    del circuit
+    
+    print(N,'-------------')
     
 path_array, path_approx = array(path_array),array(path_approx)
 

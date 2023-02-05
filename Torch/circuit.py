@@ -244,7 +244,7 @@ class Circuit:
         return n_baseO,n_baseI,n_baseJ
 
     def islandModes(self):
-        islands = self.graphGL(elements=[C,J])
+        islands = self.graphGL(elements=[C])
         islands = networkx.connected_components(islands)
         islands = list(islands)
         Ni = 0
@@ -405,6 +405,43 @@ class Circuit:
         Hj = Cj/2
 
         return Ho+Hint+Hi+Hj
+    
+    def kermanChargeOffset(self,charge_offset=dict()):
+        charge = zeros(self.Nn)
+        for node,dQ in charge_offset:
+            charge[self.nodes_[node]] = dQ
+        charge = self.R@charge
+        
+        No,Ni,Nj = self.No,self.Ni,self.Nj
+        
+        Qo = [self.backend.basisQq(basis_max) for basis_max in basis['O']]
+        Qi = [self.backend.basisQq(basis_max) for basis_max in basis['I']]
+        Qj = [self.backend.basisQq(basis_max) for basis_max in basis['J']]
+        Q = Qo + Qi + Qj
+        Io = [self.backend.identity(2*basis_max+1)*0.0 for basis_max in basis['O']]
+        Ii = [self.backend.identity(2*basis_max+1)*charge[index+No] for index,basis_max in enumerate(basis['I'])]
+        Ij = [self.backend.identity(2*basis_max+1)*charge[index+No+Ni] for index,basis_max in enumerate(basis['J'])]
+        I = Io + Ii + Ij
+        
+        Co_,Coi_,Coj_,Ci_,Cij_,Cj_ = self.C_
+        
+        Coi = self.backend.modeMatrixProduct(Q,Coi_,I,(0,No))
+        Coj = self.backend.modeMatrixProduct(Q,Coj_,I,(0,No+Ni))
+        
+        Cij = self.backend.modeMatrixProduct(I,Coj_,Q,(No+Ni,No))
+        Cij += self.backend.modeMatrixProduct(Q,Coj_,I,(No+Ni,No))
+        Cij -= self.backend.modeMatrixProduct(I,Coj_,I,(No+Ni,No))
+        
+        Ci = self.backend.modeMatrixProduct(I,Ci_,Q,(No,No))
+        Ci += self.backend.modeMatrixProduct(Q,Ci_,I,(No,No))
+        Ci += self.backend.modeMatrixProduct(I,Ci_,I,(No,No))
+        
+        Cj = self.backend.modeMatrixProduct(I,Cj_,Q,(No+Ni,No+Ni))
+        Cj += self.backend.modeMatrixProduct(Q,Cj_,I,(No+Ni,No+Ni))
+        Cj += self.backend.modeMatrixProduct(I,Cj_,I,(No+Ni,No+Ni))
+
+        H = Coi + Coj + Ci/2 + Cj/2
+        return -H
 
     def josephsonFlux(self,external_fluxes=dict()):
         basis = self.basis
