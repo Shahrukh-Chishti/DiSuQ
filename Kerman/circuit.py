@@ -78,7 +78,7 @@ def phase(phi):
     return exp(im*2*pi*phi)
 
 def hamiltonianEnergy(H,sort=True):
-    eigenenergies = real(eigvals(H))
+    eigenenergies = real(eigvalsh(H))
     if sort:
         eigenenergies.sort()
     return eigenenergies

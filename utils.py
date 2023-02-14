@@ -8,10 +8,10 @@ import networkx as nx
 from networkx.drawing.nx_pydot import write_dot
 from numpy import full,nan
 
-def plotCombine(plot,title=None,x_label=None,y_label=None):
+def plotCombine(plot,title=None,x_label=None,y_label=None,mode='lines'):
     fig = go.Figure()
     for name,(x,y) in plot.items():
-        fig.add_trace(go.Scatter(x=x,y=y,name=name))
+        fig.add_trace(go.Scatter(x=x,y=y,name=name,mode=mode))
     fig.update_layout(title=title,
     xaxis_title=x_label,
     yaxis_title=y_label)

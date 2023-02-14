@@ -1,13 +1,13 @@
 from torch.optim import SGD,RMSprop,Adam
 import torch,pandas
 from torch import tensor,argsort,zeros,abs,mean,stack,var
-from torch.linalg import det,inv,eig as eigsolve
+from torch.linalg import det,inv,eigh as eigsolve
 from numpy import arange,set_printoptions,meshgrid,linspace,array
 from time import perf_counter,sleep
 from DiSuQ.Torch.non_attacking_rooks import charPoly
 from DiSuQ.Torch.components import L,J,C
 from DiSuQ.Torch.components import L0,J0,C0
-
+from scipy.stats import truncnorm
 
 """
     * Loss functions
@@ -178,6 +178,9 @@ class OrderingOptimization(Optimization):
             dParams.append(self.parameterState())
             dCircuit.append(self.circuitState())
             logs.append(metrics)
+            if breakPoint(logs[-15:]):
+                print('Optimization Break Point xxxxxx')
+                break
 
         dLog = pandas.DataFrame(logs)
         dLog['time'] = dLog['time'].diff()
@@ -186,6 +189,31 @@ class OrderingOptimization(Optimization):
         dCircuit = pandas.DataFrame(dCircuit)
         return dLog,dParams,dCircuit
     
+def breakPoint(logs):
+    # break optimization loop : stagnation / spiking
+    loss = pandas.DataFrame(logs)['loss'].to_numpy()
+    if loss[-1] > 1e6:
+        return True    
+    return False
+
+def truncNormalParameters(circuit,N,var=5):
+    iDs,domain = [],[]
+    for component in circuit.network:
+        iDs.append(component.ID)
+        if component.__class__ == C :
+            bound = C0; loc = component.capacitance().item()
+        elif component.__class__ == L :
+            bound = L0; loc = component.inductance().item()
+        elif component.__class__ == J :
+            bound = J0; loc = component.energy().item()
+        a = 0.0 - loc/var ; b = bound - loc/var
+        domain.append(truncnorm.rvs(a,b,loc,var,size=N))
+    grid = array(domain)
+    parameters = []
+    for point in grid.T:
+        parameters.append(dict(zip(iDs,point)))
+    return parameters
+
 def uniformParameters(circuit,N):
     iDs,domain = [],[]
     for component in circuit.network:
@@ -195,18 +223,27 @@ def uniformParameters(circuit,N):
         elif component.__class__ == L :
             bound = L0
         elif component.__class__ == J :
-            bound =J0
+            bound = J0
         domain.append(linspace(0,bound,N,endpoint=False)[1:])
     grid = array(meshgrid(*domain))
     grid = grid.reshape(len(iDs),-1)
     parameters = []
     for point in grid.T:
         parameters.append(dict(zip(iDs,point)))
-    return parameters     
+    return parameters
+
+def initializationSequential(parameters,optimizer,lossFunction,flux_profile,iterations=100,lr=.005):
+    Search = []
+    for index,parameter in enumerate(parameters):
+        optimizer.circuit.initialization(parameter)
+        optimizer.parameters = optimizer.circuitParameters()
+        Search.append(optimizer.optimization(lossFunction,flux_profile,iterations=iterations,lr=lr))
+    return Search
     
 def initializationParallelism(optimizer,lossFunction,flux_profile,iterations=100,lr=.005):
     def optimization(parameters):
         optimizer.circuit.initialization(parameters)
+        optim.parameters = optim.circuitParameters()
         return optimizer.optimization(lossFunction,flux_profile,iterations=iterations,lr=lr)
     return optimization
     
@@ -224,7 +261,7 @@ def lossTransitionFlatness(Spectrum,flux_profile):
     loss += var(spectrum[:,2]-spectrum[:,1])
     return loss,dict()
 
-def loss_Anharmonicity(alpha):
+def lossAnharmonicity(alpha):
     def lossFunction(Spectrum,flux_profile):
         anharmonicity = tensor(0.0)
         for spectrum,state in Spectrum:
@@ -234,7 +271,7 @@ def loss_Anharmonicity(alpha):
         return loss,{'anharmonicity':anharmonicity.detach().item()}
     return lossFunction
 
-def loss_E10(E10):
+def lossE10(E10):
     def lossFunction(Spectrum,flux_profile):
         loss = tensor(0.0)
         spectrum = stack([spectrum[:2] for spectrum,state in Spectrum])
@@ -243,7 +280,7 @@ def loss_E10(E10):
         return loss,dict()
     return lossFunction
 
-def loss_Transition(E10,E21):
+def lossTransition(E10,E21):
     def lossFunction(Spectrum,flux_profile):
         spectrum = stack([spectrum[:3] for spectrum,state in Spectrum])
         e10 = spectrum[:,1]-spectrum[:,0]

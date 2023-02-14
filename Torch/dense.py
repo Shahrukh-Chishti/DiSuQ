@@ -67,8 +67,8 @@ def unitaryTransformation(M,U):
     M = U.conj().T@ M@ U
     return M
 
-def identity(n):
-    return eye(n)
+def identity(n,dtype=float):
+    return eye(n,dtype=dtype)
 
 def null(N=1,dtype=complex):
     return zeros(N,N,dtype=complex)

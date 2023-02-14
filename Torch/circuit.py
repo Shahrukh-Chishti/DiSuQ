@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 import DiSuQ.Torch.dense as Dense
 import DiSuQ.Torch.sparse as Sparse
 from torch import exp,det,tensor,arange,zeros,sqrt,diagonal,argsort,set_num_threads,full
-from torch.linalg import eig as eigsolve,inv
-from DiSuQ.Torch.components import diagonalisation,null,J,L,C,im,pi
+from torch.linalg import eigvalsh as eigsolve,inv
+from DiSuQ.Torch.components import diagonalisation,null,J,L,C,im,pi,complex
 
 from numpy.linalg import matrix_rank
 from numpy import prod,array
@@ -21,8 +21,7 @@ def phase(phi):
     return exp(im*2*pi*phi)
 
 def hamiltonianEnergy(H,sort=True):
-    eigenenergies,_ = eigsolve(H)
-    del _
+    eigenenergies = eigsolve(H)
     eigenenergies = eigenenergies.real
     if sort:
         eigenenergies = eigenenergies.sort()[0]
@@ -135,14 +134,14 @@ class Circuit:
         return GL
 
     def circuitComponents(self):
-        circuit_components = []
+        circuit_components = dict()
         for component in self.network:
             if component.__class__ == C :
-                circuit_components.append({'C':component.capacitance().item()})
+                circuit_components[component.ID] = component.capacitance().item()
             elif component.__class__ == L :
-                circuit_components.append({'L':component.inductance().item()})
+                circuit_components[component.ID] = component.inductance().item()
             elif component.__class__ == J :
-                circuit_components.append({'J':component.energy().item()})
+                circuit_components[component.ID] = component.energy().item()
         return circuit_components
 
     def componentMatrix(self):
@@ -408,7 +407,7 @@ class Circuit:
     
     def kermanChargeOffset(self,charge_offset=dict()):
         charge = zeros(self.Nn)
-        for node,dQ in charge_offset:
+        for node,dQ in charge_offset.items():
             charge[self.nodes_[node]] = dQ
         charge = self.R@charge
         
@@ -585,6 +584,22 @@ class Circuit:
         H = (H_C+H_L)/2
 
         return H
+    
+    def chargeChargeOffset(self,charge_offset=dict()):
+        charge = zeros(self.Nn)
+        basis = self.basis
+        Cn_ = self.Cn_
+        for node,dQ in charge_offset.items():
+            charge[self.nodes_[node]] = dQ
+            
+        Q = [self.backend.basisQq(basis_max) for basis_max in basis]
+        I = [self.backend.identity(2*basis_max+1,complex)*charge[index] for index,basis_max in enumerate(basis)]
+        #import pdb;pdb.set_trace()
+        H = self.backend.modeMatrixProduct(Q,Cn_,I)
+        H += self.backend.modeMatrixProduct(I,Cn_,Q)
+        H -= self.backend.modeMatrixProduct(I,Cn_,I)
+        
+        return -H/2.
 
     def potentialOscillator(self,external_fluxes=dict()):
         Ln_ = self.Ln_

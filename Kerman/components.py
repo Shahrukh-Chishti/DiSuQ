@@ -2,7 +2,7 @@ import numpy,uuid
 from numpy import cos,sin,pi,exp,sqrt,array,arange,argsort,asarray,eye
 from numpy import diag,linspace,outer,zeros,fill_diagonal,ones
 from numpy import dot,zeros_like,real,prod,diagonal
-from numpy.linalg import det,norm,eig as eigsolve,eigh,inv,eigvals,matrix_rank
+from numpy.linalg import det,norm,eigh as eigsolve,inv,eigvalsh,matrix_rank
 from scipy.linalg import expm
 from numpy import complex128 as complex
 from numpy import float32 as float
