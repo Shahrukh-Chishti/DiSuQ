@@ -5,6 +5,7 @@ from torch import vstack,transpose
 from torch import matmul as mul,nonzero
 from torch import sparse,sparse_coo_tensor
 from torch.sparse import mm as mul
+from scipy import sparse
 
 from .components import *
 
@@ -90,6 +91,12 @@ def kron(A,B):
     cols = (idA[:,1][:,None] + idB[:,1][None,:]).ravel()
     indices = vstack((rows,cols))
     return sparse_coo_tensor(indices,values,(N,N))
+
+def scipyfy(H):
+    indices = indicesSparse(H).numpy().T
+    values = valuesSparse(H).detach().numpy()
+    shape = H.size()
+    return sparse.coo_matrix((values,indices),shape=shape)
 
 def sparsify(T):
     indices = nonzero(T,as_tuple=True)

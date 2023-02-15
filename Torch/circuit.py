@@ -7,7 +7,7 @@ from torch import exp,det,tensor,arange,zeros,sqrt,diagonal,argsort,set_num_thre
 from torch.linalg import eigvalsh as eigsolve,inv
 from DiSuQ.Torch.components import diagonalisation,null,J,L,C,im,pi,complex
 
-from numpy.linalg import matrix_rank
+from numpy.linalg import matrix_rank,eigvalsh
 from numpy import prod,array
 
 
@@ -629,13 +629,24 @@ class Circuit:
         H_J = self.josephsonFlux(external_fluxes)
         return H_L+H_J
 
-    def circuitEnergy(self,H_LC=tensor(0.0),H_J=None,external_fluxes=dict()):
+    def circuitEnergy(self,H_LC=tensor(0.0),H_J=None,external_fluxes=dict(),grad=True):
         if H_J is None:
             H_J = null(H_LC)
         #H_LC = self.hamiltonianLC()
         #H_ext = self.fluxInducerEnergy()
         H = H_LC + H_J(external_fluxes)
-        eigenenergies = hamiltonianEnergy(H)
+        if grad:
+            if self.sparse:
+                H = H.to_dense()
+            eigenenergies = hamiltonianEnergy(H)
+        else:
+            if self.sparse:
+                H = self.backend.scipyfy(H)
+                eigenenergies = self.backend.sparse.linalg.eigsh(H,return_eigenvectors=False)
+            else:
+                H = H.detach().numpy()
+                eigenenergies = eigvalsh(H)
+        
         return eigenenergies
 
     def spectrumManifold(self,flux_points,flux_manifold,H_LC=tensor(0.0),H_J=None,excitation=[1]):
