@@ -105,8 +105,8 @@ def sparsify(T):
     indices = vstack(indices)
     return sparse_coo_tensor(indices,values,shape)
 
-def identity(n):
-    return sparsify(eye(n))
+def identity(n,dtype=float):
+    return sparsify(eye(n,dtype=dtype))
 
 def null(shape=1,dtype=complex):
     return sparse_coo_tensor([[],[]],[],[shape]*2,dtype=dtype)

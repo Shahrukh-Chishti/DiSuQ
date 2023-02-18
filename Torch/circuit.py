@@ -418,8 +418,8 @@ class Circuit:
         Qj = [self.backend.basisQq(basis_max) for basis_max in basis['J']]
         Q = Qo + Qi + Qj
         Io = [self.backend.identity(2*basis_max+1)*0.0 for basis_max in basis['O']]
-        Ii = [self.backend.identity(2*basis_max+1)*charge[index+No] for index,basis_max in enumerate(basis['I'])]
-        Ij = [self.backend.identity(2*basis_max+1)*charge[index+No+Ni] for index,basis_max in enumerate(basis['J'])]
+        Ii = [self.backend.identity(2*basis_max+1)*charge[index+No]*2 for index,basis_max in enumerate(basis['I'])]
+        Ij = [self.backend.identity(2*basis_max+1)*charge[index+No+Ni]*2 for index,basis_max in enumerate(basis['J'])]
         I = Io + Ii + Ij
         
         Co_,Coi_,Coj_,Ci_,Cij_,Cj_ = self.C_
