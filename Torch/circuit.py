@@ -593,8 +593,7 @@ class Circuit:
             charge[self.nodes_[node]] = dQ
             
         Q = [self.backend.basisQq(basis_max) for basis_max in basis]
-        I = [self.backend.identity(2*basis_max+1,complex)*charge[index] for index,basis_max in enumerate(basis)]
-        #import pdb;pdb.set_trace()
+        I = [self.backend.identity(2*basis_max+1,complex)*charge[index]*2 for index,basis_max in enumerate(basis)]
         H = self.backend.modeMatrixProduct(Q,Cn_,I)
         H += self.backend.modeMatrixProduct(I,Cn_,Q)
         H -= self.backend.modeMatrixProduct(I,Cn_,I)
