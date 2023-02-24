@@ -3,12 +3,12 @@ import matplotlib.pyplot as plt
 
 import DiSuQ.Torch.dense as Dense
 import DiSuQ.Torch.sparse as Sparse
-from torch import exp,det,tensor,arange,zeros,sqrt,diagonal,argsort,set_num_threads,full
+from torch import exp,det,tensor,arange,zeros,sqrt,diagonal,argsort,set_num_threads,full as full_torch
 from torch.linalg import eigvalsh as eigsolve,inv
 from DiSuQ.Torch.components import diagonalisation,null,J,L,C,im,pi,complex
 
 from numpy.linalg import matrix_rank,eigvalsh
-from numpy import prod,array
+from numpy import prod,array,full as full_numpy
 
 
 def inverse(A):
@@ -629,6 +629,7 @@ class Circuit:
         return H_L+H_J
 
     def circuitEnergy(self,H_LC=tensor(0.0),H_J=None,external_fluxes=dict(),grad=True):
+        ## this could be improved : removing if clause, sub-class, sparse/dense and grad/numer segregation
         if H_J is None:
             H_J = null(H_LC)
         #H_LC = self.hamiltonianLC()
@@ -648,7 +649,7 @@ class Circuit:
         
         return eigenenergies
 
-    def spectrumManifold(self,flux_points,flux_manifold,H_LC=tensor(0.0),H_J=None,excitation=[1]):
+    def spectrumManifold(self,flux_points,flux_manifold,H_LC=tensor(0.0),H_J=None,excitation=[1],grad=True):
         """
             flux_points : inductor identifier for external introduction
             flux_manifold : [(fluxes)]
@@ -656,14 +657,19 @@ class Circuit:
         if H_J is None:
             H_J = null(H_LC)
         #manifold of flux space M
-        Ex,E0 = full((len(excitation),len(flux_manifold)),float('nan')),[]
+        if not grad:
+            Ex = full_numpy((len(excitation),len(flux_manifold)),float('nan'))
+        else:
+            Ex = full_torch((len(excitation),len(flux_manifold)),float('nan'))
+        E0 = []
         #H_LC = self.hamiltonianLC()
         #H_ext = self.fluxInducerEnergy()
         for index,fluxes in enumerate(flux_manifold):
             external_fluxes = dict(zip(flux_points,fluxes))
             #H_J = self.josephsonEnergy(external_fluxes)
-            H = H_LC + H_J(external_fluxes)
-            eigenenergies = hamiltonianEnergy(H)
+            #H = H_LC + H_J(external_fluxes)
+            eigenenergies = self.circuitEnergy(H_LC,H_J,external_fluxes,grad)
+            #eigenenergies = hamiltonianEnergy(H)
             
             E0.append(eigenenergies[0])
             Ex[:,index] = eigenenergies[excitation]-eigenenergies[0]

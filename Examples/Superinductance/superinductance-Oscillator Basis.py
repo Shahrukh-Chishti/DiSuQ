@@ -51,4 +51,4 @@ for N in array_range:
     
 path_array, path_approx = array(path_array),array(path_approx)
 
-plotTrajectory(array_range,{'array':path_array,'approx':path_approx},'Fluxonium - Quasi approximation','E10','E21',save=True)
+plotTrajectory(array_range,{'array':path_array,'approx':path_approx},'Fluxonium - Quasi approximation - Oscillator Basis','E10','E21',save=True)

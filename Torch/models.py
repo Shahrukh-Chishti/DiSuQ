@@ -2,9 +2,18 @@ import numpy,sys
 from DiSuQ.Torch.circuit import Circuit, hamiltonianEnergy, phase
 from DiSuQ.Torch.components import J,C,L,pi,h
 from DiSuQ.Torch.components import C0,J0,L0
+from DiSuQ.Torch.components import e,h,flux_quanta,hbar
 from numpy.linalg import det
 from pyvis import network as pvnet
 from torch import tensor
+
+def capE(cap,unit):
+    cap *= unit
+    return e**2 / 2 / cap / 1e-9 # GHz
+
+def indE(ind,unit):
+    ind *= unit
+    return (hbar/2/e)**2 /ind / 1e-9 # GHz
 
 def tensorize(values,variable=True):
     tensors = []
@@ -90,6 +99,73 @@ def phaseSlip(basis,inductance=[.001,.0005,.00002,.00035,.0005],capacitance=[100
     circuit += [L(1,7,Le,'Ll',True)]
     circuit += [C(7,0,Cg)]
     circuit = Circuit(circuit,basis)
+    return circuit
+
+def resI(basis,sparse=True):
+    cap = 54.3 + 1.92
+    circuit = [C(0,1,capE(cap,1e-15),'C')] + [J(0,1,9.13,'J1')] + [J(0,1,1.00,'J2')]
+    circuit += [L(0,1,.001,'L',True)]
+    circuit = Circuit(circuit,basis,sparse)
+    return circuit
+
+def resIV(basis,sparse=True):
+    cap = 28.0
+    Ec = capE(cap,1e-15)
+    El = indE(150.,1e-9)
+    circuit = [C(0,1,Ec,'C')] + [J(0,1,9.13,'J')]
+    circuit += [L(0,1,El,'L',True)]
+    circuit = Circuit(circuit,basis,sparse)
+    return circuit
+
+def resII(basis,sparse=True):
+    Ec = capE(.15,1e-15)
+    Ec1 = capE(3.4,1e-12)
+    Ec2 = capE(1.5,1e-12)
+    circuit = [C(0,1,Ec,'C')]
+    circuit += [L(0,1,.001,'L',True)]
+    circuit += [C(1,2,Ec1,'C1'), J(1,2,100.,'J1')]
+    circuit += [C(2,0,Ec2,'C2'), J(2,0,88.2,'J2')]
+    circuit = Circuit(circuit,basis,sparse)
+    return circuit
+
+def resV(basis,sparse=True):
+    Ec = capE(45.,1e-15)
+    El = indE(19.8,1e-9)
+    EcJ = capE(15.0,1e-15)
+    circuit = [C(0,1,Ec,'C')]
+    circuit += [L(1,2,.001,'L',True)]
+    circuit += [C(2,0,EcJ,'EcJ'), J(2,0,88.2,'J')]
+    circuit = Circuit(circuit,basis,sparse)
+    return circuit
+
+def resIII(basis,sparse=True):
+    Ec = capE(101.,1e-15)
+    El = indE(150.+18.3,1e-9)
+    EcLink = capE(.8,1e-12)
+    Ec1 = capE(1.59,1e-12)
+    Ec2 = capE(520,1e-12)
+    
+    circuit = [C(0,1,Ec,'C')]
+    circuit += [L(0,2,El,'L',True)]
+    circuit += [C(1,2,Ec1,'C1'), J(1,2,1.,'J1')]
+    circuit += [C(2,3,EcLink,'Coupling')]
+    circuit += [C(3,0,Ec2,'C2'), J(3,0,59.5,'J2')]
+    circuit = Circuit(circuit,basis,sparse)
+    return circuit
+
+def resVI(basis,sparse=True):
+    Ec1 = capE(.15,1e-15)
+    El = indE(150.+18.3,1e-9)
+    EcLink = capE(.8,1e-12)
+    Ec1 = capE(1.59,1e-12)
+    Ec2 = capE(520,1e-12)
+    
+    circuit = [C(0,1,Ec,'C1')]
+    circuit += [L(0,2,El,'L1',True)]
+    circuit += [C(1,2,Ec1,'C1'), J(1,2,1.,'J1')]
+    circuit += [C(2,3,EcLink,'Coupling')]
+    circuit += [C(3,0,Ec2,'C2'), J(3,0,59.5,'J2')]
+    circuit = Circuit(circuit,basis,sparse)
     return circuit
 
 if __name__=='__main__':
