@@ -9,14 +9,15 @@ from time import perf_counter,sleep
 from torch import set_num_threads
 set_num_threads(64)
 
-Ec,Ej = 100,20
-gamma = 1.5
-n = 2
+Ec,Ej = .1,100
+gamma = .5
+n = 3
 array_range = arange(1,8)
+n_basis = 512
 
 path_array, path_approx = [],[]
 for N in array_range:
-    basis = [6]+[n]*N
+    basis = [10]+[n]*N
     print('Array Range :',N)
     print(basis)
     
@@ -36,12 +37,12 @@ for N in array_range:
     print('Time Diagonalization:',end-start)
     
     El = gamma*Ej/N
-    basis = [1024]
+    basis = [n_basis]
     start = perf_counter()
     circuit = models.transmon(basis,Ej,Ec,sparse=False)
     H_LC = circuit.chargeHamiltonianLC()
-    H_LC -= N*gamma*Ej* circuit.backend.displacementCharge(1024,1/N)/2
-    H_LC -= N*gamma*Ej* circuit.backend.displacementCharge(1024,-1/N)/2
+    H_LC -= N*gamma*Ej* circuit.backend.displacementCharge(n_basis,1/N)/2
+    H_LC -= N*gamma*Ej* circuit.backend.displacementCharge(n_basis,-1/N)/2
     H_J = circuit.josephsonCharge
     print(H_LC.shape)
     E0,E1,E2 = circuit.circuitEnergy(H_LC,H_J,{'I':tensor(0.0)},grad=False)[:3]
@@ -53,4 +54,4 @@ for N in array_range:
     
 path_array, path_approx = array(path_array),array(path_approx)
 
-plotTrajectory(array_range,{'array':path_array,'approx':path_approx},'Fluxonium - Quasi approximation','E10','E21',save=True)
+plotTrajectory(array_range,{'array':path_array,'approx':path_approx},'Fluxonium - Quasi approximation - Charge Basis','E10','E21',save=True)

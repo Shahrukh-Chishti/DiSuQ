@@ -357,8 +357,7 @@ class Circuit:
 
                 Jplus = self.backend.basisProduct(Dplus)
                 Jminus = self.backend.basisProduct(Dminus)
-            Hj = E*(Jplus*phase(flux) + Jminus*phase(-flux))
-            H = H-Hj
+            H -= E*(Jplus*phase(flux) + Jminus*phase(-flux))
 
         return H/2
 
@@ -378,30 +377,21 @@ class Circuit:
         Qj = [self.backend.basisQq(basis_max) for basis_max in basis['J']]
         Q = Qo + Qi + Qj
 
-        Co = self.backend.modeMatrixProduct(Q,Co_,Q,(0,0))
+        H = self.backend.modeMatrixProduct(Q,Co_,Q,(0,0))/2
 
         Fo = [self.backend.basisFo(basis_max,Zi) for Zi,basis_max in zip(Z,basis['O'])]
         Fi = [self.backend.basisFq(basis_max) for basis_max in basis['I']]
         Fj = [self.backend.basisFq(basis_max) for basis_max in basis['J']]
         F = Fo + Fi + Fj
 
-        Lo = self.backend.modeMatrixProduct(F,Lo_,F,(0,0))
+        H += self.backend.modeMatrixProduct(F,Lo_,F,(0,0))/2
 
-        Ho = (Co + Lo)/2
+        H += self.backend.modeMatrixProduct(Q,Coi_,Q,(0,No))
+        H += self.backend.modeMatrixProduct(Q,Coj_,Q,(0,No+Ni))
+        H += self.backend.modeMatrixProduct(Q,Cij_,Q,(No,No+Ni))
 
-        Coi = self.backend.modeMatrixProduct(Q,Coi_,Q,(0,No))
-
-        Coj = self.backend.modeMatrixProduct(Q,Coj_,Q,(0,No+Ni))
-
-        Cij = self.backend.modeMatrixProduct(Q,Cij_,Q,(No,No+Ni))
-
-        Hint = Coi + Coj + Cij
-
-        Ci = self.backend.modeMatrixProduct(Q,Ci_,Q,(No,No))
-        Hi = Ci/2
-
-        Cj = self.backend.modeMatrixProduct(Q,Cj_,Q,(No+Ni,No+Ni))
-        Hj = Cj/2
+        H += self.backend.modeMatrixProduct(Q,Ci_,Q,(No,No))/2
+        H += self.backend.modeMatrixProduct(Q,Cj_,Q,(No+Ni,No+Ni))/2
 
         return Ho+Hint+Hi+Hj
     
@@ -424,22 +414,21 @@ class Circuit:
         
         Co_,Coi_,Coj_,Ci_,Cij_,Cj_ = self.C_
         
-        Coi = self.backend.modeMatrixProduct(Q,Coi_,I,(0,No))
-        Coj = self.backend.modeMatrixProduct(Q,Coj_,I,(0,No+Ni))
+        H = self.backend.modeMatrixProduct(Q,Coi_,I,(0,No))
+        H += self.backend.modeMatrixProduct(Q,Coj_,I,(0,No+Ni))
         
-        Cij = self.backend.modeMatrixProduct(I,Coj_,Q,(No+Ni,No))
-        Cij += self.backend.modeMatrixProduct(Q,Coj_,I,(No+Ni,No))
-        Cij -= self.backend.modeMatrixProduct(I,Coj_,I,(No+Ni,No))
+        H += self.backend.modeMatrixProduct(I,Coj_,Q,(No+Ni,No))
+        H += self.backend.modeMatrixProduct(Q,Coj_,I,(No+Ni,No))
+        H -= self.backend.modeMatrixProduct(I,Coj_,I,(No+Ni,No))
         
-        Ci = self.backend.modeMatrixProduct(I,Ci_,Q,(No,No))
-        Ci += self.backend.modeMatrixProduct(Q,Ci_,I,(No,No))
-        Ci += self.backend.modeMatrixProduct(I,Ci_,I,(No,No))
+        H += self.backend.modeMatrixProduct(I,Ci_,Q,(No,No))/2
+        H += self.backend.modeMatrixProduct(Q,Ci_,I,(No,No))/2
+        H += self.backend.modeMatrixProduct(I,Ci_,I,(No,No))/2
         
-        Cj = self.backend.modeMatrixProduct(I,Cj_,Q,(No+Ni,No+Ni))
-        Cj += self.backend.modeMatrixProduct(Q,Cj_,I,(No+Ni,No+Ni))
-        Cj += self.backend.modeMatrixProduct(I,Cj_,I,(No+Ni,No+Ni))
+        H += self.backend.modeMatrixProduct(I,Cj_,Q,(No+Ni,No+Ni))/2
+        H += self.backend.modeMatrixProduct(Q,Cj_,I,(No+Ni,No+Ni))/2
+        H += self.backend.modeMatrixProduct(I,Cj_,I,(No+Ni,No+Ni))/2
 
-        H = Coi + Coj + Ci/2 + Cj/2
         return -H
 
     def josephsonFlux(self,external_fluxes=dict()):
@@ -462,8 +451,7 @@ class Circuit:
                 Jplus = self.backend.crossBasisProduct(Dplus,Dminus,i,j)
                 Jminus = self.backend.crossBasisProduct(Dplus,Dminus,j,i)
                 #assert (Jminus == Jplus.conj().T).all()
-            Hj = E*(Jplus*phase(flux) + Jminus*phase(-flux))
-            H = H - Hj
+            H -= E*(Jplus*phase(flux) + Jminus*phase(-flux))
 
         return H/2
 
@@ -487,8 +475,7 @@ class Circuit:
                 Jplus = self.backend.crossBasisProduct(Dplus,Dminus,i,j)
                 Jminus = self.backend.crossBasisProduct(Dplus,Dminus,j,i)
                 #assert (Jminus == Jplus.conj().T).all()
-            Hj = E*(Jplus*phase(flux) + Jminus*phase(-flux))
-            H = H - Hj
+            H -= E*(Jplus*phase(flux) + Jminus*phase(-flux))
 
         return H/2
 
@@ -513,8 +500,7 @@ class Circuit:
                 #assert (Jminus == Jplus.conj().T).all()
                 
             #print(E,flux)
-            Hj = E*(Jplus*phase(flux) + Jminus*phase(-flux))
-            H = H-Hj
+            H -= E*(Jplus*phase(flux) + Jminus*phase(-flux))
 
         return H/2
 
@@ -546,12 +532,10 @@ class Circuit:
         Q = [self.backend.basisQo(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
         F = [self.backend.basisFo(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
 
-        H_C = self.backend.modeMatrixProduct(Q,Cn_,Q)
-        H_L = self.backend.modeMatrixProduct(F,Ln_,F)
+        H = self.backend.modeMatrixProduct(Q,Cn_,Q)
+        H += self.backend.modeMatrixProduct(F,Ln_,F)
 
-        H = (H_C+H_L)/2
-
-        return H
+        return H/2
 
     def fluxHamiltonianLC(self):
         """
@@ -562,12 +546,10 @@ class Circuit:
 
         Q = [self.backend.basisQf(basis_max) for basis_max in basis]
         F = [self.backend.basisFf(basis_max) for basis_max in basis]
-        H_C = self.backend.modeMatrixProduct(Q,Cn_,Q)
-        H_L = self.backend.modeMatrixProduct(F,Ln_,F)
+        H = self.backend.modeMatrixProduct(Q,Cn_,Q)
+        H += self.backend.modeMatrixProduct(F,Ln_,F)
 
-        H = (H_C+H_L)/2
-
-        return H
+        return H/2
 
     def chargeHamiltonianLC(self):
         """
@@ -578,12 +560,10 @@ class Circuit:
 
         Q = [self.backend.basisQq(basis_max) for basis_max in basis]
         F = [self.backend.basisFq(basis_max) for basis_max in basis]
-        H_C = self.backend.modeMatrixProduct(Q,Cn_,Q)
-        H_L = self.backend.modeMatrixProduct(F,Ln_,F)
+        H = self.backend.modeMatrixProduct(Q,Cn_,Q)
+        H += self.backend.modeMatrixProduct(F,Ln_,F)
 
-        H = (H_C+H_L)/2
-
-        return H
+        return H/2
     
     def chargeChargeOffset(self,charge_offset=dict()):
         charge = zeros(self.Nn)
@@ -606,27 +586,27 @@ class Circuit:
 
         impedance = self.modeImpedance()
         F = [self.backend.basisFo(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
-        H_L = self.backend.modeMatrixProduct(F,Ln_,F)/2
-        H_J = self.josephsonOscillator(external_fluxes)
-        return H_L+H_J
+        H = self.backend.modeMatrixProduct(F,Ln_,F)/2
+        H += self.josephsonOscillator(external_fluxes)
+        return H
 
     def potentialCharge(self,external_fluxes=dict()):
         Ln_ = self.Ln_
         basis = self.basis
 
         F = [self.backend.basisFq(basis_max) for basis_max in basis]
-        H_L = self.backend.modeMatrixProduct(F,Ln_,F)/2
-        H_J = self.josephsonCharge(external_fluxes)
-        return H_L+H_J
+        H = self.backend.modeMatrixProduct(F,Ln_,F)/2
+        H += self.josephsonCharge(external_fluxes)
+        return H
 
     def potentialFlux(self,external_fluxes=dict()):
         Ln_ = self.Ln_
         basis = self.basis
 
         F = [self.backend.basisFf(basis_max) for basis_max in basis]
-        H_L = self.backend.modeMatrixProduct(F,Ln_,F)/2
-        H_J = self.josephsonFlux(external_fluxes)
-        return H_L+H_J
+        H = self.backend.modeMatrixProduct(F,Ln_,F)/2
+        H += self.josephsonFlux(external_fluxes)
+        return H
 
     def circuitEnergy(self,H_LC=tensor(0.0),H_J=None,external_fluxes=dict(),grad=True):
         ## this could be improved : removing if clause, sub-class, sparse/dense and grad/numer segregation
