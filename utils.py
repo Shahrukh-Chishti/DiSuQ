@@ -17,13 +17,15 @@ def plotCombine(plot,title=None,x_label=None,y_label=None,mode='lines'):
     yaxis_title=y_label)
     py.iplot(fig)
 
-def plotCompare(x,plot,title=None,x_label=None,y_label=None):
+def plotCompare(x,plot,title=None,x_label=None,y_label=None,save=False):
     fig = go.Figure()
     for name,values in plot.items():
         fig.add_trace(go.Scatter(x=x,y=values,name=name))
     fig.update_layout(title=title,
     xaxis_title=x_label,
     yaxis_title=y_label)
+    if save:
+        fig.write_html('./'+title+'.html')
     py.iplot(fig)
 
 def view_pydot(G):

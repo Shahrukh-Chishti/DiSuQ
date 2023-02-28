@@ -50,19 +50,20 @@ def oscillatorLC(basis,El=.00031,Ec=51.6256,sparse=True):
     oscillator = [L(0,1,El),C(0,1,Ec)]
     return Circuit(oscillator,basis,sparse)
 
-def fluxoniumArray(basis,gamma=1.5,N=2,Ec=100,Ej=150,sparse=True):
+def fluxoniumArray(basis,gamma=1.5,N=0,Ec=100,Ej=150,sparse=True):
+    # N : number of islands
     circuit = [C(0,1,Ec,'Cap')]
     circuit += [J(0,1,Ej,'Junc')]
-    for i in range(N-1):
+    for i in range(N):
         circuit += [J(1+i,2+i,gamma*Ej,'junc'+str(i))]
-        circuit += [C(1+i,2+i,Ec/gamma,'junc'+str(i))]
+        circuit += [C(1+i,2+i,Ec/gamma,'cap'+str(i))]
     circuit += [J(1+N,0,gamma*Ej,'junc'+str(N))]
-    circuit += [C(1+N,0,Ec/gamma,'junc'+str(N))]
+    circuit += [C(1+N,0,Ec/gamma,'cap'+str(N))]
     
     circuit = Circuit(circuit,basis,sparse)
     return circuit
 
-def fluxonium(basis,El=.0003,Ec=100,Ej=20,sparse=True):
+def fluxonium(basis,El=.0003,Ec=.1,Ej=20,sparse=True):
     circuit = [C(0,1,Ec,'Cap')]
     circuit += [J(0,1,Ej,'JJ')]
     circuit += [L(0,1,El,'I',True)]

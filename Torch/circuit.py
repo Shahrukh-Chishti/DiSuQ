@@ -8,7 +8,7 @@ from torch.linalg import eigvalsh as eigsolve,inv
 from DiSuQ.Torch.components import diagonalisation,null,J,L,C,im,pi,complex
 
 from numpy.linalg import matrix_rank,eigvalsh
-from numpy import prod,array,full as full_numpy
+from numpy import prod,array,sort,full as full_numpy
 
 
 def inverse(A):
@@ -393,7 +393,7 @@ class Circuit:
         H += self.backend.modeMatrixProduct(Q,Ci_,Q,(No,No))/2
         H += self.backend.modeMatrixProduct(Q,Cj_,Q,(No+Ni,No+Ni))/2
 
-        return Ho+Hint+Hi+Hj
+        return H
     
     def kermanChargeOffset(self,charge_offset=dict()):
         charge = zeros(self.Nn)
@@ -557,7 +557,6 @@ class Circuit:
         """
         Cn_,Ln_ = self.Cn_,self.Ln_
         basis = self.basis
-
         Q = [self.backend.basisQq(basis_max) for basis_max in basis]
         F = [self.backend.basisFq(basis_max) for basis_max in basis]
         H = self.backend.modeMatrixProduct(Q,Cn_,Q)
@@ -623,6 +622,7 @@ class Circuit:
             if self.sparse:
                 H = self.backend.scipyfy(H)
                 eigenenergies = self.backend.sparse.linalg.eigsh(H,return_eigenvectors=False)
+                eigenenergies = sort(eigenenergies)
             else:
                 H = H.detach().numpy()
                 eigenenergies = eigvalsh(H)

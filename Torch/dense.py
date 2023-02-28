@@ -55,9 +55,8 @@ def modeMatrixProduct(A,M,B,mode=(0,0)):
     nA,nB = M.shape
     for i in range(nA):
         for j in range(nB):
-            left = basisProduct(A,[i+a])
-            right = basisProduct(B,[j+b])
-            H += M[i,j]*mul(left,right)
+            if not M[i,j]==0:
+                H += M[i,j]*mul(basisProduct(A,[i+a]),basisProduct(B,[j+b]))
 
     return H
 

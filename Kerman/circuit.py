@@ -1,6 +1,6 @@
 import networkx,copy
 import matplotlib.pyplot as plt
-from numpy import kron
+from numpy import kron,full
 from .components import *
 
 def modeTensorProduct(pre,M,post):
@@ -325,6 +325,7 @@ class Circuit:
 
     def displacementCombination(self,combination):
         basis = self.basis
+        No,Ni,Nj = self.No,self.Ni,self.Nj
         O = combination[:No]
         I = combination[No:No+Ni]
         J = combination[No+Ni:]
@@ -634,7 +635,7 @@ class Circuit:
         Ex,E0 = full((len(excitation),len(flux_manifold)),float('nan')),[]
         #H_LC = self.hamiltonianLC()
         #H_ext = self.fluxInducerEnergy()
-        for fluxes in flux_manifold:
+        for index,fluxes in enumerate(flux_manifold):
             #import pdb;pdb.set_trace()
             external_fluxes = dict(zip(flux_points,fluxes))
             #H_J = self.josephsonEnergy(external_fluxes)

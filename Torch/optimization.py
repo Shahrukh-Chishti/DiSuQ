@@ -1,4 +1,4 @@
-from torch.optim import SGD,RMSprop,Adam
+from torch.optim import SGD,RMSprop,Adam,LBFGS
 import torch,pandas
 from torch import tensor,argsort,zeros,abs,mean,stack,var
 from torch.linalg import det,inv,eigh as eigsolve
