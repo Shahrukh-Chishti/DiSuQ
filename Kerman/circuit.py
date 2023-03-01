@@ -60,7 +60,6 @@ def modeMatrixProduct(A,M,B,mode=(0,0)):
             #if cross_mode:
             #    left = kron(left,identity(len(right)))
             #    right = kron(identity(len(left)),right)
-
             H += M[i,j]*dotProduct(left,right)
 
     return H
@@ -78,9 +77,7 @@ def phase(phi):
     return exp(im*2*pi*phi)
 
 def hamiltonianEnergy(H,sort=True):
-    eigenenergies = real(eigvalsh(H))
-    if sort:
-        eigenenergies.sort()
+    eigenenergies = eigvalsh(H)
     return eigenenergies
 
 class Circuit:
@@ -343,6 +340,8 @@ class Circuit:
 
         Dplus = DO_plus+DI_plus+DJ_plus
         Dminus = DO_minus+DI_minus+DJ_minus
+        #if not len(combination)==len(Dplus):
+        #    import ipdb;ipdb.set_trace()
         assert len(combination)==len(Dplus)
         assert len(combination)==len(Dminus)
         return Dplus,Dminus

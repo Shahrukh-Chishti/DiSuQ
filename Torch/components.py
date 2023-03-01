@@ -18,7 +18,7 @@ Z0 = h/4/e/e
 Z0 = flux_quanta / 2 / e
 
 # upper limit of circuit elements
-J0,C0,L0 = 1500,1500,500
+J0,C0,L0 = 1500,1500,1000
 
 def null(H):
     def empty(*args):
