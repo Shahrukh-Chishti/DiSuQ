@@ -9,8 +9,8 @@ from time import perf_counter,sleep
 from torch import set_num_threads
 set_num_threads(48)
 
-Ec,Ej = .1,100
-gamma = 5.5
+Ec,Ej = .1,30.
+gamma = 25.
 n = 3
 N_array = 14
 array_range = arange(1,N_array)

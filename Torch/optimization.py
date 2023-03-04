@@ -7,6 +7,7 @@ from time import perf_counter,sleep
 from DiSuQ.Torch.non_attacking_rooks import charPoly
 from DiSuQ.Torch.components import L,J,C
 from DiSuQ.Torch.components import L0,J0,C0
+from DiSuQ.utils import empty
 from scipy.stats import truncnorm
 
 """
@@ -155,11 +156,25 @@ class OrderingOptimization(Optimization):
         order = argsort(spectrum)#.clone().detach() # break point : retain graph
         return spectrum[order],state[order]
 
-    def phaseTransition(self,spectrum,order,levels=[0,1,2]):
+    def orderTransition(self,spectrum,order,levels=[0,1,2]):
         sorted = argsort(spectrum)
         if all(sorted[levels]==order[levels]):
             return order
         return sorted
+    
+    def lossScape(self,loss_function,flux_profile,scape,static):
+        # parascape : {A:[...],B:[....]} | A,B in circuit.parameters
+        A,B = scape.keys()
+        Loss = empty((len(scape[A]),len(scape[B])))
+        for id_A,a in enumerate(scape[A]):
+            for id_B,b in enumerate(scape[B]):
+                point = {A:a,B:b}
+                point.update(static)
+                self.circuit.initialization(point)
+                Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
+                loss,metrics = loss_function(Spectrum,flux_profile)
+                Loss[id_A,id_B] = loss.detach().item()
+        return Loss
 
     def optimization(self,loss_function,flux_profile,iterations=100,lr=1e-5):
         # flux profile :: list of flux points dict{}
