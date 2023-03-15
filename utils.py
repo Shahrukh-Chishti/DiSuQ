@@ -16,12 +16,14 @@ def empty(shape):
 # analysis plots
     
 def render(fig,title,size,html,export):
-    fig.update_layout(font={'size':14})
-    fig.update_layout(margin_t=30)
+    fig.update_layout(font={'size':20})
+    fig.update_layout(margin_t=10,margin_r=10)
+    fig.update_layout(legend=dict(yanchor="top",y=0.99,xanchor="right",x=0.99))
     if size:
         height,width = size
         fig.update_layout(width=width,height=height)
-    if export:        
+    if export:
+        fig.write_image('./'+title+'.'+export)
         fig.write_image('./'+title+'.'+export)
     fig.update_layout(title=title)
     fig.update_layout(margin_t=100)
@@ -33,7 +35,7 @@ def render(fig,title,size,html,export):
 def plotCombine(plot,title=None,x_label=None,y_label=None,mode='lines',size=None,html=False,export=None):
     fig = go.Figure()
     for name,(x,y) in plot.items():
-        fig.add_trace(go.Scatter(x=x,y=y,name=name,mode=mode))
+        fig.add_trace(go.Scatter(x=x,y=y,name=name,mode=mode,line={'width':5}))
     fig.update_layout(xaxis_title=x_label,yaxis_title=y_label)
     
     render(fig,title,size,html,export)
@@ -41,7 +43,7 @@ def plotCombine(plot,title=None,x_label=None,y_label=None,mode='lines',size=None
 def plotCompare(x,plot,title=None,x_label=None,y_label=None,size=None,html=False,export=None,legend=True):
     fig = go.Figure()
     for name,values in plot.items():
-        fig.add_trace(go.Scatter(x=x,y=values,name=name))
+        fig.add_trace(go.Scatter(x=x,y=values,name=name,line={'width':5}))
     fig.update_layout(xaxis_title=x_label,yaxis_title=y_label)
     
     render(fig,title,size,html,export)
@@ -56,10 +58,10 @@ def plotHeatmap(z,x,y,title=None,xaxis=None,yaxis=None,size=None,html=False,expo
     
 def plotTrajectory(evo,plot,title=None,x_label=None,y_label=None,size=None,html=False,export=None):
     fig = go.Figure()
-    evo = evo/max(evo)*10
+    evo = evo/max(evo)*15
     for name,path in plot.items():
         fig.add_trace(go.Scatter(x=path[:,0],y=path[:,1],name=name,mode='lines+markers',
-                                marker={'size':evo}))
+                                marker={'size':evo},line={'width':5}))
     fig.update_layout(xaxis_title=x_label,yaxis_title=y_label)
     
     render(fig,title,size,html,export)
@@ -70,8 +72,8 @@ def plotOptimization(z,x,y,paths,title=None,xaxis=None,yaxis=None,size=None,html
     fig.add_trace(heatmap)
     fig.update_layout(xaxis_title=xaxis,yaxis_title=yaxis)
     for name,path in paths.items():
-        evo = arange(len(path)) ; evo = evo/max(evo)*10
-        fig.add_trace(go.Scatter(x=path[:,0],y=path[:,1],name=name,mode='lines+markers',marker={'size':evo}))
+        evo = arange(len(path)) ; evo = evo/max(evo)*15
+        fig.add_trace(go.Scatter(x=path[:,0],y=path[:,1],name=name,mode='lines+markers',marker={'size':evo},line={'width':5}))
         
     render(fig,title,size,html,export)
     
