@@ -1,19 +1,11 @@
 import numpy,sys
 from DiSuQ.Torch.circuit import Circuit, hamiltonianEnergy, phase
 from DiSuQ.Torch.components import J,C,L,pi,h
-from DiSuQ.Torch.components import C0,J0,L0
+from DiSuQ.Torch.components import C0,J0,L0,capE,indE
 from DiSuQ.Torch.components import e,h,flux_quanta,hbar
 from numpy.linalg import det
 from pyvis import network as pvnet
 from torch import tensor
-
-def capE(cap,unit):
-    cap *= unit
-    return e**2 / 2 / cap / 1e-9 # GHz
-
-def indE(ind,unit):
-    ind *= unit
-    return (hbar/2/e)**2 /ind / 1e-9 # GHz
 
 def tensorize(values,variable=True):
     tensors = []

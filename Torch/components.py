@@ -18,12 +18,47 @@ Z0 = h/4/e/e
 Z0 = flux_quanta / 2 / e
 
 # upper limit of circuit elements
+# Energy units in GHz
 J0,C0,L0 = 1500,1500,1000
 
 def null(H):
     def empty(*args):
         return H*0
     return empty
+
+# conversion SI and Natural units
+
+def capSINat(cap):
+    return cap/(1e9*h/e**2)
+
+def capNatSI(cap):
+    return (1e9*h/e**2)*cap
+
+def indSINat(ind):
+    return ind/(4*1e9*e**2/h)
+
+def indSINat(ind):
+    return ind*(4*1e9*e**2/h)
+
+# conversion Natural and Energy units
+
+def capEnergy(cap):
+    # natural <-> energy
+    return 1. / 2 / cap # GHz
+
+def indEnergy(ind):
+    # natural <-> energy
+    return 1. / 4 / pi**2 / ind # GHz
+
+# natural -- involution -- energy
+
+# conversion SI to Energy units 
+
+def capE(cap):
+    return capEnergy(capSINat(cap))
+
+def indE(ind):
+    return indEnergy(indSINat(ind))
 
 def sigmoidInverse(x):
     return -numpy.log(1/x -1)
@@ -44,6 +79,27 @@ def diagonalisation(M,reverse=False):
     D = vec[:,indices].clone().detach()
     return D
 
+# components are standardized with natural & energy units
+
+def classComponents(component):
+    var,energy,phys = None,None,None
+    if component.__class__ == C :
+        var = component.cap
+        energy = component.energy()
+        phys = component.capacitance()
+        
+    elif component.__class__ == L :
+        var = component.cap
+        energy = component.energy()
+        phys = component.capacitance()
+        
+    elif component.__class__ == J :
+        var = component.cap
+        energy = component.energy()
+        phys = component.capacitance()
+        
+    return var,energy,phys
+
 class Elements:
     def __init__(self,plus,minus,ID=None):
         self.plus = plus
@@ -53,45 +109,44 @@ class Elements:
         self.ID = ID
 
 class J(Elements):
-    def __init__(self,plus,minus,jo,ID=None):
+    def __init__(self,plus,minus,Ej,ID=None):
         super().__init__(plus,minus,ID)
-        self.initJunc(jo)
+        self.initJunc(Ej) # Ej[GHz]
         
-    def initJunc(self,jo):
-        self.jo = tensor(sigmoidInverse(jo/J0),dtype=float,requires_grad=True)
+    def initJunc(self,Ej):
+        self.jo = tensor(sigmoidInverse(Ej/J0),dtype=float,requires_grad=True)
 
     def energy(self):
-        return sigmoid(self.jo)/1.0 * J0
+        return sigmoid(self.jo)/1.0 * J0 # GHz
 
 class C(Elements):
-    def __init__(self,plus,minus,cap,ID=None):
+    def __init__(self,plus,minus,Ec,ID=None):
         super().__init__(plus,minus,ID)
-        self.initCap(cap)
+        self.initCap(Ec) # Ec[GHz]
         
-    def initCap(self,cap):
-        self.cap = tensor(sigmoidInverse(cap/C0),dtype=float,requires_grad=True)
+    def initCap(self,Ec):
+        self.cap = tensor(sigmoidInverse(Ec/C0),dtype=float,requires_grad=True)
+
+    def energy(self):
+        return sigmoid(self.cap)*C0 # GHz
 
     def capacitance(self):
-        return sigmoid(self.cap)*C0
-
-    def energy(self):
-        return 1/self.capacitance()/2.0
+        return capEnergy(self.energy()) # he9/e/e : natural unit
 
 class L(Elements):
-    def __init__(self,plus,minus,ind,ID=None,external=False):
+    def __init__(self,plus,minus,El,ID=None,external=False):
         super().__init__(plus,minus,ID)
         self.external = external # duplication : doesn't requires_grad
-        self.initInd(ind)
+        self.initInd(El) # El[GHz]
         
-    def initInd(self,ind):
-        self.ind = tensor(sigmoidInverse(ind/L0),dtype=float,requires_grad=True)
-
-    def inductance(self):
-        return sigmoid(self.ind)*L0
+    def initInd(self,El):
+        self.ind = tensor(sigmoidInverse(El/L0),dtype=float,requires_grad=True)
 
     def energy(self):
-        return 1/self.inductance()/4/pi/pi
+        return sigmoid(self.ind)*L0 # GHz
 
+    def inductance(self):
+        return indEnergy(self.energy()) # 4e9 e^2/h : natural unit
 
 if __name__=='__main__':
     Qo = basisQo(30,tensor(4))

@@ -204,7 +204,7 @@ class Circuit:
             for u,v,component in self.G.edges(node,data=True):
                 component = component['component']
                 if component.__class__ == C:
-                    capacitance = component.energy()
+                    capacitance = component.capacitance()
                     Cn[i,i] += capacitance
                     if not (u==0 or v==0):
                         Cn[self.nodes_[u],self.nodes_[v]] = -capacitance
@@ -218,7 +218,7 @@ class Circuit:
             component = self.G[u][v][key]['component']
             if component.__class__ == L:
                 #if not component.external:
-                Lb[index,index] = component.energy()
+                Lb[index,index] = component.inductance()
         return Lb
 
     def mutualInductance(self):
