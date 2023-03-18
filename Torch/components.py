@@ -87,16 +87,19 @@ def classComponents(component):
         var = component.cap
         energy = component.energy()
         phys = component.capacitance()
+        bound = component.C0
         
     elif component.__class__ == L :
         var = component.cap
         energy = component.energy()
         phys = component.capacitance()
+        bound = component.L0
         
     elif component.__class__ == J :
         var = component.cap
         energy = component.energy()
         phys = component.capacitance()
+        bound = component.J0
         
     return var,energy,phys
 
@@ -109,41 +112,44 @@ class Elements:
         self.ID = ID
 
 class J(Elements):
-    def __init__(self,plus,minus,Ej,ID=None):
+    def __init__(self,plus,minus,Ej,ID=None,J0=J0):
         super().__init__(plus,minus,ID)
+        self.J0 = J0
         self.initJunc(Ej) # Ej[GHz]
         
     def initJunc(self,Ej):
-        self.jo = tensor(sigmoidInverse(Ej/J0),dtype=float,requires_grad=True)
+        self.jo = tensor(sigmoidInverse(Ej/self.J0),dtype=float,requires_grad=True)
 
     def energy(self):
-        return sigmoid(self.jo)/1.0 * J0 # GHz
+        return sigmoid(self.jo)/1.0 * self.J0 # GHz
 
 class C(Elements):
-    def __init__(self,plus,minus,Ec,ID=None):
+    def __init__(self,plus,minus,Ec,ID=None,C0=C0):
         super().__init__(plus,minus,ID)
+        self.C0 = C0
         self.initCap(Ec) # Ec[GHz]
         
     def initCap(self,Ec):
-        self.cap = tensor(sigmoidInverse(Ec/C0),dtype=float,requires_grad=True)
+        self.cap = tensor(sigmoidInverse(Ec/self.C0),dtype=float,requires_grad=True)
 
     def energy(self):
-        return sigmoid(self.cap)*C0 # GHz
+        return sigmoid(self.cap)*self.C0 # GHz
 
     def capacitance(self):
         return capEnergy(self.energy()) # he9/e/e : natural unit
 
 class L(Elements):
-    def __init__(self,plus,minus,El,ID=None,external=False):
+    def __init__(self,plus,minus,El,ID=None,external=False,L0=L0):
         super().__init__(plus,minus,ID)
+        self.L0 = L0
         self.external = external # duplication : doesn't requires_grad
         self.initInd(El) # El[GHz]
         
     def initInd(self,El):
-        self.ind = tensor(sigmoidInverse(El/L0),dtype=float,requires_grad=True)
+        self.ind = tensor(sigmoidInverse(El/self.L0),dtype=float,requires_grad=True)
 
     def energy(self):
-        return sigmoid(self.ind)*L0 # GHz
+        return sigmoid(self.ind)*self.L0 # GHz
 
     def inductance(self):
         return indEnergy(self.energy()) # 4e9 e^2/h : natural unit

@@ -69,6 +69,7 @@ class Circuit:
             self.backend = Dense
             
     def initialization(self,parameters):
+        # parameters : GHz unit
         for component in self.network:
             if component.__class__ == C :
                 component.initCap(parameters[component.ID])

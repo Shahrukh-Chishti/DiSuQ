@@ -6,7 +6,6 @@ from numpy import arange,set_printoptions,meshgrid,linspace,array
 from time import perf_counter,sleep
 from DiSuQ.Torch.non_attacking_rooks import charPoly
 from DiSuQ.Torch.components import L,J,C
-from DiSuQ.Torch.components import L0,J0,C0
 from DiSuQ.utils import empty
 from scipy.stats import truncnorm
 
@@ -216,11 +215,11 @@ def truncNormalParameters(circuit,N,var=5):
     for component in circuit.network:
         iDs.append(component.ID)
         if component.__class__ == C :
-            bound = C0; loc = component.capacitance().item()
+            bound = component.C0; loc = component.energy().item()
         elif component.__class__ == L :
-            bound = L0; loc = component.inductance().item()
+            bound = component.L0; loc = component.energy().item()
         elif component.__class__ == J :
-            bound = J0; loc = component.energy().item()
+            bound = component.J0; loc = component.energy().item()
         a = 0.0 - loc/var ; b = bound - loc/var
         domain.append(truncnorm.rvs(a,b,loc,var,size=N))
     grid = array(domain)
@@ -234,11 +233,11 @@ def uniformParameters(circuit,N):
     for component in circuit.network:
         iDs.append(component.ID)
         if component.__class__ == C :
-            bound = C0
+            bound = component.C0
         elif component.__class__ == L :
-            bound = L0
+            bound = component.L0
         elif component.__class__ == J :
-            bound = J0
+            bound = component.J0
         domain.append(linspace(0,bound,N,endpoint=False)[1:])
     grid = array(meshgrid(*domain))
     grid = grid.reshape(len(iDs),-1)
