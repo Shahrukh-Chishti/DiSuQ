@@ -3,6 +3,7 @@ import torch,pandas
 from torch import tensor,argsort,zeros,abs,mean,stack,var
 from torch.linalg import det,inv,eigh as eigsolve
 from numpy import arange,set_printoptions,meshgrid,linspace,array
+from scipy.optimize import minimize
 from time import perf_counter,sleep
 from DiSuQ.Torch.non_attacking_rooks import charPoly
 from DiSuQ.Torch.components import L,J,C
@@ -24,12 +25,13 @@ def groundEnergy(spectrum):
     return spectrum[0]
 
 class Optimization:
-    def __init__(self,circuit,representation='K',sparse=False):
+    def __init__(self,circuit,representation='K',sparse=False,algo=RMSprop):
         self.circuit = circuit
         self.parameters = self.circuitParameters()
         self.levels = [0,1,2]
         self.sparse = sparse
         self.representation = representation
+        self.algo = algo
 
     def circuitParameters(self):
         circuit = self.circuit
@@ -119,7 +121,7 @@ class PolynomialOptimization(Optimization):
         # flux profile :: list of flux points dict{}
         # loss_function : list of Hamiltonian on all flux points
         logs = [];dParams = []
-        optimizer = Adam(self.parameters,lr=lr)
+        optimizer = self.algo(self.parameters,lr=lr)
         start = perf_counter()
         for iter in range(iterations):
             optimizer.zero_grad()
@@ -174,12 +176,62 @@ class OrderingOptimization(Optimization):
                 loss,metrics = loss_function(Spectrum,flux_profile)
                 Loss[id_A,id_B] = loss.detach().item()
         return Loss
+    
+    def minimization(self,loss_function,flux_profile,method,args):
+        x0 = self.circuitState()
+        keys = tuple(x0.keys())
+        x0 =  array(tuple(x0.values()))
+        def objective(parameters):
+            parameters = dict(zip(keys,parameters))
+            self.circuit.initialization(parameters)
+            Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
+            loss,_ = loss_function(Spectrum,flux_profile)
+            return loss.detach().item()
+        x = minimize(objective,x0,args,method)
+        parameters = dict(zip(keys,parameters))
+        self.circuit.initialization(parameters)     
+    
+    def optimizationLBFGS(self,loss_function,flux_profile,iterations=100,lr=1e-5):
+        # flux profile :: list of flux points dict{}
+        # loss_function : list of Hamiltonian on all flux points
+        logs = []; dParams = []; dCircuit = []
+        optimizer = LBFGS(self.parameters,lr=lr)
+        
+        def closure(metrics):
+            def Loss():
+                optimizer.zero_grad()
+                Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
+                loss,_ = loss_function(Spectrum,flux_profile)
+                metrics['loss'] = loss.detach().item()
+                loss.backward(retain_graph=True)
+                return loss
+            return Loss
+        
+        start = perf_counter()
+        for epoch in range(iterations):
+            dParams.append(self.parameterState())
+            dCircuit.append(self.circuitState())
+            metrics = dict()
+            optimizer.step(closure(metrics))
+            metrics['time'] = perf_counter()-start
+            
+            logs.append(metrics)
+            if breakPoint(logs[-15:]):
+                print('Optimization Break Point xxxxxx')
+                break
+
+        dLog = pandas.DataFrame(logs)
+        dLog['time'] = dLog['time'].diff()
+        dLog.dropna(inplace=True)
+        dParams = pandas.DataFrame(dParams)
+        dCircuit = pandas.DataFrame(dCircuit)
+        return dLog,dParams,dCircuit
 
     def optimization(self,loss_function,flux_profile,iterations=100,lr=1e-5):
         # flux profile :: list of flux points dict{}
         # loss_function : list of Hamiltonian on all flux points
         logs = []; dParams = []; dCircuit = []
-        optimizer = RMSprop(self.parameters,lr=lr)
+        optimizer = self.algo(self.parameters,lr=lr)
         start = perf_counter()
         for epoch in range(iterations):
             dParams.append(self.parameterState())
