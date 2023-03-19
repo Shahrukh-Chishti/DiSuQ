@@ -576,9 +576,9 @@ class Circuit:
         I = [self.backend.identity(2*basis_max+1,complex)*charge[index]*2 for index,basis_max in enumerate(basis)]
         H = self.backend.modeMatrixProduct(Q,Cn_,I)
         H += self.backend.modeMatrixProduct(I,Cn_,Q)
-        H -= self.backend.modeMatrixProduct(I,Cn_,I)
+        H += self.backend.modeMatrixProduct(I,Cn_,I)
         
-        return -H/2.
+        return H/2.
 
     def potentialOscillator(self,external_fluxes=dict()):
         Ln_ = self.Ln_

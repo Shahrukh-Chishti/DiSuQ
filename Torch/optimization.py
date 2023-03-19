@@ -182,15 +182,16 @@ class OrderingOptimization(Optimization):
         optimizer = SGD(self.parameters,lr=lr)
         start = perf_counter()
         for epoch in range(iterations):
-            optimizer.zero_grad()
-            Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
-            loss,metrics = loss_function(Spectrum,flux_profile)          
-            loss.backward(retain_graph=True)
-            optimizer.step()
-            metrics['loss'] = loss.detach().item()
-            metrics['time'] = perf_counter()-start
             dParams.append(self.parameterState())
             dCircuit.append(self.circuitState())
+            optimizer.zero_grad()
+            Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
+            loss,metrics = loss_function(Spectrum,flux_profile)
+            metrics['loss'] = loss.detach().item()
+            loss.backward(retain_graph=True)
+            optimizer.step()
+            metrics['time'] = perf_counter()-start
+            
             logs.append(metrics)
             if breakPoint(logs[-15:]):
                 print('Optimization Break Point xxxxxx')
