@@ -1,4 +1,4 @@
-from torch.optim import SGD,RMSprop,Adam,LBFGS
+from torch.optim import SGD,RMSprop,Adam,LBFGS,Rprop
 import torch,pandas
 from torch import tensor,argsort,zeros,abs,mean,stack,var
 from torch.linalg import det,inv,eigh as eigsolve
@@ -179,7 +179,7 @@ class OrderingOptimization(Optimization):
         # flux profile :: list of flux points dict{}
         # loss_function : list of Hamiltonian on all flux points
         logs = []; dParams = []; dCircuit = []
-        optimizer = SGD(self.parameters,lr=lr)
+        optimizer = RMSprop(self.parameters,lr=lr)
         start = perf_counter()
         for epoch in range(iterations):
             dParams.append(self.parameterState())
@@ -295,13 +295,13 @@ def lossE10(E10):
         return loss,dict()
     return lossFunction
 
-def lossTransition(E10,E21):
+def lossTransition(E10,E20):
     def lossFunction(Spectrum,flux_profile):
         spectrum = stack([spectrum[:3] for spectrum,state in Spectrum])
         e10 = spectrum[:,1]-spectrum[:,0]
-        e21 = spectrum[:,2]-spectrum[:,1]
-        loss = MSE(e10,E10) + MSE(e21,E21)
-        log = {'mid10':e10[int(len(flux_profile)/2)].detach().item(),'mid21':e21[int(len(flux_profile)/2)].detach().item()}
+        e20 = spectrum[:,2]-spectrum[:,0]
+        loss = MSE(e10,E10) + MSE(e20,E20)
+        log = {'mid10':e10[int(len(flux_profile)/2)].detach().item(),'mid20':e20[int(len(flux_profile)/2)].detach().item()}
         return loss,log
     return lossFunction
 
