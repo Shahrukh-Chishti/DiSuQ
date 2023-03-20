@@ -63,15 +63,20 @@ def fluxonium(basis,El=.0003,Ec=.1,Ej=20,sparse=True):
     circuit = Circuit(circuit,basis,sparse)
     return circuit
 
-def shuntedQubit(basis,josephson=[120.,50,120.],cap=[10.,50.,10.],ind=100.,sparse=True):
+def shuntedQubit(basis,josephson=[120.,50,120.],cap=[10.,50.,10.],ind=100.,sparse=True,symmetry=False):
     Ej1,Ej2,Ej3 = josephson
     C1,C2,C3 = cap
 
     circuit = [J(1,2,Ej1,'JJ1'),C(1,2,C1,'C1')]
     circuit += [J(2,3,Ej2,'JJ2'),C(2,3,C2,'C2')]
     circuit += [J(3,0,Ej3,'JJ3'),C(3,0,C3,'C3')]
+    
+    # inbuilt symmetry
+    if symmetry:
+        circuit[-2].jo = circuit[0].jo
+        circuit[-1].cap = circuit[1].cap
+    
     circuit += [L(0,1,ind,'I',True)]
-
     circuit = Circuit(circuit,basis,sparse)
     return circuit
 

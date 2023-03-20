@@ -2,6 +2,7 @@ from torch.optim import SGD,RMSprop,Adam,LBFGS,Rprop
 import torch,pandas
 from torch import tensor,argsort,zeros,abs,mean,stack,var
 from torch.linalg import det,inv,eigh as eigsolve
+from torch.nn.utils import clip_grad_norm_,clip_grad_value_
 from numpy import arange,set_printoptions,meshgrid,linspace,array
 from scipy.optimize import minimize
 from time import perf_counter,sleep
@@ -43,7 +44,7 @@ class Optimization:
                 parameters.append(component.ind)
             elif component.__class__ == J :
                 parameters.append(component.jo)
-        return parameters
+        return list(set(parameters))
     
     def circuitState(self):
         circuit = self.circuit
@@ -177,7 +178,7 @@ class OrderingOptimization(Optimization):
                 Loss[id_A,id_B] = loss.detach().item()
         return Loss
     
-    def minimization(self,loss_function,flux_profile,method='Nelder-Mead',args=()):
+    def minimization(self,loss_function,flux_profile,method='Nelder-Mead',args=(),constraints=()):
         x0 = self.circuitState()
         keys = tuple(x0.keys())
         x0 =  array(tuple(x0.values()))
@@ -198,7 +199,7 @@ class OrderingOptimization(Optimization):
             return loss
         
         start = perf_counter()
-        results = minimize(objective,x0,args,method,options={'disp': True} )
+        results = minimize(objective,x0,args,method,options={'disp': True},constraints=constraints)
         parameters = results['x']
         parameters = dict(zip(keys,parameters))
         self.circuit.initialization(parameters)
@@ -210,7 +211,7 @@ class OrderingOptimization(Optimization):
         dCircuit = pandas.DataFrame(dCircuit)
         return dLog,dParams,dCircuit
     
-    def optimizationLBFGS(self,loss_function,flux_profile,iterations=100,lr=1e-5):
+    def optimizationLBFGS(self,loss_function,flux_profile,iterations=100,lr=1e-5,clip_grad = 200):
         # flux profile :: list of flux points dict{}
         # loss_function : list of Hamiltonian on all flux points
         logs = []; dParams = []; dCircuit = []
@@ -223,6 +224,8 @@ class OrderingOptimization(Optimization):
                 loss,_ = loss_function(Spectrum,flux_profile)
                 metrics['loss'] = loss.detach().item()
                 loss.backward(retain_graph=True)
+                #print([parameter.grad for parameter in self.parameters])
+                clip_grad_value_(self.parameters,clip_grad)
                 return loss
             return Loss
         

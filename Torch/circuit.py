@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 import DiSuQ.Torch.dense as Dense
 import DiSuQ.Torch.sparse as Sparse
-from torch import exp,det,tensor,arange,zeros,sqrt,diagonal,argsort,set_num_threads,full as full_torch
+from torch import exp,det,tensor,arange,zeros,zeros_like,sqrt,diagonal,argsort,set_num_threads,full as full_torch
 from torch.linalg import eigvalsh as eigsolve,inv
 from DiSuQ.Torch.components import diagonalisation,null,J,L,C,im,pi,complex
 
