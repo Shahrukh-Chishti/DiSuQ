@@ -177,19 +177,38 @@ class OrderingOptimization(Optimization):
                 Loss[id_A,id_B] = loss.detach().item()
         return Loss
     
-    def minimization(self,loss_function,flux_profile,method,args):
+    def minimization(self,loss_function,flux_profile,method='Nelder-Mead',args=()):
         x0 = self.circuitState()
         keys = tuple(x0.keys())
         x0 =  array(tuple(x0.values()))
+        logs = []; dParams = []; dCircuit = []
         def objective(parameters):
+            dParams.append(self.parameterState())
+            dCircuit.append(self.circuitState())
+            
             parameters = dict(zip(keys,parameters))
             self.circuit.initialization(parameters)
             Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
-            loss,_ = loss_function(Spectrum,flux_profile)
-            return loss.detach().item()
-        x = minimize(objective,x0,args,method)
+            loss,metrics = loss_function(Spectrum,flux_profile)
+            loss = loss.detach().item()
+            
+            metrics['loss'] = loss
+            metrics['time'] = perf_counter()-start
+            logs.append(metrics)
+            return loss
+        
+        start = perf_counter()
+        results = minimize(objective,x0,args,method,options={'disp': True} )
+        parameters = results['x']
         parameters = dict(zip(keys,parameters))
-        self.circuit.initialization(parameters)     
+        self.circuit.initialization(parameters)
+        
+        dLog = pandas.DataFrame(logs)
+        dLog['time'] = dLog['time'].diff()
+        dLog.dropna(inplace=True)
+        dParams = pandas.DataFrame(dParams)
+        dCircuit = pandas.DataFrame(dCircuit)
+        return dLog,dParams,dCircuit
     
     def optimizationLBFGS(self,loss_function,flux_profile,iterations=100,lr=1e-5):
         # flux profile :: list of flux points dict{}
