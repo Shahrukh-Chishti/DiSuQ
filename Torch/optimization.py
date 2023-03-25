@@ -28,23 +28,31 @@ def groundEnergy(spectrum):
 class Optimization:
     def __init__(self,circuit,representation='K',sparse=False,algo=RMSprop):
         self.circuit = circuit
-        self.parameters = self.circuitParameters()
+        self.parameters,self.IDs = self.circuitParameters()
         self.levels = [0,1,2]
         self.sparse = sparse
         self.representation = representation
         self.algo = algo
+        
+    def circuitID(self):
+        IDs = []
+        for component in self.circuit.network:
+            IDs.append(component.ID)
+        return IDs
 
     def circuitParameters(self):
-        circuit = self.circuit
-        parameters = []
-        for component in circuit.network:
+        parameters = []; IDs = []
+        for component in self.circuit.network:
             if component.__class__ == C :
-                parameters.append(component.cap)
+                parameter = component.cap
             elif component.__class__ == L :
-                parameters.append(component.ind)
+                parameter = component.ind
             elif component.__class__ == J :
-                parameters.append(component.jo)
-        return list(set(parameters))
+                parameter = component.jo
+            if not parameter in parameters:
+                IDs.append(component.ID)
+                parameters.append(parameter)
+        return parameters,IDs
     
     def circuitState(self):
         circuit = self.circuit
@@ -206,17 +214,25 @@ class OrderingOptimization(Optimization):
         
         dLog = pandas.DataFrame(logs)
         dLog['time'] = dLog['time'].diff()
-        dLog.dropna(inplace=True)
         dParams = pandas.DataFrame(dParams)
         dCircuit = pandas.DataFrame(dCircuit)
         return dLog,dParams,dCircuit
     
-    def optimizationLBFGS(self,loss_function,flux_profile,iterations=100,lr=1e-5):
+    def lossModel(self,loss_function,flux_profile):
+        def loss(parameters):
+            # parameters !!!!
+            # circuit object restructuring 
+            circuit.initialization(parameters)
+            Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
+            loss,_ = loss_function(Spectrum,flux_profile)
+            return loss
+        return loss
+    
+    def optimizationLBFGS(self,loss_function,flux_profile,iterations=100,lr=1e-5,log=False):
         # flux profile :: list of flux points dict{}
         # loss_function : list of Hamiltonian on all flux points
         logs = []; dParams = []; dCircuit = []
-        optimizer = LBFGS(self.parameters,lr=lr,max_iter=10,history_size=40,line_search_fn='strong_wolfe')
-        
+        optimizer = LBFGS(self.parameters,lr=lr,max_iter=10,history_size=40,line_search_fn=None)
         def closure(metrics):
             def Loss():
                 optimizer.zero_grad()
@@ -224,6 +240,19 @@ class OrderingOptimization(Optimization):
                 loss,_ = loss_function(Spectrum,flux_profile)
                 metrics['loss'] = loss.detach().item()
                 loss.backward(retain_graph=True)
+                if log:
+                    spectrum = dict()
+                    for level in range(3):
+                        spectrum['0-level-'+str(level)] = Spectrum[0][0][level].detach().item()
+                        spectrum['pi-level-'+str(level)] = Spectrum[int(len(flux_profile)/2)][0][level].detach().item()
+                    metrics.update(spectrum)
+                    gradients = [parameter.grad.detach().item() for parameter in self.parameters]
+                    gradients = dict(zip(['grad-'+ID for ID in self.IDs],gradients))
+                    metrics.update(gradients)
+                    #hess = hessian(self.lossModel(loss_function,flux_profile))
+                    #hess = tensor(hess)                    
+                    #hess = dict(zip(['hess'+index for index in range(len(hess))],hess))
+                    #metrics.update(hess)
                 #print([parameter.grad for parameter in self.parameters])
                 #clip_grad_value_(self.parameters,clip_grad)
                 return loss
@@ -232,7 +261,7 @@ class OrderingOptimization(Optimization):
         start = perf_counter()
         for epoch in range(iterations):
             dParams.append(self.parameterState())
-            dCircuit.append(self.circuitState())
+            dCircuit.append(self.circuitState())                         
             metrics = dict()
             optimizer.step(closure(metrics))
             metrics['time'] = perf_counter()-start
@@ -244,7 +273,6 @@ class OrderingOptimization(Optimization):
 
         dLog = pandas.DataFrame(logs)
         dLog['time'] = dLog['time'].diff()
-        dLog.dropna(inplace=True)
         dParams = pandas.DataFrame(dParams)
         dCircuit = pandas.DataFrame(dCircuit)
         return dLog,dParams,dCircuit
@@ -273,7 +301,6 @@ class OrderingOptimization(Optimization):
 
         dLog = pandas.DataFrame(logs)
         dLog['time'] = dLog['time'].diff()
-        dLog.dropna(inplace=True)
         dParams = pandas.DataFrame(dParams)
         dCircuit = pandas.DataFrame(dCircuit)
         return dLog,dParams,dCircuit
@@ -325,14 +352,14 @@ def initializationSequential(parameters,optimizer,lossFunction,flux_profile,iter
     Search = []
     for index,parameter in enumerate(parameters):
         optimizer.circuit.initialization(parameter)
-        optimizer.parameters = optimizer.circuitParameters()
+        optimizer.parameters,_ = optimizer.circuitParameters()
         Search.append(optimizer.optimization(lossFunction,flux_profile,iterations=iterations,lr=lr))
     return Search
     
 def initializationParallelism(optimizer,lossFunction,flux_profile,iterations=100,lr=.005):
     def optimization(parameters):
         optimizer.circuit.initialization(parameters)
-        optim.parameters = optim.circuitParameters()
+        optim.parameters,_ = optim.circuitParameters()
         return optimizer.optimization(lossFunction,flux_profile,iterations=iterations,lr=lr)
     return optimization
     
