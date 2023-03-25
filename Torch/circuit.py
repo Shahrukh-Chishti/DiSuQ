@@ -6,7 +6,7 @@ import DiSuQ.Torch.sparse as Sparse
 from torch import exp,det,tensor,arange,zeros,zeros_like,sqrt,diagonal,argsort,set_num_threads,full as full_torch
 from torch.linalg import eigvalsh as eigsolve,inv
 from DiSuQ.Torch.components import diagonalisation,null,J,L,C,im,pi,complex
-
+from time import perf_counter
 from numpy.linalg import matrix_rank,eigvalsh
 from numpy import prod,array,sort,full as full_numpy
 
@@ -630,7 +630,7 @@ class Circuit:
         
         return eigenenergies
 
-    def spectrumManifold(self,flux_points,flux_manifold,H_LC=tensor(0.0),H_J=None,excitation=[1],grad=True):
+    def spectrumManifold(self,flux_points,flux_manifold,H_LC=tensor(0.0),H_J=None,excitation=[1],grad=True,log=False):
         """
             flux_points : inductor identifier for external introduction
             flux_manifold : [(fluxes)]
@@ -645,7 +645,11 @@ class Circuit:
         E0 = []
         #H_LC = self.hamiltonianLC()
         #H_ext = self.fluxInducerEnergy()
+        start = perf_counter()
         for index,fluxes in enumerate(flux_manifold):
+            if log:
+                if index%50 == 0:
+                    print(index,'\t',perf_counter()-start)
             external_fluxes = dict(zip(flux_points,fluxes))
             #H_J = self.josephsonEnergy(external_fluxes)
             #H = H_LC + H_J(external_fluxes)

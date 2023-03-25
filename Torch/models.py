@@ -24,6 +24,21 @@ def zeroPi(basis,Ej=10,Ec=1.,El=.01,EcJ=100,sparse=True):
     circuit = Circuit(circuit,basis,sparse)
     return circuit
 
+def prismon(basis,Ej=10,Ec=1.,El=.01,EcJ=100.,sparse=True,symmetry=False):
+    circuit = [L(0,1,El,'La',True),C(0,2,Ec,'Ca'),J(1,2,Ej,'Ja'),C(1,2,EcJ,'CJa')]
+    circuit += [L(2,3,El,'Lb',True),C(1,5,Ec,'Cb'),J(0,4,Ej,'Jb'),C(0,4,EcJ,'CJb')]
+    circuit += [L(5,4,El,'Lc',True),C(4,3,Ec,'Cc'),J(3,5,Ej,'Jc'),C(3,5,EcJ,'CJc')]
+    
+    # inbuilt symmetry
+    if symmetry:
+        circuit[6].jo = circuit[2].jo ; circuit[10].jo = circuit[2].jo
+        circuit[4].ind = circuit[0].ind ; circuit[8].ind = circuit[0].ind
+        circuit[5].cap = circuit[1].cap ; circuit[9].cap = circuit[1].cap
+        circuit[7].cap = circuit[3].cap ; circuit[11].cap = circuit[3].cap
+        
+    circuit = Circuit(circuit,basis,sparse)
+    return circuit
+
 def transmon(basis,Ej=10.,Ec=0.3,sparse=True):
     transmon = [J(0,1,Ej,'J')]
     transmon += [C(0,1,Ec,'C')]

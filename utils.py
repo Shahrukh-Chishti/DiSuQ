@@ -48,9 +48,11 @@ def plotCompare(x,plot,title=None,x_label=None,y_label=None,size=None,html=False
     
     render(fig,title,size,html,export)
 
-def plotHeatmap(z,x,y,title=None,xaxis=None,yaxis=None,size=None,html=False,export=None):
+def plotHeatmap(z,x,y,title=None,xaxis=None,yaxis=None,size=None,html=False,export=None,ncontours=10):
     fig = go.Figure()
-    heatmap = go.Contour(z=z,y=y,x=x,contours_coloring='heatmap')
+    start=z.min(); end=z.max()
+    contours = dict(start=start,end=end,size=(end-start)/ncontours)
+    heatmap = go.Contour(z=z,y=y,x=x,contours_coloring='heatmap',contours=contours)
     fig.add_trace(heatmap)
     fig.update_layout(xaxis_title=xaxis,yaxis_title=yaxis)
     

@@ -211,11 +211,11 @@ class OrderingOptimization(Optimization):
         dCircuit = pandas.DataFrame(dCircuit)
         return dLog,dParams,dCircuit
     
-    def optimizationLBFGS(self,loss_function,flux_profile,iterations=100,lr=1e-5,clip_grad = 200):
+    def optimizationLBFGS(self,loss_function,flux_profile,iterations=100,lr=1e-5):
         # flux profile :: list of flux points dict{}
         # loss_function : list of Hamiltonian on all flux points
         logs = []; dParams = []; dCircuit = []
-        optimizer = LBFGS(self.parameters,lr=lr)
+        optimizer = LBFGS(self.parameters,lr=lr,max_iter=10,history_size=40,line_search_fn='strong_wolfe')
         
         def closure(metrics):
             def Loss():
@@ -225,7 +225,7 @@ class OrderingOptimization(Optimization):
                 metrics['loss'] = loss.detach().item()
                 loss.backward(retain_graph=True)
                 #print([parameter.grad for parameter in self.parameters])
-                clip_grad_value_(self.parameters,clip_grad)
+                #clip_grad_value_(self.parameters,clip_grad)
                 return loss
             return Loss
         
@@ -313,7 +313,7 @@ def uniformParameters(circuit,N):
             bound = component.L0
         elif component.__class__ == J :
             bound = component.J0
-        domain.append(linspace(0,bound,N,endpoint=False)[1:])
+        domain.append(linspace(0,bound,N+1,endpoint=False)[1:])
     grid = array(meshgrid(*domain))
     grid = grid.reshape(len(iDs),-1)
     parameters = []
