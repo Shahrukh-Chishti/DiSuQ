@@ -44,7 +44,7 @@ class Circuit:
         * i,j : indices of indexed graph : mode correspondence
     """
 
-    def __init__(self,network,basis,sparse=True):
+    def __init__(self,network,basis,sparse=True,pairs=dict()):
         self.network = network
         self.G = self.parseCircuit()
         self.spanning_tree = self.spanningTree()
@@ -53,7 +53,8 @@ class Circuit:
         self.Nn = len(self.nodes)
         self.Ne = len(self.edges)
         self.Nb = len(self.edges_inductive)
-
+        self.pairs = pairs
+        self.symmetrize(self.pairs)
         self.Cn_,self.Ln_ = self.componentMatrix()
         self.No,self.Ni,self.Nj = self.modeDistribution()
         self.R = self.modeTransformation().real
@@ -77,8 +78,22 @@ class Circuit:
                 component.initInd(parameters[component.ID])
             elif component.__class__ == J :
                 component.initJunc(parameters[component.ID])
+                
+        self.symmetrize(self.pairs)
         self.Cn_,self.Ln_ = self.componentMatrix()
         self.Lo_,self.C_ = self.transformComponents()
+        
+    def symmetrize(self,pairs):
+        components = self.circuitComposition()
+        for master,slave in pairs.items():
+            master = components[master]
+            slave = components[slave]
+            if slave.__class__ == C :
+                slave.cap = master.cap
+            elif slave.__class__ == L :
+                slave.ind = master.ind
+            elif slave.__class__ == J :
+                slave.jo = master.jo
 
     def parseCircuit(self):
         G = networkx.MultiGraph()
@@ -133,6 +148,18 @@ class Circuit:
         GL.remove_edges_from(edges)
 
         return GL
+    
+    def circuitState(self):
+        parameters = {}
+        for component in self.network:
+            parameters[component.ID] = component.energy().item()
+        return parameters
+    
+    def circuitComposition(self):
+        components = dict()
+        for component in self.network:
+            components[component.ID] = component
+        return components
 
     def circuitComponents(self):
         circuit_components = dict()

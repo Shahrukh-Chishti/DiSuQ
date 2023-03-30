@@ -16,11 +16,17 @@ def tensorize(values,variable=True):
 def sigInv(sig,limit):
     return [sigmoidInverse(s/limit) for s in sig]
 
-def zeroPi(basis,Ej=10,Ec=1.,El=.01,EcJ=100,sparse=True):
+def zeroPi(basis,Ej=10,Ec=1.,El=.01,EcJ=100,sparse=True,symmetry=False):
     circuit = [L(0,1,El,'Lx',True),L(2,3,El,'Ly',True)]
     circuit += [C(1,2,Ec,'Cx'),C(3,0,Ec,'Cy')]
     circuit += [J(1,3,Ej,'Jx'),J(2,0,Ej,'Jy')]
     circuit += [C(1,3,EcJ,'CJx'),C(2,0,EcJ,'CJy')]
+    
+    if symmetry:
+        circuit[0].ind = circuit[1].ind
+        circuit[1].cap = circuit[2].cap
+        circuit[3].jo = circuit[4].jo
+        circuit[5].cap = circuit[6].cap
     circuit = Circuit(circuit,basis,sparse)
     return circuit
 
@@ -63,9 +69,9 @@ def fluxoniumArray(basis,gamma=1.5,N=0,Ec=100,Ej=150,sparse=True):
     circuit += [J(0,1,Ej,'Junc')]
     for i in range(N):
         circuit += [J(1+i,2+i,gamma*Ej,'junc'+str(i))]
-        circuit += [C(1+i,2+i,Ec/gamma,'cap'+str(i))]
+        #circuit += [C(1+i,2+i,Ec/gamma,'cap'+str(i))]
     circuit += [J(1+N,0,gamma*Ej,'junc'+str(N))]
-    circuit += [C(1+N,0,Ec/gamma,'cap'+str(N))]
+    #circuit += [C(1+N,0,Ec/gamma,'cap'+str(N))]
     
     circuit = Circuit(circuit,basis,sparse)
     return circuit
@@ -85,14 +91,15 @@ def shuntedQubit(basis,josephson=[120.,50,120.],cap=[10.,50.,10.],ind=100.,spars
     circuit = [J(1,2,Ej1,'JJ1'),C(1,2,C1,'C1')]
     circuit += [J(2,3,Ej2,'JJ2'),C(2,3,C2,'C2')]
     circuit += [J(3,0,Ej3,'JJ3'),C(3,0,C3,'C3')]
+    circuit += [L(0,1,ind,'I',True)]
     
     # inbuilt symmetry
+    pairs = dict()
     if symmetry:
-        circuit[-2].jo = circuit[0].jo
-        circuit[-1].cap = circuit[1].cap
+        pairs['JJ1'] = 'JJ3'
+        pairs['C1'] = 'C3'
     
-    circuit += [L(0,1,ind,'I',True)]
-    circuit = Circuit(circuit,basis,sparse)
+    circuit = Circuit(circuit,basis,sparse,pairs)
     return circuit
 
 def shuntedQubitFluxFree(basis,josephson=[120.,50,120.],cap=[10.,50.,10.],sparse=True):
@@ -124,24 +131,24 @@ def phaseSlip(basis,inductance=[.001,.0005,.00002,.00035,.0005],capacitance=[100
 
 def resI(basis,sparse=True):
     cap = 54.3 + 1.92
-    circuit = [C(0,1,capE(cap,1e-15),'C')] + [J(0,1,9.13,'J1')] + [J(0,1,1.00,'J2')]
+    circuit = [C(0,1,capE(cap*1e-15),'C')] + [J(0,1,9.13,'J1')] + [J(0,1,1.00,'J2')]
     circuit += [L(0,1,.001,'L',True)]
     circuit = Circuit(circuit,basis,sparse)
     return circuit
 
 def resIV(basis,sparse=True):
     cap = 28.0
-    Ec = capE(cap,1e-15)
-    El = indE(150.,1e-9)
+    Ec = capE(cap*1e-15)
+    El = indE(150.*1e-9)
     circuit = [C(0,1,Ec,'C')] + [J(0,1,9.13,'J')]
     circuit += [L(0,1,El,'L',True)]
     circuit = Circuit(circuit,basis,sparse)
     return circuit
 
 def resII(basis,sparse=True):
-    Ec = capE(.15,1e-15)
-    Ec1 = capE(3.4,1e-12)
-    Ec2 = capE(1.5,1e-12)
+    Ec = capE(.15*1e-15)
+    Ec1 = capE(3.4*1e-12)
+    Ec2 = capE(1.5*1e-12)
     circuit = [C(0,1,Ec,'C')]
     circuit += [L(0,1,.001,'L',True)]
     circuit += [C(1,2,Ec1,'C1'), J(1,2,100.,'J1')]
@@ -150,9 +157,9 @@ def resII(basis,sparse=True):
     return circuit
 
 def resV(basis,sparse=True):
-    Ec = capE(45.,1e-15)
-    El = indE(19.8,1e-9)
-    EcJ = capE(15.0,1e-15)
+    Ec = capE(45.*1e-15)
+    El = indE(19.8*1e-9)
+    EcJ = capE(15.0*1e-15)
     circuit = [C(0,1,Ec,'C')]
     circuit += [L(1,2,.001,'L',True)]
     circuit += [C(2,0,EcJ,'EcJ'), J(2,0,88.2,'J')]
@@ -160,11 +167,11 @@ def resV(basis,sparse=True):
     return circuit
 
 def resIII(basis,sparse=True):
-    Ec = capE(101.,1e-15)
-    El = indE(150.+18.3,1e-9)
-    EcLink = capE(.8,1e-12)
-    Ec1 = capE(1.59,1e-12)
-    Ec2 = capE(520,1e-12)
+    Ec = capE(101.*1e-15)
+    El = indE((150.+18.3)*1e-9)
+    EcLink = capE(.8*1e-12)
+    Ec1 = capE(1.59*1e-12)
+    Ec2 = capE(520*1e-12)
     
     circuit = [C(0,1,Ec,'C')]
     circuit += [L(0,2,El,'L',True)]
@@ -175,11 +182,11 @@ def resIII(basis,sparse=True):
     return circuit
 
 def resVI(basis,sparse=True):
-    Ec1 = capE(.15,1e-15)
-    El = indE(150.+18.3,1e-9)
-    EcLink = capE(.8,1e-12)
-    Ec1 = capE(1.59,1e-12)
-    Ec2 = capE(520,1e-12)
+    Ec1 = capE(.15*1e-15)
+    El = indE((150.+18.3)*1e-9)
+    EcLink = capE(.8*1e-12)
+    Ec1 = capE(1.59*1e-12)
+    Ec2 = capE(520*1e-12)
     
     circuit = [C(0,1,Ec,'C1')]
     circuit += [L(0,2,El,'L1',True)]

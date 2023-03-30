@@ -26,7 +26,7 @@ def groundEnergy(spectrum):
     return spectrum[0]
 
 class Optimization:
-    def __init__(self,circuit,representation='K',sparse=False,algo=RMSprop):
+    def __init__(self,circuit,representation='K',sparse=False,algo=Adam):
         self.circuit = circuit
         self.parameters,self.IDs = self.circuitParameters()
         self.levels = [0,1,2]
@@ -228,11 +228,14 @@ class OrderingOptimization(Optimization):
             return loss
         return loss
     
-    def optimizationLBFGS(self,loss_function,flux_profile,iterations=100,lr=1e-5,log=False):
+    def optimizationLBFGS(self,loss_function,flux_profile,iterations=100,lr=None,log=False):
         # flux profile :: list of flux points dict{}
         # loss_function : list of Hamiltonian on all flux points
         logs = []; dParams = []; dCircuit = []
-        optimizer = LBFGS(self.parameters,lr=lr,max_iter=10,history_size=40,line_search_fn=None)
+        if lr is None:
+            optimizer = LBFGS(self.parameters,max_iter=10,history_size=40,line_search_fn='strong_wolfe')
+        else :
+            optimizer = LBFGS(self.parameters,lr=lr,max_iter=10,history_size=40,line_search_fn=None)
         def closure(metrics):
             def Loss():
                 optimizer.zero_grad()
@@ -312,7 +315,7 @@ def breakPoint(logs):
         return True    
     return False
 
-def truncNormalParameters(circuit,N,var=5):
+def truncNormalParameters(circuit,subspace,N,var=5):
     iDs,domain = [],[]
     for component in circuit.network:
         iDs.append(component.ID)
@@ -330,23 +333,26 @@ def truncNormalParameters(circuit,N,var=5):
         parameters.append(dict(zip(iDs,point)))
     return parameters
 
-def uniformParameters(circuit,N):
+def uniformParameters(circuit,subspace,N):
     iDs,domain = [],[]
     for component in circuit.network:
-        iDs.append(component.ID)
-        if component.__class__ == C :
-            bound = component.C0
-        elif component.__class__ == L :
-            bound = component.L0
-        elif component.__class__ == J :
-            bound = component.J0
-        domain.append(linspace(0,bound,N+1,endpoint=False)[1:])
+        if component.ID in subspace:
+            iDs.append(component.ID)
+            if component.__class__ == C :
+                bound = component.C0
+            elif component.__class__ == L :
+                bound = component.L0
+            elif component.__class__ == J :
+                bound = component.J0
+            domain.append(linspace(0,bound,N+1,endpoint=False)[1:])
     grid = array(meshgrid(*domain))
     grid = grid.reshape(len(iDs),-1)
-    parameters = []
+    space = []
     for point in grid.T:
-        parameters.append(dict(zip(iDs,point)))
-    return parameters
+        state = circuit.circuitState()
+        state.update(dict(zip(iDs,point)))
+        space.append(state)
+    return space
 
 def initializationSequential(parameters,optimizer,lossFunction,flux_profile,iterations=100,lr=.005):
     Search = []

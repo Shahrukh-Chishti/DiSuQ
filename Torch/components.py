@@ -19,7 +19,7 @@ Z0 = flux_quanta / 2 / e
 
 # upper limit of circuit elements
 # Energy units in GHz
-J0,C0,L0 = 1000,2500,1000
+J0,C0,L0 = 1200,2500,1200
 
 def null(H):
     def empty(*args):
@@ -58,7 +58,7 @@ def capE(cap):
     return 1 / 2 / cap * e * e / h / 1e9
 
 def indE(ind):
-    return 1 / 4 / pi**2 / ind * flux_quanta*2 / h / 1e9
+    return 1 / 4 / pi**2 / ind * flux_quanta**2 / h / 1e9
 
 def sigmoidInverse(x):
     return -numpy.log(1/x -1)

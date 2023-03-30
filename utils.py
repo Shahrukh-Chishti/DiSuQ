@@ -3,6 +3,7 @@ import plotly.graph_objs as go
 import matplotlib.pyplot as plt
 from networkx.drawing.nx_pydot import to_pydot
 from IPython.display import Image, display
+import time
 from pyvis import network as pvnet
 import networkx as nx
 from networkx.drawing.nx_pydot import write_dot
@@ -24,6 +25,7 @@ def render(fig,title,size,html,export):
         fig.update_layout(width=width,height=height)
     if export:
         fig.write_image('./'+title+'.'+export)
+        time.sleep(2)
         fig.write_image('./'+title+'.'+export)
     fig.update_layout(title=title)
     fig.update_layout(margin_t=100)
@@ -31,6 +33,15 @@ def render(fig,title,size,html,export):
         fig.write_html('./'+title+'.html')
     else :
         py.iplot(fig)
+        
+def plotBox(plot,title=None,x_label=None,y_label=None,size=None,html=False,export=None):
+    fig = go.Figure()
+    for name,dist in plot:
+        fig.add_trace(go.Box(y=dist,name=name))
+    fig.update_layout(xaxis_title=x_label,yaxis_title=y_label)
+    fig.update_layout(showlegend=False)
+    
+    render(fig,title,size,html,export)        
 
 def plotCombine(plot,title=None,x_label=None,y_label=None,mode='lines',size=None,html=False,export=None):
     fig = go.Figure()

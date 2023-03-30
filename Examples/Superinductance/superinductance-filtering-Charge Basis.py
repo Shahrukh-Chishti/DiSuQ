@@ -4,13 +4,13 @@ from DiSuQ.Torch.optimization import lossAnharmonicity,lossTransitionFlatness
 from torch import tensor
 from numpy import arange,array
 from DiSuQ.utils import plotCompare
-from DevSuQ.utils import plotTrajectory
+from DiSuQ.utils import plotTrajectory
 from time import perf_counter,sleep
 from torch import set_num_threads
-set_num_threads(48)
+set_num_threads(32)
 
-Ec,Ej = .1,30.
-gamma = 25.
+Ec,Ej = 1.5,45.
+gamma = 10.
 n = 3
 N_array = 14
 array_range = arange(1,N_array)
@@ -32,6 +32,8 @@ Basis['3'] = [50,75,100]
 Basis['2'] = [500,1000]
 
 path_array, path_approx, path_cosine = [],[],[]
+
+
 for N in array_range:
     # N= N+1 ; basis = arange(N,0,-1,int).tolist()  # Linear
     # basis = [8]+[n]*N # static
@@ -82,7 +84,8 @@ for N in array_range:
     end = perf_counter()
     print('Time:',end-start)
     print(N,'-------------')
-    
+
+
 N_approx = 25
 array_range = arange(1,N_approx)
 n_basis *= 2
@@ -108,4 +111,4 @@ for N in array_range:
 
 path_array, path_approx, path_cosine = array(path_array),array(path_approx),array(path_cosine)
 
-plotTrajectory(array_range,{'array':path_array,'approx':path_approx,'cosine':path_cosine},'Quasi approximation-Charge Basis-Gamma'+str(gamma),'E10','E21',save=True)
+plotTrajectory(array_range,{'array':path_array,'approx':path_approx,'cosine':path_cosine},'Quasi approximation-Charge Basis-Gamma'+str(gamma),'E10','E21',html=True,export='pdf')
