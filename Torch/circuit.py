@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import DiSuQ.Torch.dense as Dense
 import DiSuQ.Torch.sparse as Sparse
 from torch import exp,det,tensor,arange,zeros,zeros_like,sqrt,diagonal,argsort,set_num_threads,full as full_torch
-from torch.linalg import eigvalsh as eigsolve,inv
+from torch.linalg import eigvalsh as eigsolve,inv,eigh
 from DiSuQ.Torch.components import diagonalisation,null,J,L,C,im,pi,complex
 from time import perf_counter
 from numpy.linalg import matrix_rank,eigvalsh
@@ -28,7 +28,7 @@ def hamiltonianEnergy(H,sort=True):
     return eigenenergies
 
 def wavefunction(H,level=[0]):
-    eig,vec = eigsolve(H)
+    eig,vec = eigh(H)
     indices = argsort(eig)
     states = vec.T[indices[level]]
     return states
@@ -531,6 +531,45 @@ class Circuit:
             H -= E*(Jplus*phase(flux) + Jminus*phase(-flux))
 
         return H/2
+    
+    def josephsonMixed(self,basis,n_trunc):
+        Dplus,Dminus = [],[]
+        Z = self.modeImpedance()
+        for base,n,z in zip(basis,n_trunc,Z):
+            if base=='o':
+                Dplus.append(self.backend.displacementOscillator(n,z,1))
+                Dminus.append(self.backend.displacementOscillator(n,z,-1))
+            elif base == 'q':
+                Dplus.append(self.backend.chargeDisplacePlus(n))
+                Dminus.append(self.backend.chargeDisplaceMinus(n))
+            elif base == 'f':
+                Dplus.append(self.backend.displacementFlux(n,1))
+                Dminus.append(self.backend.displacementFlux(n,-1))
+                
+        assert len(Dplus) == len(basis)
+        def Hj(external_fluxes=dict()):
+            edges,Ej = self.josephsonComponents()
+            N = self.canonicalBasisSize()
+            H = self.backend.null(N)
+            for (u,v,key),E in zip(edges,Ej):
+                i,j = self.nodes_[u],self.nodes_[v]
+                flux = self.loopFlux(u,v,key,external_fluxes)
+                if i<0 or j<0 :
+                    # grounded josephson
+                    i = max(i,j)
+                    Jplus = self.backend.basisProduct(Dplus,[i])
+                    Jminus = self.backend.basisProduct(Dminus,[i])
+                else:
+                    Jplus = self.backend.crossBasisProduct(Dplus,Dminus,i,j)
+                    Jminus = self.backend.crossBasisProduct(Dplus,Dminus,j,i)
+                    #assert (Jminus == Jplus.conj().T).all()
+
+                #print(E,flux)
+                H -= E*(Jplus*phase(flux) + Jminus*phase(-flux))
+
+            return H/2
+        return Hj
+        
 
     def fluxInducerEnergy(self):
         basis = self.basis
@@ -592,6 +631,27 @@ class Circuit:
 
         return H/2
     
+    def mixedHamiltonianLC(self,basis,n_trunc):
+        Cn_,Ln_ = self.Cn_,self.Ln_
+        Q,F = [],[]
+        Z = self.modeImpedance()
+        for base,n,z in zip(basis,n_trunc,Z):
+            if base=='o':
+                Q.append(self.backend.basisQo(n,z))
+                F.append(self.backend.basisFo(n,z))
+            elif base == 'q':
+                Q.append(self.backend.basisQq(n))
+                F.append(self.backend.basisFq(n))
+            elif base == 'f':
+                Q.append(self.backend.basisQf(n))
+                F.append(self.backend.basisFf(n))
+                
+        assert len(Dplus) == len(basis)
+        H = self.backend.modeMatrixProduct(Q,Cn_,Q)
+        H += self.backend.modeMatrixProduct(F,Ln_,F)
+
+        return H/2
+    
     def chargeChargeOffset(self,charge_offset=dict()):
         charge = zeros(self.Nn)
         basis = self.basis
@@ -634,6 +694,12 @@ class Circuit:
         H = self.backend.modeMatrixProduct(F,Ln_,F)/2
         H += self.josephsonFlux(external_fluxes)
         return H
+    
+    def operatorExpectation(self,bra,O,mode,ket):
+        basis = self.basis
+        O = [O(basis_max) for basis_max in basis]
+        O = self.backend.basisProduct(O,[mode])
+        return bra.conj()@ O@ ket
 
     def circuitEnergy(self,H_LC=tensor(0.0),H_J=None,external_fluxes=dict(),grad=True):
         ## this could be improved : removing if clause, sub-class, sparse/dense and grad/numer segregation

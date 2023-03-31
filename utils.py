@@ -36,7 +36,7 @@ def render(fig,title,size,html,export):
         
 def plotBox(plot,title=None,x_label=None,y_label=None,size=None,html=False,export=None):
     fig = go.Figure()
-    for name,dist in plot:
+    for name,dist in plot.items():
         fig.add_trace(go.Box(y=dist,name=name))
     fig.update_layout(xaxis_title=x_label,yaxis_title=y_label)
     fig.update_layout(showlegend=False)

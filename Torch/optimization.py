@@ -318,20 +318,23 @@ def breakPoint(logs):
 def truncNormalParameters(circuit,subspace,N,var=5):
     iDs,domain = [],[]
     for component in circuit.network:
-        iDs.append(component.ID)
-        if component.__class__ == C :
-            bound = component.C0; loc = component.energy().item()
-        elif component.__class__ == L :
-            bound = component.L0; loc = component.energy().item()
-        elif component.__class__ == J :
-            bound = component.J0; loc = component.energy().item()
-        a = 0.0 - loc/var ; b = bound - loc/var
-        domain.append(truncnorm.rvs(a,b,loc,var,size=N))
+        if component.ID in subspace:
+            iDs.append(component.ID)
+            if component.__class__ == C :
+                bound = component.C0; loc = component.energy().item()
+            elif component.__class__ == L :
+                bound = component.L0; loc = component.energy().item()
+            elif component.__class__ == J :
+                bound = component.J0; loc = component.energy().item()
+            a = 0.0 - loc/var ; b = bound - loc/var
+            domain.append(truncnorm.rvs(a,b,loc,var,size=N))
     grid = array(domain)
-    parameters = []
+    space = []
     for point in grid.T:
-        parameters.append(dict(zip(iDs,point)))
-    return parameters
+        state = circuit.circuitState()
+        state.update(dict(zip(iDs,point)))
+        space.append(state)
+    return space
 
 def uniformParameters(circuit,subspace,N):
     iDs,domain = [],[]
