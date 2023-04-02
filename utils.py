@@ -74,20 +74,20 @@ def plotTrajectory(evo,plot,title=None,x_label=None,y_label=None,size=None,html=
     evo = evo/max(evo)*15
     for name,path in plot.items():
         fig.add_trace(go.Scatter(x=path[:,0],y=path[:,1],name=name,mode='lines+markers',
-                                marker={'size':evo},line={'width':5}))
+                                marker={'size':evo},line={'width':3}))
     fig.update_layout(xaxis_title=x_label,yaxis_title=y_label)
     
     render(fig,title,size,html,export)
     
-def plotOptimization(z,x,y,paths,title=None,xaxis=None,yaxis=None,size=None,html=False,export=None):
+def plotOptimization(z,x,y,paths,title=None,xaxis=None,yaxis=None,size=None,html=False,export=None,legend=False):
     fig = go.Figure()
     heatmap = go.Contour(z=z,y=y,x=x,name='loss',contours_coloring='heatmap')
     fig.add_trace(heatmap)
     fig.update_layout(xaxis_title=xaxis,yaxis_title=yaxis)
     for name,path in paths.items():
         evo = arange(len(path)) ; evo = evo/max(evo)*15
-        fig.add_trace(go.Scatter(x=path[:,0],y=path[:,1],name=name,mode='lines+markers',marker={'size':evo},line={'width':5}))
-        
+        fig.add_trace(go.Scatter(x=path[:,0],y=path[:,1],name=name,mode='lines+markers',marker={'size':evo},line={'width':3}))
+    fig.update_layout(showlegend=legend)
     render(fig,title,size,html,export)
     
 # graph plots

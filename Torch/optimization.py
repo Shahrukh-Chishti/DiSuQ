@@ -7,7 +7,7 @@ from numpy import arange,set_printoptions,meshgrid,linspace,array
 from scipy.optimize import minimize
 from time import perf_counter,sleep
 from DiSuQ.Torch.non_attacking_rooks import charPoly
-from DiSuQ.Torch.components import L,J,C
+from DiSuQ.Torch.components import L,J,C,L0,J0,C0
 from DiSuQ.utils import empty
 from scipy.stats import truncnorm
 
@@ -40,18 +40,20 @@ class Optimization:
             IDs.append(component.ID)
         return IDs
 
-    def circuitParameters(self):
+    def circuitParameters(self,subspace=()):
         parameters = []; IDs = []
+        slaves = self.circuit.pairs.values()
         for component in self.circuit.network:
-            if component.__class__ == C :
-                parameter = component.cap
-            elif component.__class__ == L :
-                parameter = component.ind
-            elif component.__class__ == J :
-                parameter = component.jo
-            if not parameter in parameters:
-                IDs.append(component.ID)
-                parameters.append(parameter)
+            if component.ID in subspace or len(subspace)==0:
+                if component.__class__ == C :
+                    parameter = component.cap
+                elif component.__class__ == L :
+                    parameter = component.ind
+                elif component.__class__ == J :
+                    parameter = component.jo
+                if not component.ID in slaves:
+                    IDs.append(component.ID)
+                    parameters.append(parameter)
         return parameters,IDs
     
     def circuitState(self):
@@ -178,39 +180,87 @@ class OrderingOptimization(Optimization):
         Loss = empty((len(scape[A]),len(scape[B])))
         for id_A,a in enumerate(scape[A]):
             for id_B,b in enumerate(scape[B]):
-                point = {A:a,B:b}
-                point.update(static)
+                point = static.copy()
+                point.update({A:a,B:b})
                 self.circuit.initialization(point)
                 Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
                 loss,metrics = loss_function(Spectrum,flux_profile)
                 Loss[id_A,id_B] = loss.detach().item()
         return Loss
-    
-    def minimization(self,loss_function,flux_profile,method='Nelder-Mead',args=(),constraints=()):
+        
+    def minimization(self,loss_function,flux_profile,method='Nelder-Mead',subspace=(),tol=None,maxiter=None):
         x0 = self.circuitState()
-        keys = tuple(x0.keys())
-        x0 =  array(tuple(x0.values()))
-        logs = []; dParams = []; dCircuit = []
+        for master,slave in self.circuit.pairs.items():
+            del x0[slave]
+        static = dict() # static complement to subspace
+        for key,value in x0.items():
+            if not key in subspace and len(subspace)>0:
+                static[key] = value
+        for key in static:
+            del x0[key]
+        keys = tuple(x0.keys()) # subspace
+        x0 =  array(tuple(x0.values())) # subspace
         def objective(parameters):
+            parameters = dict(zip(keys,parameters))
+            parameters.update(static)
+            for master,slave in self.circuit.pairs.items():
+                parameters[slave] = parameters[master]
+            self.circuit.initialization(parameters)
+            self.parameters,self.IDs = self.circuitParameters(subspace) 
+            Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
+            loss,metrics = loss_function(Spectrum,flux_profile)
+            loss = loss.detach().item()
+            return loss
+        def gradient(parameters):
+            parameters = dict(zip(keys,parameters))
+            parameters.update(static)
+            for master,slave in self.circuit.pairs.items():
+                parameters[slave] = parameters[master]
+            self.circuit.initialization(parameters)
+            self.parameters,self.IDs = self.circuitParameters(subspace)
+            for parameter in self.parameters:
+                if parameter.grad:
+                    parameter.grad.zero_()
+            Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
+            loss,metrics = loss_function(Spectrum,flux_profile)
+            loss.backward(retain_graph=True)
+            parameters = dict(zip(self.IDs,self.parameters))
+            gradients = []
+            for iD in keys:
+                gradients.append(parameters[iD].grad.detach().item())
+            return gradients
+
+        logs = []; dParams = []; dCircuit = []
+        def logger(parameters):
             dParams.append(self.parameterState())
             dCircuit.append(self.circuitState())
             
             parameters = dict(zip(keys,parameters))
+            parameters.update(static)
+            for master,slave in self.circuit.pairs.items():
+                parameters[slave] = parameters[master]
             self.circuit.initialization(parameters)
             Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
             loss,metrics = loss_function(Spectrum,flux_profile)
             loss = loss.detach().item()
-            
             metrics['loss'] = loss
             metrics['time'] = perf_counter()-start
             logs.append(metrics)
-            return loss
         
         start = perf_counter()
-        results = minimize(objective,x0,args,method,options={'disp': True},constraints=constraints)
-        parameters = results['x']
-        parameters = dict(zip(keys,parameters))
-        self.circuit.initialization(parameters)
+        components = self.circuit.circuitComposition()
+        Bounds = []
+        for iD in keys:
+            component = components[iD]
+            if component.__class__ == C :
+                bound = component.C0
+            elif component.__class__ == L :
+                bound = component.L0
+            elif component.__class__ == J :
+                bound = component.J0
+            Bounds.append((1e-5,bound-5)) # positive boundary exclusive
+            
+        results = minimize(objective,x0,method=method,tol=tol,jac=gradient,bounds=Bounds,options={'disp': True},callback=logger)
         
         dLog = pandas.DataFrame(logs)
         dLog['time'] = dLog['time'].diff()
@@ -236,38 +286,37 @@ class OrderingOptimization(Optimization):
             optimizer = LBFGS(self.parameters,max_iter=10,history_size=40,line_search_fn='strong_wolfe')
         else :
             optimizer = LBFGS(self.parameters,lr=lr,max_iter=10,history_size=40,line_search_fn=None)
-        def closure(metrics):
-            def Loss():
-                optimizer.zero_grad()
-                Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
-                loss,_ = loss_function(Spectrum,flux_profile)
-                metrics['loss'] = loss.detach().item()
-                loss.backward(retain_graph=True)
-                if log:
-                    spectrum = dict()
-                    for level in range(3):
-                        spectrum['0-level-'+str(level)] = Spectrum[0][0][level].detach().item()
-                        spectrum['pi-level-'+str(level)] = Spectrum[int(len(flux_profile)/2)][0][level].detach().item()
-                    metrics.update(spectrum)
-                    gradients = [parameter.grad.detach().item() for parameter in self.parameters]
-                    gradients = dict(zip(['grad-'+ID for ID in self.IDs],gradients))
-                    metrics.update(gradients)
+        def closure():
+            optimizer.zero_grad()
+            Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
+            loss,_ = loss_function(Spectrum,flux_profile)                
+            loss.backward(retain_graph=True)
+            return loss
+        
+        start = perf_counter()
+        for epoch in range(iterations):
+            dParams.append(self.parameterState())
+            dCircuit.append(self.circuitState())
+            Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
+            loss,_ = loss_function(Spectrum,flux_profile)
+            metrics = dict()
+            metrics['loss'] = loss.detach().item()
+            optimizer.step(closure)
+            metrics['time'] = perf_counter()-start
+            if log:
+                spectrum = dict()
+                for level in range(3):
+                    spectrum['0-level-'+str(level)] = Spectrum[0][0][level].detach().item()
+                    spectrum['pi-level-'+str(level)] = Spectrum[int(len(flux_profile)/2)][0][level].detach().item()
+                metrics.update(spectrum)
+                gradients = [parameter.grad.detach().item() for parameter in self.parameters]
+                gradients = dict(zip(['grad-'+ID for ID in self.IDs],gradients))
+                metrics.update(gradients)
                     #hess = hessian(self.lossModel(loss_function,flux_profile))
                     #hess = tensor(hess)                    
                     #hess = dict(zip(['hess'+index for index in range(len(hess))],hess))
                     #metrics.update(hess)
                 #print([parameter.grad for parameter in self.parameters])
-                #clip_grad_value_(self.parameters,clip_grad)
-                return loss
-            return Loss
-        
-        start = perf_counter()
-        for epoch in range(iterations):
-            dParams.append(self.parameterState())
-            dCircuit.append(self.circuitState())                         
-            metrics = dict()
-            optimizer.step(closure(metrics))
-            metrics['time'] = perf_counter()-start
             
             logs.append(metrics)
             if breakPoint(logs[-15:]):
@@ -311,7 +360,7 @@ class OrderingOptimization(Optimization):
 def breakPoint(logs):
     # break optimization loop : stagnation / spiking
     loss = pandas.DataFrame(logs)['loss'].to_numpy()
-    if loss[-1] > 1e6:
+    if loss[-1] > 1e12 and len(loss) > 10:
         return True    
     return False
 

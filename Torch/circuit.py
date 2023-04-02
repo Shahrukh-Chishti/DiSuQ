@@ -533,6 +533,7 @@ class Circuit:
         return H/2
     
     def josephsonMixed(self,basis,n_trunc):
+        assert len(basis)==len(n_trunc)
         Dplus,Dminus = [],[]
         Z = self.modeImpedance()
         for base,n,z in zip(basis,n_trunc,Z):
@@ -547,9 +548,9 @@ class Circuit:
                 Dminus.append(self.backend.displacementFlux(n,-1))
                 
         assert len(Dplus) == len(basis)
+        N = prod([len(D) for D in Dplus])
         def Hj(external_fluxes=dict()):
             edges,Ej = self.josephsonComponents()
-            N = self.canonicalBasisSize()
             H = self.backend.null(N)
             for (u,v,key),E in zip(edges,Ej):
                 i,j = self.nodes_[u],self.nodes_[v]
@@ -632,6 +633,7 @@ class Circuit:
         return H/2
     
     def mixedHamiltonianLC(self,basis,n_trunc):
+        assert len(basis)==len(n_trunc)
         Cn_,Ln_ = self.Cn_,self.Ln_
         Q,F = [],[]
         Z = self.modeImpedance()
@@ -646,7 +648,8 @@ class Circuit:
                 Q.append(self.backend.basisQf(n))
                 F.append(self.backend.basisFf(n))
                 
-        assert len(Dplus) == len(basis)
+        assert len(Q) == len(basis)
+        assert len(F) == len(basis)
         H = self.backend.modeMatrixProduct(Q,Cn_,Q)
         H += self.backend.modeMatrixProduct(F,Ln_,F)
 
