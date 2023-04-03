@@ -310,10 +310,12 @@ class Circuit:
         R = self.R
         No,Ni,Nj = self.No,self.Ni,self.Nj
         N = self.Nn
-        L_ = R.conj().T @ Ln_ @ R
+        #L_ = R.conj().T @ Ln_ @ R
+        L_ = R @ Ln_ @ inv(R)
 
         Lo_ = L_[:No,:No]
-        C_ = R @ Cn_ @ R.conj().T
+        #C_ = R @ Cn_ @ R.conj().T
+        C_ = R @ Cn_ @ inv(R)
         Co_ = C_[:No,:No]
         Coi_ = C_[:No,No:No+Ni]
         Coj_ = C_[:No,No+Ni:]

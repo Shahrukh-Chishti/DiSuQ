@@ -1,6 +1,6 @@
 from torch.optim import SGD,RMSprop,Adam,LBFGS,Rprop
 import torch,pandas
-from torch import tensor,argsort,zeros,abs,mean,stack,var
+from torch import tensor,argsort,zeros,abs,mean,stack,var,log
 from torch.linalg import det,inv,eigh as eigsolve
 from torch.nn.utils import clip_grad_norm_,clip_grad_value_
 from numpy import arange,set_printoptions,meshgrid,linspace,array
@@ -227,7 +227,11 @@ class OrderingOptimization(Optimization):
             parameters = dict(zip(self.IDs,self.parameters))
             gradients = []
             for iD in keys:
-                gradients.append(parameters[iD].grad.detach().item())
+                parameter = parameters[iD]
+                if parameter.grad is None: # spectrum degeneracy:torch.eigh destablize
+                    gradients.append(0.0)
+                else:
+                    gradients.append(parameter.grad.detach().item())
             return gradients
 
         logs = []; dParams = []; dCircuit = []
@@ -258,7 +262,7 @@ class OrderingOptimization(Optimization):
                 bound = component.L0
             elif component.__class__ == J :
                 bound = component.J0
-            Bounds.append((1e-5,bound-5)) # positive boundary exclusive
+            Bounds.append((1e-5,bound-(1e-5))) # positive boundary exclusive
             
         results = minimize(objective,x0,method=method,tol=tol,jac=gradient,bounds=Bounds,options={'disp': True},callback=logger)
         
@@ -278,14 +282,16 @@ class OrderingOptimization(Optimization):
             return loss
         return loss
     
-    def optimizationLBFGS(self,loss_function,flux_profile,iterations=100,lr=None,log=False):
+    def optimizationLBFGS(self,loss_function,flux_profile,max_iter=20,history_size=100,tol=1e-6,iterations=100,lr=None,log=False):
         # flux profile :: list of flux points dict{}
         # loss_function : list of Hamiltonian on all flux points
         logs = []; dParams = []; dCircuit = []
         if lr is None:
-            optimizer = LBFGS(self.parameters,max_iter=10,history_size=40,line_search_fn='strong_wolfe')
+            optimizer = LBFGS(self.parameters,max_iter=max_iter,history_size=history_size,tolerance_change=tol,
+                              line_search_fn='strong_wolfe')
         else :
-            optimizer = LBFGS(self.parameters,lr=lr,max_iter=10,history_size=40,line_search_fn=None)
+            optimizer = LBFGS(self.parameters,lr=lr,max_iter=max_iter,history_size=history_size,tolerance_change=tol,
+                              line_search_fn=None)
         def closure():
             optimizer.zero_grad()
             Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
@@ -345,7 +351,6 @@ class OrderingOptimization(Optimization):
             loss.backward(retain_graph=True)
             optimizer.step()
             metrics['time'] = perf_counter()-start
-            
             logs.append(metrics)
             if breakPoint(logs[-15:]):
                 print('Optimization Break Point xxxxxx')
@@ -434,6 +439,13 @@ def lossTransitionFlatness(Spectrum,flux_profile):
     loss = var(spectrum[:,1]-spectrum[:,0])
     loss += var(spectrum[:,2]-spectrum[:,1])
     return loss,dict()
+
+def lossDegeneracy(Spectrum,flux_profile):
+    half = int(len(flux_profile)/2)
+    e20 = Spectrum[half][0][2]-Spectrum[half][0][0]
+    e10 = Spectrum[half][0][1]-Spectrum[half][0][0]
+    D = log(e20/e10)
+    return D,{'E10':e10}
 
 def lossAnharmonicity(alpha):
     def lossFunction(Spectrum,flux_profile):

@@ -37,7 +37,7 @@ def capNatSI(cap):
 def indSINat(ind):
     return ind/(flux_quanta**2/h/1e9)
 
-def indSINat(ind):
+def indNatSI(ind):
     return ind*(flux_quanta**2/h/1e9)
 
 # conversion Natural and Energy units

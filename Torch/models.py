@@ -21,12 +21,12 @@ def zeroPi(basis,Ej=10,Ec=1.,El=.01,EcJ=100,sparse=True,symmetry=False):
     circuit += [C(1,2,Ec,'Cx'),C(3,0,Ec,'Cy')]
     circuit += [J(1,3,Ej,'Jx'),J(2,0,Ej,'Jy')]
     circuit += [C(1,3,EcJ,'CJx'),C(2,0,EcJ,'CJy')]
-    
+    pairs = dict()
     if symmetry:
-        circuit[0].ind = circuit[1].ind
-        circuit[1].cap = circuit[2].cap
-        circuit[3].jo = circuit[4].jo
-        circuit[5].cap = circuit[6].cap
+        pairs['Lx'] = 'Ly'
+        pairs['Cx'] = 'Cy'
+        pairs['Jx'] = 'Jy'
+        pairs['CJx'] = 'CJy'
     circuit = Circuit(circuit,basis,sparse)
     return circuit
 
