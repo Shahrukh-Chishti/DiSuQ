@@ -1,11 +1,11 @@
 import uuid,numpy
-from numpy import sqrt as sqroot,pi,prod
+from numpy import sqrt as sqroot,pi,prod,clip
 
 from torch import tensor,norm,abs,ones,zeros,zeros_like,argsort
 from torch import linspace,arange,diagonal,diag,sqrt,eye
 from torch.linalg import det,inv,eig as eigsolve
 from torch import matrix_exp as expm,exp,outer
-from torch import sin,cos,sigmoid
+from torch import sin,cos,sigmoid,clamp
 from torch import cfloat as complex, float32 as float
 
 im = 1.0j
@@ -16,10 +16,13 @@ hbar = h/2/pi
 flux_quanta = h/2/e
 Z0 = h/4/e/e
 Z0 = flux_quanta / 2 / e
+zero = 1e-9
+inf = 1e9
 
 # upper limit of circuit elements
 # Energy units in GHz
 J0,C0,L0 = 1200,2500,1200
+J_,C_,L_ = 1e-6,1e-6,1e-6
 
 def null(H):
     def empty(*args):
@@ -61,7 +64,9 @@ def indE(ind):
     return 1 / 4 / pi**2 / ind * flux_quanta**2 / h / 1e9
 
 def sigmoidInverse(x):
-    return -numpy.log(1/x -1)
+    x = 1/x -1
+    x = clip(x,zero,inf)
+    return -numpy.log(x)
 
 def normalize(state,square=True):
     state = abs(state)
@@ -112,47 +117,71 @@ class Elements:
         self.ID = ID
 
 class J(Elements):
-    def __init__(self,plus,minus,Ej,ID=None,J0=J0):
+    def __init__(self,plus,minus,Ej,ID=None,J0=J0,J_=J_):
         super().__init__(plus,minus,ID)
-        self.J0 = J0
+        self.J0 = J0; self.J_ = J_
         self.initJunc(Ej) # Ej[GHz]
         
     def initJunc(self,Ej):
-        self.jo = tensor(sigmoidInverse(Ej/self.J0),dtype=float,requires_grad=True)
+        self.jo = tensor(sigmoidInverse((Ej-self.J_)/self.J0),dtype=float,requires_grad=True)
+        
+    def variable(self):
+        return self.jo
 
     def energy(self):
-        return sigmoid(self.jo)/1.0 * self.J0 # GHz
+        return sigmoid(self.jo) * self.J0 + self.J_ # GHz
+    
+    def bounds(self):
+        upper = sigmoid(tensor(1e6))*self.J0 + self.J_
+        lower = sigmoid(-tensor(1e6))*self.J0 + self.J_
+        return lower,upper
 
 class C(Elements):
-    def __init__(self,plus,minus,Ec,ID=None,C0=C0):
+    def __init__(self,plus,minus,Ec,ID=None,C0=C0,C_=C_):
         super().__init__(plus,minus,ID)
-        self.C0 = C0
+        self.C0 = C0; self.C_ = C_
         self.initCap(Ec) # Ec[GHz]
         
     def initCap(self,Ec):
-        self.cap = tensor(sigmoidInverse(Ec/self.C0),dtype=float,requires_grad=True)
+        self.cap = tensor(sigmoidInverse((Ec-self.C_)/self.C0),dtype=float,requires_grad=True)
+        
+    def variable(self):
+        return self.cap
 
     def energy(self):
-        return sigmoid(self.cap)*self.C0 # GHz
+        return sigmoid(self.cap)*self.C0 + self.C_ # GHz
 
     def capacitance(self):
         return capEnergy(self.energy()) # he9/e/e : natural unit
+    
+    def bounds(self):
+        upper = sigmoid(tensor(1e6))*self.C0 + self.C_
+        lower = sigmoid(-tensor(1e6))*self.C0 + self.C_
+        return lower,upper
 
 class L(Elements):
-    def __init__(self,plus,minus,El,ID=None,external=False,L0=L0):
+    def __init__(self,plus,minus,El,ID=None,external=False,L0=L0,L_=L_):
         super().__init__(plus,minus,ID)
-        self.L0 = L0
+        self.L0 = L0; self.L_ = L_
         self.external = external # duplication : doesn't requires_grad
         self.initInd(El) # El[GHz]
         
     def initInd(self,El):
-        self.ind = tensor(sigmoidInverse(El/self.L0),dtype=float,requires_grad=True)
+        self.ind = tensor(sigmoidInverse((El-self.L_)/self.L0),dtype=float,requires_grad=True)
+        
+    def variable(self):
+        return self.ind
 
     def energy(self):
-        return sigmoid(self.ind)*self.L0 # GHz
+        return sigmoid(self.ind)*self.L0 + self.L_ # GHz
 
     def inductance(self):
         return indEnergy(self.energy()) # 4e9 e^2/h : natural unit
+    
+    def bounds(self):
+        upper = sigmoid(tensor(1e6))*self.L0 + self.L_
+        lower = sigmoid(-tensor(1e6))*self.L0 + self.L_
+        return lower,upper
 
 if __name__=='__main__':
     Qo = basisQo(30,tensor(4))

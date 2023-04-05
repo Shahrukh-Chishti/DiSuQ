@@ -16,18 +16,18 @@ def tensorize(values,variable=True):
 def sigInv(sig,limit):
     return [sigmoidInverse(s/limit) for s in sig]
 
-def zeroPi(basis,Ej=10,Ec=1.,El=.01,EcJ=100,sparse=True,symmetry=False):
-    circuit = [L(0,1,El,'Lx',True),L(2,3,El,'Ly',True)]
-    circuit += [C(1,2,Ec,'Cx'),C(3,0,Ec,'Cy')]
-    circuit += [J(1,3,Ej,'Jx'),J(2,0,Ej,'Jy')]
-    circuit += [C(1,3,EcJ,'CJx'),C(2,0,EcJ,'CJy')]
+def zeroPi(basis,Ej=10,Ec=1.,El=.01,EcJ=100,sparse=True,symmetry=False,L0=5.,C0=100.,J0=1000.,CJ0=500.):
+    circuit = [L(0,1,El,'Lx',True,L0),L(2,3,El,'Ly',True,L0)]
+    circuit += [C(1,2,Ec,'Cx',C0),C(3,0,Ec,'Cy',C0)]
+    circuit += [J(1,3,Ej,'Jx',J0),J(2,0,Ej,'Jy',J0)]
+    circuit += [C(1,3,EcJ,'CJx',CJ0),C(2,0,EcJ,'CJy',CJ0)]
     pairs = dict()
     if symmetry:
         pairs['Lx'] = 'Ly'
         pairs['Cx'] = 'Cy'
         pairs['Jx'] = 'Jy'
         pairs['CJx'] = 'CJy'
-    circuit = Circuit(circuit,basis,sparse)
+    circuit = Circuit(circuit,basis,sparse,pairs)
     return circuit
 
 def prismon(basis,Ej=10,Ec=1.,El=.01,EcJ=100.,sparse=True,symmetry=False):

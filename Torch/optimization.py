@@ -188,7 +188,7 @@ class OrderingOptimization(Optimization):
                 Loss[id_A,id_B] = loss.detach().item()
         return Loss
         
-    def minimization(self,loss_function,flux_profile,method='Nelder-Mead',subspace=(),tol=None,maxiter=None):
+    def minimization(self,loss_function,flux_profile,method='Nelder-Mead',subspace=(),options=dict()):
         x0 = self.circuitState()
         for master,slave in self.circuit.pairs.items():
             del x0[slave]
@@ -207,6 +207,7 @@ class OrderingOptimization(Optimization):
                 parameters[slave] = parameters[master]
             self.circuit.initialization(parameters)
             self.parameters,self.IDs = self.circuitParameters(subspace) 
+            
             Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
             loss,metrics = loss_function(Spectrum,flux_profile)
             loss = loss.detach().item()
@@ -218,6 +219,7 @@ class OrderingOptimization(Optimization):
                 parameters[slave] = parameters[master]
             self.circuit.initialization(parameters)
             self.parameters,self.IDs = self.circuitParameters(subspace)
+            
             for parameter in self.parameters:
                 if parameter.grad:
                     parameter.grad.zero_()
@@ -236,35 +238,30 @@ class OrderingOptimization(Optimization):
 
         logs = []; dParams = []; dCircuit = []
         def logger(parameters):
-            dParams.append(self.parameterState())
-            dCircuit.append(self.circuitState())
-            
             parameters = dict(zip(keys,parameters))
             parameters.update(static)
             for master,slave in self.circuit.pairs.items():
                 parameters[slave] = parameters[master]
             self.circuit.initialization(parameters)
+            self.parameters,self.IDs = self.circuitParameters(subspace)
+            
             Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
             loss,metrics = loss_function(Spectrum,flux_profile)
             loss = loss.detach().item()
             metrics['loss'] = loss
             metrics['time'] = perf_counter()-start
             logs.append(metrics)
+            dParams.append(self.parameterState())
+            dCircuit.append(self.circuitState())
         
         start = perf_counter()
         components = self.circuit.circuitComposition()
         Bounds = []
         for iD in keys:
-            component = components[iD]
-            if component.__class__ == C :
-                bound = component.C0
-            elif component.__class__ == L :
-                bound = component.L0
-            elif component.__class__ == J :
-                bound = component.J0
-            Bounds.append((1e-5,bound-(1e-5))) # positive boundary exclusive
-            
-        results = minimize(objective,x0,method=method,tol=tol,jac=gradient,bounds=Bounds,options={'disp': True},callback=logger)
+            bound = components[iD].bounds()
+            Bounds.append(bound) # positive boundary exclusive
+        options['disp'] = True
+        results = minimize(objective,x0,method=method,options=options,jac=gradient,bounds=Bounds,callback=logger)
         
         dLog = pandas.DataFrame(logs)
         dLog['time'] = dLog['time'].diff()
@@ -445,7 +442,7 @@ def lossDegeneracy(Spectrum,flux_profile):
     e20 = Spectrum[half][0][2]-Spectrum[half][0][0]
     e10 = Spectrum[half][0][1]-Spectrum[half][0][0]
     D = log(e20/e10)
-    return D,{'E10':e10}
+    return -D,{'D':D.detach().item(),'E10':e10.detach().item()}
 
 def lossAnharmonicity(alpha):
     def lossFunction(Spectrum,flux_profile):
