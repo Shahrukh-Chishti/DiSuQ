@@ -1,7 +1,7 @@
 from torch.optim import SGD,RMSprop,Adam,LBFGS,Rprop
 import torch,pandas
 from torch import tensor,argsort,zeros,abs,mean,stack,var,log
-from torch.linalg import det,inv,eigh as eigsolve
+from torch.linalg import det,inv,eigh as eigsolve, eigvalsh
 from torch.nn.utils import clip_grad_norm_,clip_grad_value_
 from numpy import arange,set_printoptions,meshgrid,linspace,array
 from scipy.optimize import minimize
@@ -160,13 +160,20 @@ class OrderingOptimization(Optimization):
     """
     def __init__(self,circuit,representation='K',sparse=False):
         super().__init__(circuit,representation,sparse)
-
-    def spectrumOrdered(self,external_flux):
+        
+    def stateOrdered(self,external_flux):
         H = self.circuitHamiltonian(external_flux)
         spectrum,state = eigsolve(H)
         spectrum = spectrum.real
         order = argsort(spectrum)#.clone().detach() # break point : retain graph
         return spectrum[order],state[order]
+
+    def spectrumOrdered(self,external_flux):
+        H = self.circuitHamiltonian(external_flux)
+        spectrum = eigvalsh(H)
+        #spectrum = spectrum.real
+        #order = argsort(spectrum)#.clone().detach() # break point : retain graph
+        return spectrum,None
 
     def orderTransition(self,spectrum,order,levels=[0,1,2]):
         sorted = argsort(spectrum)
@@ -367,17 +374,14 @@ def breakPoint(logs):
     return False
 
 def truncNormalParameters(circuit,subspace,N,var=5):
+    # var : std of normal distribution
     iDs,domain = [],[]
     for component in circuit.network:
         if component.ID in subspace:
             iDs.append(component.ID)
-            if component.__class__ == C :
-                bound = component.C0; loc = component.energy().item()
-            elif component.__class__ == L :
-                bound = component.L0; loc = component.energy().item()
-            elif component.__class__ == J :
-                bound = component.J0; loc = component.energy().item()
-            a = 0.0 - loc/var ; b = bound - loc/var
+            loc = component.energy().item()
+            a,b = component.bounds()
+            a = a - loc/var ; b = b - loc/var
             domain.append(truncnorm.rvs(a,b,loc,var,size=N))
     grid = array(domain)
     space = []

@@ -7,7 +7,8 @@ from torch import exp,det,tensor,arange,zeros,zeros_like,sqrt,diagonal,argsort,s
 from torch.linalg import eigvalsh as eigsolve,inv,eigh
 from DiSuQ.Torch.components import diagonalisation,null,J,L,C,im,pi,complex
 from time import perf_counter
-from numpy.linalg import matrix_rank,eigvalsh
+from numpy.linalg import matrix_rank
+from scipy.linalg import eigvalsh
 from numpy import prod,array,sort,full as full_numpy
 
 
@@ -22,9 +23,9 @@ def phase(phi):
 
 def hamiltonianEnergy(H,sort=True):
     eigenenergies = eigsolve(H)
-    eigenenergies = eigenenergies.real
-    if sort:
-        eigenenergies = eigenenergies.sort()[0]
+    #eigenenergies = eigenenergies.real
+    #if sort:
+    #    eigenenergies = eigenenergies.sort()[0]
     return eigenenergies
 
 def wavefunction(H,level=[0]):
@@ -723,7 +724,7 @@ class Circuit:
                 eigenenergies = self.backend.sparse.linalg.eigsh(H,return_eigenvectors=False)
                 eigenenergies = sort(eigenenergies)
             else:
-                H = H.detach().numpy()
+                H = H.detach().numpy() 
                 eigenenergies = eigvalsh(H)
         
         return eigenenergies

@@ -1,7 +1,7 @@
 import numpy,sys
 from DiSuQ.Torch.circuit import Circuit, hamiltonianEnergy, phase
 from DiSuQ.Torch.components import J,C,L,pi,h
-from DiSuQ.Torch.components import C0,J0,L0,capE,indE
+from DiSuQ.Torch.components import C0,J0,L0,capE,indE,C_,J_,L_
 from DiSuQ.Torch.components import e,h,flux_quanta,hbar
 from numpy.linalg import det
 from pyvis import network as pvnet
@@ -16,11 +16,11 @@ def tensorize(values,variable=True):
 def sigInv(sig,limit):
     return [sigmoidInverse(s/limit) for s in sig]
 
-def zeroPi(basis,Ej=10,Ec=1.,El=.01,EcJ=100,sparse=True,symmetry=False,L0=5.,C0=100.,J0=1000.,CJ0=500.):
-    circuit = [L(0,1,El,'Lx',True,L0),L(2,3,El,'Ly',True,L0)]
-    circuit += [C(1,2,Ec,'Cx',C0),C(3,0,Ec,'Cy',C0)]
-    circuit += [J(1,3,Ej,'Jx',J0),J(2,0,Ej,'Jy',J0)]
-    circuit += [C(1,3,EcJ,'CJx',CJ0),C(2,0,EcJ,'CJy',CJ0)]
+def zeroPi(basis,Ej=10.,Ec=50.,El=10.,EcJ=100.,sparse=True,symmetry=False,_L_=(L_,L0),_C_=(C_,C0),_J_=(J_,J0),_CJ_=(4*C_,4*C0)):
+    circuit = [L(0,1,El,'Lx',True,_L_[1],_L_[0]),L(2,3,El,'Ly',True,_L_[1],_L_[0])]
+    circuit += [C(1,2,Ec,'Cx',_C_[1],_C_[0]),C(3,0,Ec,'Cy',_C_[1],_C_[0])]
+    circuit += [J(1,3,Ej,'Jx',_J_[1],_J_[0]),J(2,0,Ej,'Jy',_J_[1],_J_[0])]
+    circuit += [C(1,3,EcJ,'CJx',_CJ_[1],_CJ_[0]),C(2,0,EcJ,'CJy',_CJ_[1],_CJ_[0])]
     pairs = dict()
     if symmetry:
         pairs['Lx'] = 'Ly'
@@ -30,19 +30,20 @@ def zeroPi(basis,Ej=10,Ec=1.,El=.01,EcJ=100,sparse=True,symmetry=False,L0=5.,C0=
     circuit = Circuit(circuit,basis,sparse,pairs)
     return circuit
 
-def prismon(basis,Ej=10,Ec=1.,El=.01,EcJ=100.,sparse=True,symmetry=False):
-    circuit = [L(0,1,El,'La',True),C(0,2,Ec,'Ca'),J(1,2,Ej,'Ja'),C(1,2,EcJ,'CJa')]
-    circuit += [L(2,3,El,'Lb',True),C(1,5,Ec,'Cb'),J(0,4,Ej,'Jb'),C(0,4,EcJ,'CJb')]
-    circuit += [L(5,4,El,'Lc',True),C(4,3,Ec,'Cc'),J(3,5,Ej,'Jc'),C(3,5,EcJ,'CJc')]
+def prismon(basis,Ej=10.,Ec=50.,El=10.,EcJ=100.,sparse=True,symmetry=False,_L_=(L_,L0),_C_=(C_,C0),_J_=(J_,J0),_CJ_=(4*C_,4*C0)):
+    circuit =  [L(0,1,El,'La',True,_L_[1],_L_[0]),C(0,2,Ec,'Ca',_C_[1],_C_[0]),J(1,2,Ej,'Ja',_J_[1],_J_[0]),C(1,2,EcJ,'CJa',_CJ_[1],_CJ_[0])]
+    circuit += [L(2,3,El,'Lb',True,_L_[1],_L_[0]),C(1,5,Ec,'Cb',_C_[1],_C_[0]),J(0,4,Ej,'Jb',_J_[1],_J_[0]),C(0,4,EcJ,'CJb',_CJ_[1],_CJ_[0])]
+    circuit += [L(5,4,El,'Lc',True,_L_[1],_L_[0]),C(4,3,Ec,'Cc',_C_[1],_C_[0]),J(3,5,Ej,'Jc',_J_[1],_J_[0]),C(3,5,EcJ,'CJc',_CJ_[1],_CJ_[0])]
     
     # inbuilt symmetry
+    pairs = dict()
     if symmetry:
-        circuit[6].jo = circuit[2].jo ; circuit[10].jo = circuit[2].jo
-        circuit[4].ind = circuit[0].ind ; circuit[8].ind = circuit[0].ind
-        circuit[5].cap = circuit[1].cap ; circuit[9].cap = circuit[1].cap
-        circuit[7].cap = circuit[3].cap ; circuit[11].cap = circuit[3].cap
+        pairs['Ja'] = 'Jb' ; pairs['Ja'] = 'Jc'
+        pairs['Ca'] = 'Cb' ; pairs['Ca'] = 'Cc'
+        pairs['La'] = 'Lb' ; pairs['La'] = 'Lc'
+        pairs['CJa'] = 'CJb' ; pairs['CJa'] = 'CJc'
         
-    circuit = Circuit(circuit,basis,sparse)
+    circuit = Circuit(circuit,basis,sparse,pairs)
     return circuit
 
 def transmon(basis,Ej=10.,Ec=0.3,sparse=True):
