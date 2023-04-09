@@ -23,10 +23,10 @@ def zeroPi(basis,Ej=10.,Ec=50.,El=10.,EcJ=100.,sparse=True,symmetry=False,_L_=(L
     circuit += [C(1,3,EcJ,'CJx',_CJ_[1],_CJ_[0]),C(2,0,EcJ,'CJy',_CJ_[1],_CJ_[0])]
     pairs = dict()
     if symmetry:
-        pairs['Lx'] = 'Ly'
-        pairs['Cx'] = 'Cy'
-        pairs['Jx'] = 'Jy'
-        pairs['CJx'] = 'CJy'
+        pairs['Ly'] = 'Lx'
+        pairs['Cy'] = 'Cx'
+        pairs['Jy'] = 'Jx'
+        pairs['CJy'] = 'CJx'
     circuit = Circuit(circuit,basis,sparse,pairs)
     return circuit
 
@@ -38,10 +38,10 @@ def prismon(basis,Ej=10.,Ec=50.,El=10.,EcJ=100.,sparse=True,symmetry=False,_L_=(
     # inbuilt symmetry
     pairs = dict()
     if symmetry:
-        pairs['Ja'] = 'Jb' ; pairs['Ja'] = 'Jc'
-        pairs['Ca'] = 'Cb' ; pairs['Ca'] = 'Cc'
-        pairs['La'] = 'Lb' ; pairs['La'] = 'Lc'
-        pairs['CJa'] = 'CJb' ; pairs['CJa'] = 'CJc'
+        pairs['Jb'] = 'Ja' ; pairs['Jc'] = 'Ja'
+        pairs['Cb'] = 'Ca' ; pairs['Cc'] = 'Ca'
+        pairs['Lb'] = 'La' ; pairs['Lc'] = 'La'
+        pairs['CJb'] = 'CJa' ; pairs['CJc'] = 'CJa'
         
     circuit = Circuit(circuit,basis,sparse,pairs)
     return circuit

@@ -86,7 +86,7 @@ class Circuit:
         
     def symmetrize(self,pairs):
         components = self.circuitComposition()
-        for master,slave in pairs.items():
+        for slave,master in pairs.items():
             master = components[master]
             slave = components[slave]
             if slave.__class__ == C :

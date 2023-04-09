@@ -42,7 +42,7 @@ class Optimization:
 
     def circuitParameters(self,subspace=()):
         parameters = []; IDs = []
-        slaves = self.circuit.pairs.values()
+        slaves = self.circuit.pairs.keys()
         for component in self.circuit.network:
             if component.ID in subspace or len(subspace)==0:
                 if component.__class__ == C :
@@ -197,7 +197,7 @@ class OrderingOptimization(Optimization):
         
     def minimization(self,loss_function,flux_profile,method='Nelder-Mead',subspace=(),options=dict()):
         x0 = self.circuitState()
-        for master,slave in self.circuit.pairs.items():
+        for slave,master in self.circuit.pairs.items():
             del x0[slave]
         static = dict() # static complement to subspace
         for key,value in x0.items():
@@ -210,7 +210,7 @@ class OrderingOptimization(Optimization):
         def objective(parameters):
             parameters = dict(zip(keys,parameters))
             parameters.update(static)
-            for master,slave in self.circuit.pairs.items():
+            for slave,master in self.circuit.pairs.items():
                 parameters[slave] = parameters[master]
             self.circuit.initialization(parameters)
             self.parameters,self.IDs = self.circuitParameters(subspace) 
@@ -222,7 +222,7 @@ class OrderingOptimization(Optimization):
         def gradient(parameters):
             parameters = dict(zip(keys,parameters))
             parameters.update(static)
-            for master,slave in self.circuit.pairs.items():
+            for slave,master in self.circuit.pairs.items():
                 parameters[slave] = parameters[master]
             self.circuit.initialization(parameters)
             self.parameters,self.IDs = self.circuitParameters(subspace)
@@ -247,7 +247,7 @@ class OrderingOptimization(Optimization):
         def logger(parameters):
             parameters = dict(zip(keys,parameters))
             parameters.update(static)
-            for master,slave in self.circuit.pairs.items():
+            for slave,master in self.circuit.pairs.items():
                 parameters[slave] = parameters[master]
             self.circuit.initialization(parameters)
             self.parameters,self.IDs = self.circuitParameters(subspace)
