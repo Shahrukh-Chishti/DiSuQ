@@ -212,9 +212,9 @@ def displacementOscillator(n,z,a):
     return sparsify(D)
 
 def displacementFlux(n,a):
-    D = basisFf(n).to_dense()
-    D = expm(im*2*pi*a*D)
-    return sparsify(D)
+    flux = fluxStates(2*n+1,n)
+    flux = im*2*pi*a*flux
+    return diagSparse(flux)
 
 if __name__=='__main__':
     Qo = basisQo(30,tensor(4.0))

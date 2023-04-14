@@ -61,18 +61,20 @@ def splitTransmon(basis):
     return transmon
 
 def oscillatorLC(basis,El=.00031,Ec=51.6256,sparse=True):
-    oscillator = [L(0,1,El),C(0,1,Ec)]
+    oscillator = [L(0,1,El,'L'),C(0,1,Ec,'C')]
     return Circuit(oscillator,basis,sparse)
 
-def fluxoniumArray(basis,gamma=1.5,N=0,Ec=100,Ej=150,sparse=True):
+def fluxoniumArray(basis,shunt=None,gamma=1.5,N=0,Ec=100,Ej=150,sparse=True):
     # N : number of islands
     circuit = [C(0,1,Ec,'Cap')]
     circuit += [J(0,1,Ej,'Junc')]
+    if shunt is None:
+        shunt = Ec/gamma
     for i in range(N):
         circuit += [J(1+i,2+i,gamma*Ej,'junc'+str(i))]
-        #circuit += [C(1+i,2+i,Ec/gamma,'cap'+str(i))]
+        #circuit += [C(1+i,2+i,shunt,'cap'+str(i),C_=0.)]
     circuit += [J(1+N,0,gamma*Ej,'junc'+str(N))]
-    #circuit += [C(1+N,0,Ec/gamma,'cap'+str(N))]
+    #circuit += [C(1+N,0,shunt,'cap'+str(N),C_=0.)]
     
     circuit = Circuit(circuit,basis,sparse)
     return circuit

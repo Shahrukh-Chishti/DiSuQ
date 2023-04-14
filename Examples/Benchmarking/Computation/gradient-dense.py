@@ -23,9 +23,9 @@ def torchProfiling(N,El=10.,Ec=100.,Ej=50):
     flux_range = tensor(linspace(0,1,n_flux,endpoint=True))
     H_LC = circuit.kermanHamiltonianLC()
     H_J = circuit.kermanHamiltonianJosephson
-    #H_J = H_J({'I':tensor(0.0)})
-    flux_range = [[flux] for flux in flux_range]
-    E0,(E1,E2) = circuit.spectrumManifold('I',flux_range,H_LC,H_J,[1,2])
+    H_J = H_J({'I':tensor(0.0)})
+    #flux_range = [[flux] for flux in flux_range]
+    #E0,(E1,E2) = circuit.spectrumManifold('I',flux_range,H_LC,H_J,[1,2])
         
 def numpyProfiling(N,El=10.,Ec=100.,Ej=50):
     basis = {'O':[N],'I':[],'J':[]}; rep = 'K'
@@ -33,9 +33,9 @@ def numpyProfiling(N,El=10.,Ec=100.,Ej=50):
     flux_range = linspace(0,1,n_flux,endpoint=True)
     H_LC = circuit.kermanHamiltonianLC()
     H_J = circuit.kermanHamiltonianJosephson
-    #H_J = H_J({'I':0.0})
-    flux_range = [[flux] for flux in flux_range]
-    E0,(E1,E2) = circuit.spectrumManifold('I',flux_range,H_LC,H_J,[1,2])
+    H_J = H_J({'I':0.0})
+    #flux_range = [[flux] for flux in flux_range]
+    #E0,(E1,E2) = circuit.spectrumManifold('I',flux_range,H_LC,H_J,[1,2])
     
 if __name__ == "__main__":
     #numpyProfiling(50)
@@ -60,5 +60,7 @@ if __name__ == "__main__":
     print(torch_comp,numpy_comp)
     print(torch_mem,numpy_mem)
 
-    plotCompare(bases,{'torch':torch_mem,'numpy':numpy_mem},'Diagonalization Memory Profile','basis','peak memory',save=True)
-    plotCompare(bases,{'torch':torch_comp,'numpy':numpy_comp},'Diagonalization Computation Profile','basis','time',save=True)
+    plotCompare(bases,{'torch':torch_mem,'numpy':numpy_mem},'Instantiation Memory Profile','basis','peak memory',
+                export='pdf',size=(600,600))
+    plotCompare(bases,{'torch':torch_comp,'numpy':numpy_comp},'Instantiation Computation Profile','basis','time',
+                export='pdf',size=(600,600))

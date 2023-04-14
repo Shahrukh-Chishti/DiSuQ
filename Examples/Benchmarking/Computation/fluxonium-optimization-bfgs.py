@@ -77,5 +77,5 @@ if __name__ == "__main__":
     print(torch_comp,numpy_comp)
     print(torch_mem,numpy_mem)
 
-    plotCompare(bases,{'torch':torch_mem,'numpy':numpy_mem},'Optimization Memory Profile','basis','peak memory',save=True)
-    plotCompare(bases,{'torch':torch_comp,'numpy':numpy_comp},'Optimization Computation Profile','basis','time',save=True)
+    plotCompare(bases,{'torch':torch_mem,'numpy':numpy_mem},'Optimization Memory Profile','basis','peak memory',export='pdf',size=(600,600))
+    plotCompare(bases,{'torch':torch_comp,'numpy':numpy_comp},'Optimization Computation Profile','basis','time',export='pdf',size=(600,600))

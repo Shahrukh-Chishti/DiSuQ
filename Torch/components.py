@@ -16,14 +16,16 @@ hbar = h/2/pi
 flux_quanta = h/2/e
 Z0 = h/4/e/e
 Z0 = flux_quanta / 2 / e
-zero = 1e-9
-inf = 1e9
+zero = 1e-12
+inf = 1e12
 
 # upper limit of circuit elements
 # Energy units in GHz
-J0,C0,L0 = 1200,2500,1200
-J_,C_,L_ = 1e-6,1e-6,1e-6
-
+J0,C0,L0 = 1200,2500,1200 ; J_,C_,L_ = 1e-6,1e-6,1e-6
+#J0,C0,L0 = 1e4,1e4,1e4 ; J_,C_,L_ = 1e-10,1e-10,1e-10
+#J0,C0,L0 = 25,38,32 ; J_,C_,L_ = 5,.3,1
+#zero = 1e-18
+#J0,C0,L0 = 1e4,1e4,1e4 ; J_,C_,L_ = 1e-15,1e-15,1e-15
 def null(H):
     def empty(*args):
         return H*0

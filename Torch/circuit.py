@@ -8,14 +8,18 @@ from torch.linalg import eigvalsh as eigsolve,inv,eigh
 from DiSuQ.Torch.components import diagonalisation,null,J,L,C,im,pi,complex
 from time import perf_counter
 from numpy.linalg import matrix_rank
-from scipy.linalg import eigvalsh
+from numpy.linalg import eigvalsh
 from numpy import prod,array,sort,full as full_numpy
 
 
-def inverse(A):
+def inverse(A,zero=1e-15):
     if det(A) == 0:
-        return zeros_like(A)
-    return inv(A)
+        #return zeros_like(A)
+        D = A.diag()
+        A[D==0,D==0] = tensor(1/zero)
+    A = inv(A)
+    A[A<=zero] = tensor(0.)
+    return A
 
 def phase(phi):
     # phi = flux/flux_quanta
