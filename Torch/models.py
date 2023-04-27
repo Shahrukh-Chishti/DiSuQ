@@ -17,6 +17,21 @@ def sigInv(sig,limit):
     return [sigmoidInverse(s/limit) for s in sig]
 
 def zeroPi(basis,Ej=10.,Ec=50.,El=10.,EcJ=100.,sparse=True,symmetry=False,_L_=(L_,L0),_C_=(C_,C0),_J_=(J_,J0),_CJ_=(4*C_,4*C0)):
+    circuit = [L(1,4,El,'Lx',True,_L_[1],_L_[0]),L(2,3,El,'Ly',True,_L_[1],_L_[0])]
+    circuit += [C(1,3,Ec,'Cx',_C_[1],_C_[0]),C(2,4,Ec,'Cy',_C_[1],_C_[0])]
+    circuit += [J(3,4,Ej,'Jx',_J_[1],_J_[0]),J(2,1,Ej,'Jy',_J_[1],_J_[0])]
+    circuit += [C(3,4,EcJ,'CJx',_CJ_[1],_CJ_[0]),C(2,1,EcJ,'CJy',_CJ_[1],_CJ_[0])]
+    pairs = dict()
+    if symmetry:
+        pairs['Ly'] = 'Lx'
+        pairs['Cy'] = 'Cx'
+        pairs['Jy'] = 'Jx'
+        pairs['CJy'] = 'CJx'
+    
+    circuit = Circuit(circuit,basis,sparse,pairs)
+    return circuit
+
+def zeroPi(basis,Ej=10.,Ec=50.,El=10.,EcJ=100.,sparse=True,symmetry=False,_L_=(L_,L0),_C_=(C_,C0),_J_=(J_,J0),_CJ_=(4*C_,4*C0)):
     circuit = [L(0,1,El,'Lx',True,_L_[1],_L_[0]),L(2,3,El,'Ly',True,_L_[1],_L_[0])]
     circuit += [C(1,2,Ec,'Cx',_C_[1],_C_[0]),C(3,0,Ec,'Cy',_C_[1],_C_[0])]
     circuit += [J(1,3,Ej,'Jx',_J_[1],_J_[0]),J(2,0,Ej,'Jy',_J_[1],_J_[0])]
@@ -27,8 +42,11 @@ def zeroPi(basis,Ej=10.,Ec=50.,El=10.,EcJ=100.,sparse=True,symmetry=False,_L_=(L
         pairs['Cy'] = 'Cx'
         pairs['Jy'] = 'Jx'
         pairs['CJy'] = 'CJx'
+    
     circuit = Circuit(circuit,basis,sparse,pairs)
     return circuit
+
+
 
 def prismon(basis,Ej=10.,Ec=50.,El=10.,EcJ=100.,sparse=True,symmetry=False,_L_=(L_,L0),_C_=(C_,C0),_J_=(J_,J0),_CJ_=(4*C_,4*C0)):
     circuit =  [L(0,1,El,'La',True,_L_[1],_L_[0]),C(0,2,Ec,'Ca',_C_[1],_C_[0]),J(1,2,Ej,'Ja',_J_[1],_J_[0]),C(1,2,EcJ,'CJa',_CJ_[1],_CJ_[0])]
@@ -72,9 +90,9 @@ def fluxoniumArray(basis,shunt=None,gamma=1.5,N=0,Ec=100,Ej=150,sparse=True):
         shunt = Ec/gamma
     for i in range(N):
         circuit += [J(1+i,2+i,gamma*Ej,'junc'+str(i))]
-        #circuit += [C(1+i,2+i,shunt,'cap'+str(i),C_=0.)]
+        circuit += [C(1+i,2+i,shunt,'cap'+str(i),C_=0.)]
     circuit += [J(1+N,0,gamma*Ej,'junc'+str(N))]
-    #circuit += [C(1+N,0,shunt,'cap'+str(N),C_=0.)]
+    circuit += [C(1+N,0,shunt,'cap'+str(N),C_=0.)]
     
     circuit = Circuit(circuit,basis,sparse)
     return circuit
@@ -87,20 +105,20 @@ def fluxonium(basis,El=.0003,Ec=.1,Ej=20,sparse=True):
     circuit = Circuit(circuit,basis,sparse)
     return circuit
 
-def shuntedQubit(basis,josephson=[120.,50,120.],cap=[10.,50.,10.],ind=100.,sparse=True,symmetry=False):
+def shuntedQubit(basis,josephson=[120.,50,120.],cap=[10.,50.,10.],ind=100.,sparse=True,symmetry=False,_C_=(C_,C0),_J_=(J_,J0)):
     Ej1,Ej2,Ej3 = josephson
     C1,C2,C3 = cap
 
-    circuit = [J(1,2,Ej1,'JJ1'),C(1,2,C1,'C1')]
-    circuit += [J(2,3,Ej2,'JJ2'),C(2,3,C2,'C2')]
-    circuit += [J(3,0,Ej3,'JJ3'),C(3,0,C3,'C3')]
+    circuit = [J(1,2,Ej1,'JJ1'),C(1,2,C1,'C1',_C_[1],_C_[0])]
+    circuit += [J(2,3,Ej2,'JJ2'),C(2,3,C2,'C2',_C_[1],_C_[0])]
+    circuit += [J(3,0,Ej3,'JJ3'),C(3,0,C3,'C3',_C_[1],_C_[0])]
     circuit += [L(0,1,ind,'I',True)]
     
     # inbuilt symmetry
     pairs = dict()
     if symmetry:
-        pairs['JJ1'] = 'JJ3'
-        pairs['C1'] = 'C3'
+        pairs['JJ3'] = 'JJ1'
+        pairs['C3'] = 'C1'
     
     circuit = Circuit(circuit,basis,sparse,pairs)
     return circuit

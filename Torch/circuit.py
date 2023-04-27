@@ -17,8 +17,13 @@ def inverse(A,zero=1e-15):
         #return zeros_like(A)
         D = A.diag()
         A[D==0,D==0] = tensor(1/zero)
-    A = inv(A)
-    A[A<=zero] = tensor(0.)
+        import pdb;pdb.set_trace()
+    try:
+        A = inv(A)
+    except:
+        import pdb;pdb.set_trace()
+    #import pdb;pdb.set_trace()    
+    #A[A<=zero] = tensor(0.)
     return A
 
 def phase(phi):
@@ -179,6 +184,7 @@ class Circuit:
 
     def componentMatrix(self):
         Cn = self.nodeCapacitance()
+        assert not det(Cn)==0
         Cn_ = inverse(Cn)
         Rbn = self.connectionPolarity()
         Lb = self.branchInductance()

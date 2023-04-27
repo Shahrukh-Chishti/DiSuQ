@@ -22,10 +22,13 @@ inf = 1e12
 # upper limit of circuit elements
 # Energy units in GHz
 J0,C0,L0 = 1200,2500,1200 ; J_,C_,L_ = 1e-6,1e-6,1e-6
+J0,J_ = 500.,0. ; C0,C_ = 150.,1e-6
+# such a huge range should be avoided, since the algebra with extreme values are below tolerance
 #J0,C0,L0 = 1e4,1e4,1e4 ; J_,C_,L_ = 1e-10,1e-10,1e-10
 #J0,C0,L0 = 25,38,32 ; J_,C_,L_ = 5,.3,1
 #zero = 1e-18
-#J0,C0,L0 = 1e4,1e4,1e4 ; J_,C_,L_ = 1e-15,1e-15,1e-15
+J0,C0,L0 = 1e8,1e8,1e8 ; J_,C_,L_ = 1e-18,1e-18,1e-18
+
 def null(H):
     def empty(*args):
         return H*0

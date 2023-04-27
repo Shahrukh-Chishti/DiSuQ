@@ -17,7 +17,7 @@ def empty(shape):
 # analysis plots
     
 def render(fig,title,size,html,export):
-    fig.update_layout(font={'size':20})
+    fig.update_layout(font={'size':30})
     fig.update_layout(margin_t=10,margin_r=10)
     fig.update_layout(legend=dict(yanchor="top",y=0.99,xanchor="right",x=0.99))
     if size:
@@ -50,6 +50,14 @@ def plotCombine(plot,title=None,x_label=None,y_label=None,mode='lines',size=None
     fig.update_layout(xaxis_title=x_label,yaxis_title=y_label)
     
     render(fig,title,size,html,export)
+    
+def plotScatter(x,plot,title=None,x_label=None,y_label=None,size=None,dot_size=1,html=False,export=None,legend=True):
+    fig = go.Figure()
+    for name,values in plot.items():
+        fig.add_trace(go.Scatter(x=x,y=values,name=name,mode='markers',marker={'size':dot_size}))
+    fig.update_layout(xaxis_title=x_label,yaxis_title=y_label)
+    fig.update_layout(showlegend=legend)
+    render(fig,title,size,html,export)
 
 def plotCompare(x,plot,title=None,x_label=None,y_label=None,size=None,html=False,export=None,legend=True):
     fig = go.Figure()
@@ -59,12 +67,15 @@ def plotCompare(x,plot,title=None,x_label=None,y_label=None,size=None,html=False
     fig.update_layout(showlegend=legend)
     render(fig,title,size,html,export)
 
-def plotHeatmap(z,x,y,title=None,xaxis=None,yaxis=None,size=None,html=False,export=None,ncontours=10):
+def plotHeatmap(z,x,y,title=None,xaxis=None,yaxis=None,size=None,html=False,export=None,ncontours=10,legend=True):
     fig = go.Figure()
     start=z.min(); end=z.max()
     contours = dict(start=start,end=end,size=(end-start)/ncontours)
     heatmap = go.Contour(z=z,y=y,x=x,contours_coloring='heatmap',contours=contours)
     fig.add_trace(heatmap)
+    fig.update_layout(showlegend=legend)
+    fig.update_traces(showscale=legend)
+    fig.update_layout(coloraxis_showscale=legend)
     fig.update_layout(xaxis_title=xaxis,yaxis_title=yaxis)
     
     render(fig,title,size,html,export)

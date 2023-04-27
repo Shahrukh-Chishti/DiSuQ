@@ -243,7 +243,7 @@ class OrderingOptimization(Optimization):
                     gradients.append(parameter.grad.detach().item())
             return gradients
 
-        logs = []; dParams = []; dCircuit = []
+        logs = []; dParams = [self.parameterState()]; dCircuit = [self.circuitState()]
         def logger(parameters):
             parameters = dict(zip(keys,parameters))
             parameters.update(static)
@@ -303,16 +303,18 @@ class OrderingOptimization(Optimization):
             loss.backward(retain_graph=True)
             return loss
         
+        dParams.append(self.parameterState())
+        dCircuit.append(self.circuitState())
         start = perf_counter()
-        for epoch in range(iterations):
-            dParams.append(self.parameterState())
-            dCircuit.append(self.circuitState())
+        for epoch in range(iterations):            
             Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
             loss,_ = loss_function(Spectrum,flux_profile)
             metrics = dict()
             metrics['loss'] = loss.detach().item()
             optimizer.step(closure)
             metrics['time'] = perf_counter()-start
+            dParams.append(self.parameterState())
+            dCircuit.append(self.circuitState())
             if log:
                 spectrum = dict()
                 for level in range(3):
@@ -344,10 +346,10 @@ class OrderingOptimization(Optimization):
         # loss_function : list of Hamiltonian on all flux points
         logs = []; dParams = []; dCircuit = []
         optimizer = self.algo(self.parameters,lr=lr)
+        dParams.append(self.parameterState())
+        dCircuit.append(self.circuitState())
         start = perf_counter()
-        for epoch in range(iterations):
-            dParams.append(self.parameterState())
-            dCircuit.append(self.circuitState())
+        for epoch in range(iterations):            
             optimizer.zero_grad()
             Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
             loss,metrics = loss_function(Spectrum,flux_profile)
@@ -355,6 +357,8 @@ class OrderingOptimization(Optimization):
             loss.backward(retain_graph=True)
             optimizer.step()
             metrics['time'] = perf_counter()-start
+            dParams.append(self.parameterState())
+            dCircuit.append(self.circuitState())
             logs.append(metrics)
             if breakPoint(logs[-15:]):
                 print('Optimization Break Point xxxxxx')
