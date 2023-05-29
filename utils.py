@@ -67,7 +67,7 @@ def plotCompare(x,plot,title=None,x_label=None,y_label=None,size=None,html=False
     fig.update_layout(showlegend=legend)
     render(fig,title,size,html,export)
 
-def plotHeatmap(z,x,y,title=None,xaxis=None,yaxis=None,size=None,html=False,export=None,ncontours=10,legend=True):
+def plotHeatmap(z,x,y,title=None,xaxis=None,yaxis=None,size=None,html=False,export=None,ncontours=10,legend=True,log=True):
     fig = go.Figure()
     start=z.min(); end=z.max()
     contours = dict(start=start,end=end,size=(end-start)/ncontours)
@@ -77,6 +77,9 @@ def plotHeatmap(z,x,y,title=None,xaxis=None,yaxis=None,size=None,html=False,expo
     fig.update_traces(showscale=legend)
     fig.update_layout(coloraxis_showscale=legend)
     fig.update_layout(xaxis_title=xaxis,yaxis_title=yaxis)
+    if log:
+        fig.update_xaxes(type="log")
+        fig.update_yaxes(type="log")
     
     render(fig,title,size,html,export)
     
@@ -90,7 +93,7 @@ def plotTrajectory(evo,plot,title=None,x_label=None,y_label=None,size=None,html=
     fig.update_layout(showlegend=legend)
     render(fig,title,size,html,export)
     
-def plotOptimization(z,x,y,paths,title=None,xaxis=None,yaxis=None,size=None,html=False,export=None,legend=False):
+def plotOptimization(z,x,y,paths,title=None,xaxis=None,yaxis=None,size=None,html=False,export=None,legend=False,log=False):
     fig = go.Figure()
     heatmap = go.Contour(z=z,y=y,x=x,name='loss',contours_coloring='heatmap')
     fig.add_trace(heatmap)
@@ -99,6 +102,9 @@ def plotOptimization(z,x,y,paths,title=None,xaxis=None,yaxis=None,size=None,html
         evo = arange(len(path)) ; evo = evo/max(evo)*15
         fig.add_trace(go.Scatter(x=path[:,0],y=path[:,1],name=name,mode='lines+markers',marker={'size':evo},line={'width':3}))
     fig.update_layout(showlegend=legend)
+    if log:
+        fig.update_xaxes(type="log")
+        fig.update_yaxes(type="log")
     render(fig,title,size,html,export)
     
 # graph plots
