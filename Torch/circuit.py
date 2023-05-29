@@ -32,9 +32,6 @@ def phase(phi):
 
 def hamiltonianEnergy(H,sort=True):
     eigenenergies = eigsolve(H)
-    #eigenenergies = eigenenergies.real
-    #if sort:
-    #    eigenenergies = eigenenergies.sort()[0]
     return eigenenergies
 
 def wavefunction(H,level=[0]):
@@ -321,12 +318,11 @@ class Circuit:
         R = self.R
         No,Ni,Nj = self.No,self.Ni,self.Nj
         N = self.Nn
-        #L_ = R.conj().T @ Ln_ @ R
-        L_ = R @ Ln_ @ inv(R)
 
+        L_ = inv(R) @ Ln_ @ R
         Lo_ = L_[:No,:No]
-        #C_ = R @ Cn_ @ R.conj().T
-        C_ = R @ Cn_ @ inv(R)
+        
+        C_ = inv(R) @ Cn_ @ R
         Co_ = C_[:No,:No]
         Coi_ = C_[:No,No:No+Ni]
         Coj_ = C_[:No,No+Ni:]

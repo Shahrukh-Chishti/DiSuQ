@@ -1,9 +1,10 @@
 from torch.optim import SGD,RMSprop,Adam,LBFGS,Rprop
 import torch,pandas
-from torch import tensor,argsort,zeros,abs,mean,stack,var,log
+from torch import tensor,argsort,zeros,abs,mean,stack,var,log,isnan
+from torch.autograd import grad
 from torch.linalg import det,inv,eigh as eigsolve, eigvalsh
 from torch.nn.utils import clip_grad_norm_,clip_grad_value_
-from numpy import arange,set_printoptions,meshgrid,linspace,array
+from numpy import arange,set_printoptions,meshgrid,linspace,array,sqrt
 from scipy.optimize import minimize
 from time import perf_counter,sleep
 from DiSuQ.Torch.non_attacking_rooks import charPoly
@@ -226,12 +227,15 @@ class OrderingOptimization(Optimization):
                 parameters[slave] = parameters[master]
             self.circuit.initialization(parameters)
             self.parameters,self.IDs = self.circuitParameters(subspace)
-            
+                 
+            Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
+            loss,metrics = loss_function(Spectrum,flux_profile)
             for parameter in self.parameters:
                 if parameter.grad:
                     parameter.grad.zero_()
-            Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
-            loss,metrics = loss_function(Spectrum,flux_profile)
+            #import pdb;pdb.set_trace()
+            #if isnan(loss):
+            #import pdb;pdb.set_trace()
             loss.backward(retain_graph=True)
             parameters = dict(zip(self.IDs,self.parameters))
             gradients = []
@@ -271,7 +275,10 @@ class OrderingOptimization(Optimization):
         results = minimize(objective,x0,method=method,options=options,jac=gradient,bounds=Bounds,callback=logger)
         
         dLog = pandas.DataFrame(logs)
-        dLog['time'] = dLog['time'].diff()
+        if len(dLog)>0:
+            dLog['time'] = dLog['time'].diff()
+        else:
+            import pdb;pdb.set_trace()
         dParams = pandas.DataFrame(dParams)
         dCircuit = pandas.DataFrame(dCircuit)
         return dLog,dParams,dCircuit
@@ -350,10 +357,10 @@ class OrderingOptimization(Optimization):
         dCircuit.append(self.circuitState())
         start = perf_counter()
         for epoch in range(iterations):            
-            optimizer.zero_grad()
             Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
             loss,metrics = loss_function(Spectrum,flux_profile)
             metrics['loss'] = loss.detach().item()
+            optimizer.zero_grad()
             loss.backward(retain_graph=True)
             optimizer.step()
             metrics['time'] = perf_counter()-start
@@ -385,7 +392,7 @@ def truncNormalParameters(circuit,subspace,N,var=5):
             iDs.append(component.ID)
             loc = component.energy().item()
             a,b = component.bounds()
-            a = a - loc/var ; b = b - loc/var
+            a = (a - loc)/var ; b = (b - loc)/var
             domain.append(truncnorm.rvs(a,b,loc,var,size=N))
     grid = array(domain)
     space = []
@@ -445,12 +452,65 @@ def lossTransitionFlatness(Spectrum,flux_profile):
     loss += var(spectrum[:,2]-spectrum[:,1])
     return loss,dict()
 
-def lossDegeneracy(Spectrum,flux_profile):
-    half = int(len(flux_profile)/2)
-    e20 = Spectrum[half][0][2]-Spectrum[half][0][0]
-    e10 = Spectrum[half][0][1]-Spectrum[half][0][0]
-    D = log(e20/e10)
-    return -D,{'D':D.detach().item(),'E10':e10.detach().item()}
+def lossDegeneracyWeighted(delta0,D0):
+    def Loss(Spectrum,flux_profile):
+        half = 0#int(len(flux_profile)/2)
+        neighbour = -1
+        e20 = Spectrum[half][0][2]-Spectrum[half][0][0]
+        e10 = Spectrum[half][0][1]-Spectrum[half][0][0]
+        D = log(e20/e10)
+        degen_point = flux_profile[0]['Lx']
+        n10 = Spectrum[neighbour][0][1]-Spectrum[neighbour][0][0]
+        #delta = Spectrum[neighbour][0][1]-Spectrum[neighbour][0][0]-e10
+        #delta = delta/e10
+        #delta = delta.abs()
+        #sensitivity = grad(e10,degen_point,create_graph=True)[0] # local fluctuations
+        #sensitivity = log(sensitivity.abs())
+        delta = log((n10-e10).abs()/e20)
+        loss = delta*delta0 - D*D0
+        return loss,{'delta':delta.detach().item(),'D':D.detach().item(),'E10':e10.detach().item()}
+    return Loss
+
+def lossDegeneracyTarget(delta0,D0):
+    def Loss(Spectrum,flux_profile):
+        half = 0#int(len(flux_profile)/2)
+        neighbour = -1
+        e20 = Spectrum[half][0][2]-Spectrum[half][0][0]
+        e10 = Spectrum[half][0][1]-Spectrum[half][0][0]
+        D = log(e20/e10)
+        degen_point = flux_profile[0]['Lx']
+        n10 = Spectrum[neighbour][0][1]-Spectrum[neighbour][0][0]
+        delta = log((n10-e10).abs()/e20)
+        loss = (delta0+delta)**2 + (D0-D)**2
+        return loss,{'delta':delta.detach().item(),'D':D.detach().item(),'E10':e10.detach().item()}
+    return Loss
+
+# def lossDegeneracy(Spectrum,flux_profile):
+#     half = 0#int(len(flux_profile)/2)
+#     neighbour = -1
+#     e20 = Spectrum[half][0][2]-Spectrum[half][0][0]
+#     e10 = Spectrum[half][0][1]-Spectrum[half][0][0]
+#     D = log(e20/e10)
+#     degen_point = flux_profile[0]['Lx']
+#     n10 = Spectrum[neighbour][0][1]-Spectrum[neighbour][0][0]
+#     delta = log((n10-e10).abs())
+#     #import pdb;pdb.set_trace()
+#     a = 1/(log(n10).abs()).detach().item() ; b = 1/(log(e10).abs()).detach().item()
+#     k = sqrt(2/(a**2+b**2))
+#     loss = k*(a*log(n10) + b*log(e10))
+#     return loss,{'delta':delta.detach().item(),'D':D.detach().item(),'E10':e10.detach().item()}
+
+
+# def lossDegeneracy(Spectrum,flux_profile):
+#     half = 0#int(len(flux_profile)/2)
+#     neighbour = -1
+#     e20 = Spectrum[half][0][2]-Spectrum[half][0][0]
+#     e10 = Spectrum[half][0][1]-Spectrum[half][0][0]
+#     D = log(e20/e10)
+#     degen_point = flux_profile[0]['Lx']
+#     n10 = Spectrum[neighbour][0][1]-Spectrum[neighbour][0][0]
+#     loss = log(n10)
+#     return loss,{'D':D.detach().item(),'N10':n10.detach().item(),'E10':e10.detach().item()}
 
 def lossAnharmonicity(alpha):
     def lossFunction(Spectrum,flux_profile):

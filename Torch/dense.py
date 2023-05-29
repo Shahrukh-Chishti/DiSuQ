@@ -85,7 +85,7 @@ def basisFo(n,impedance):
     Po = arange(1,n)
     Po = sqrt(Po)
     Po = diag(Po,diagonal=1) + diag(Po,diagonal=-1)
-    return Po*sqrt(impedance/2/pi)
+    return Po.to(dtype=complex)*sqrt(impedance/2/pi)
 
 def fluxFlux(n,impedance):
     N = 2*n+1
@@ -132,7 +132,7 @@ def transformationMatrix(n_charge,N_flux,n_flux=1):
     T = outer(flux_states,charge_states)
     T *= 2*pi*im/N_flux
     T = exp(T)/sqroot(N_flux)
-    return T
+    return T # unitary transformation
 
 def basisQq(n):
     # charge basis
@@ -140,7 +140,7 @@ def basisQq(n):
     Q = diag(charge.clone().detach())
     return Q * 2
 
-def basisFq(n):
+def basisFqKerman(n):
     # charge basis
     N = 2*n+1
     P = zeros((N,N),dtype=complex)
@@ -155,7 +155,7 @@ def basisFq(n):
 def basisFq(n):
     Q = basisQq(n)
     U = transformationMatrix(n,2*n+1,n)
-    return U@Q@U.conj().T/(2.0*n+1.0)/2.0
+    return U@Q@U.conj().T/2/(2.0*n+1.0)
 
 def basisFf(n):
     flux = fluxStates(2*n+1,n,complex)
@@ -165,7 +165,7 @@ def basisFf(n):
 def basisQf(n):
     F = basisFf(n).to(complex)
     U = transformationMatrix(n,2*n+1,n)
-    return U@F@U.conj().T*(2*n+1)*2
+    return U@F@U.conj().T*2*(2*n+1)
 
 def chargeDisplacePlus(n):
     """n : charge basis truncation"""
