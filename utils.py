@@ -67,7 +67,7 @@ def plotCompare(x,plot,title=None,x_label=None,y_label=None,size=None,html=False
     fig.update_layout(showlegend=legend)
     render(fig,title,size,html,export)
 
-def plotHeatmap(z,x,y,title=None,xaxis=None,yaxis=None,size=None,html=False,export=None,ncontours=10,legend=True,log=True):
+def plotHeatmap(z,x,y,title=None,xaxis=None,yaxis=None,size=None,html=False,export=None,ncontours=10,legend=True,log=False):
     fig = go.Figure()
     start=z.min(); end=z.max()
     contours = dict(start=start,end=end,size=(end-start)/ncontours)

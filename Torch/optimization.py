@@ -84,6 +84,9 @@ class Optimization:
         elif self.representation == 'Q':
             H = self.circuit.chargeHamiltonianLC()
             H += self.circuit.josephsonCharge(external_fluxes)
+        elif self.representation == 'O':
+            H = self.circuit.oscillatorHamiltonianLC()
+            H += self.circuit.josephsonOscillator(external_fluxes)
         if to_dense:
             H = H.to_dense()
         return H
@@ -194,7 +197,7 @@ class OrderingOptimization(Optimization):
                 Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
                 loss,metrics = loss_function(Spectrum,flux_profile)
                 Loss[id_A,id_B] = loss.detach().item()
-        return Loss
+        return Loss.transpose() # A -> X-axis , B -> Y-axis
         
     def minimization(self,loss_function,flux_profile,method='Nelder-Mead',subspace=(),options=dict()):
         x0 = self.circuitState()
