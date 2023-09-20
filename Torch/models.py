@@ -5,7 +5,8 @@ from DiSuQ.Torch.components import C0,J0,L0,capE,indE,C_,J_,L_
 from DiSuQ.Torch.components import e,h,flux_quanta,hbar
 from numpy.linalg import det
 from pyvis import network as pvnet
-from torch import tensor
+from torch import tensor,diag,sqrt
+from torch.linalg import inv
 
 def tensorize(values,variable=True):
     tensors = []
@@ -15,6 +16,8 @@ def tensorize(values,variable=True):
 
 def sigInv(sig,limit):
     return [sigmoidInverse(s/limit) for s in sig]
+
+# input order enumerates into node index
 
 def zeroPi(basis,Ej=10.,Ec=50.,El=10.,EcJ=100.,sparse=True,symmetry=False,_L_=(L_,L0),_C_=(C_,C0),_J_=(J_,J0),_CJ_=(4*C_,4*C0)):
     circuit = [L(1,4,El,'Lx',True,_L_[1],_L_[0]),L(2,3,El,'Ly',True,_L_[1],_L_[0])]
@@ -44,6 +47,71 @@ def zeroPi(basis,Ej=10.,Ec=50.,El=10.,EcJ=100.,sparse=True,symmetry=False,_L_=(L
         pairs['CJy'] = 'CJx'
     
     circuit = Circuit(circuit,basis,sparse,pairs)
+    return circuit
+
+def zeroPi(basis,Ej=10.,Ec=50.,El=10.,EcJ=100.,sparse=True,symmetry=False,_L_=(L_,L0),_C_=(C_,C0),_J_=(J_,J0),_CJ_=(4*C_,4*C0),ridge = False):
+    circuit = [J(0,1,Ej,'Jx',_J_[1],_J_[0]),J(2,3,Ej,'Jy',_J_[1],_J_[0])]
+    circuit += [C(0,1,EcJ,'CJx',_CJ_[1],_CJ_[0]),C(2,3,EcJ,'CJy',_CJ_[1],_CJ_[0])]
+    circuit += [L(3,0,El,'Lx',True,_L_[1],_L_[0]),L(1,2,El,'Ly',True,_L_[1],_L_[0])]
+    circuit += [C(3,1,Ec,'Cx',_C_[1],_C_[0]),C(0,2,Ec,'Cy',_C_[1],_C_[0])]
+    pairs = dict()
+    if symmetry:
+        pairs['Ly'] = 'Lx'
+        pairs['Cy'] = 'Cx'
+        pairs['Jy'] = 'Jx'
+        pairs['CJy'] = 'CJx'
+    
+    flux0 = numpy.pi*6
+    circuit = Circuit(circuit,basis,sparse,pairs)
+    if ridge :
+        circuit.R = tensor([[1,-1,-1],[-1,1,-1],[-1,-1,1]])/2.
+        def ridgeHamiltonianLC(self):
+            basis = self.basis
+            Ln_,Cn_ = self.Ln_,self.Cn_
+            R = self.R
+            L_ = inv(R.T) @ Ln_ @ inv(R); L_ = diag(diag(L_))
+            C_ = R @ Cn_ @ R.T; C_ = diag(diag(C_))
+            # Chi mode impedance
+            z = sqrt(C_[0,0]/L_[0,0])
+            
+            F = [self.backend.basisFo(basis['Chi'],z)]
+            F += [self.backend.basisFf(basis['Phi'],flux0)]
+            F += [self.backend.basisFq(basis['Theta'])]
+
+            Q = [self.backend.basisQo(basis['Chi'],z)]
+            Q += [4*self.backend.basisFiniteII(basis['Phi'],(-flux0,flux0))]
+            Q += [self.backend.basisQq(basis['Theta'])]
+
+            H_LC = self.backend.modeMatrixProduct(F,L_,F,(0,0))/2
+            # explicit basis change
+            H_LC += - C_[1,1]*self.backend.basisProduct(Q,[1])/2
+            H_LC += self.backend.modeMatrixProduct(Q,C_[2:,2:],Q,(2,2))/2
+            H_LC += self.backend.modeMatrixProduct(Q,C_[:1,:1],Q,(0,0))/2
+            
+            return H_LC
+
+        def ridgeJosephson(self):
+            def Hamiltonian(flux):
+                flux = flux['Lx']
+                Ej = self.josephsonComponents()[1][0]
+                D_Phi = self.backend.displacementFlux(basis['Phi'],flux0,1)*phase(flux/2) 
+                D_Phi += self.backend.displacementFlux(basis['Phi'],flux0,-1)*phase(-flux/2) 
+                D_Chi = self.backend.displacementOscillator(basis['Chi'],tensor(1.),1)
+                D_Chi += self.backend.displacementOscillator(basis['Chi'],tensor(1.),-1)
+                D_Theta = self.backend.chargeDisplacePlus(basis['Theta']) 
+                D_Theta += self.backend.chargeDisplaceMinus(basis['Theta'])
+                D = [D_Chi/2,D_Phi/2,D_Theta/2]
+                H_J = -2*Ej*self.backend.basisProduct(D,[1,2])
+                return H_J
+            return Hamiltonian
+
+        def kermanBasisSize():
+            basis = circuit.basis
+            return (2*basis['Theta']+1)*(basis['Phi'])*basis['Chi']
+        circuit.ridgeJosephson = ridgeJosephson
+        circuit.ridgeHamiltonianLC = ridgeHamiltonianLC
+        circuit.kermanBasisSize = kermanBasisSize
+    
     return circuit
 
 
