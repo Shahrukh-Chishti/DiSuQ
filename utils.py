@@ -34,12 +34,13 @@ def render(fig,title,size,html,export):
     else :
         py.iplot(fig)
         
-def plotBox(plot,title=None,x_label=None,y_label=None,size=None,html=False,export=None):
+def plotBox(plot,title=None,x_label=None,y_label=None,size=None,html=False,export=None,ylimit=None):
     fig = go.Figure()
     for name,dist in plot.items():
         fig.add_trace(go.Box(y=dist,name=name))
     fig.update_layout(xaxis_title=x_label,yaxis_title=y_label)
     fig.update_layout(showlegend=False)
+    fig.update_layout(yaxis_range=ylimit)
     
     render(fig,title,size,html,export)        
 
@@ -65,6 +66,20 @@ def plotCompare(x,plot,title=None,x_label=None,y_label=None,size=None,html=False
         fig.add_trace(go.Scatter(x=x,y=values,name=name,line={'width':5}))
     fig.update_layout(xaxis_title=x_label,yaxis_title=y_label)
     fig.update_layout(showlegend=legend)
+    render(fig,title,size,html,export)
+
+def plotMap(z,x,y,title=None,xaxis=None,yaxis=None,size=None,html=False,export=None,legend=True,log=False):
+    fig = go.Figure()
+    heatmap = go.Heatmap(z=z,y=y,x=x)
+    fig.add_trace(heatmap)
+    fig.update_layout(showlegend=legend)
+    fig.update_traces(showscale=legend)
+    fig.update_layout(coloraxis_showscale=legend)
+    fig.update_layout(xaxis_title=xaxis,yaxis_title=yaxis)
+    if log:
+        fig.update_xaxes(type="log")
+        fig.update_yaxes(type="log")
+    
     render(fig,title,size,html,export)
 
 def plotHeatmap(z,x,y,title=None,xaxis=None,yaxis=None,size=None,html=False,export=None,ncontours=10,legend=True,log=False):
