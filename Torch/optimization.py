@@ -1,10 +1,10 @@
 from torch.optim import SGD,RMSprop,Adam,LBFGS,Rprop
 import torch,pandas
-from torch import tensor,argsort,zeros,abs,mean,stack,var,log,isnan
+from torch import tensor,argsort,zeros,abs,mean,stack,var,log,isnan,lobpcg
 from torch.autograd import grad
 from torch.linalg import det,inv,eigh as eigsolve, eigvalsh
 from torch.nn.utils import clip_grad_norm_,clip_grad_value_
-from numpy import arange,set_printoptions,meshgrid,linspace,array,sqrt
+from numpy import arange,set_printoptions,meshgrid,linspace,array,sqrt,sort
 from scipy.optimize import minimize
 from time import perf_counter,sleep
 from DiSuQ.Torch.non_attacking_rooks import charPoly
@@ -76,7 +76,7 @@ class Optimization:
                 parameters[component.ID] = component.jo.item()
         return parameters
 
-    def circuitHamiltonian(self,external_fluxes,to_dense=False):
+    def circuitHamiltonian(self,external_fluxes,to_dense=True):
         # returns Dense Hamiltonian
         if self.representation == 'K':
             H = self.circuit.kermanHamiltonianLC()
@@ -87,6 +87,9 @@ class Optimization:
         elif self.representation == 'O':
             H = self.circuit.oscillatorHamiltonianLC()
             H += self.circuit.josephsonOscillator(external_fluxes)
+        elif self.representation == 'R':
+            H_J = self.circuit.ridgeJosephson(self.circuit)
+            H = self.circuit.ridgeHamiltonianLC(self.circuit) + H_J(external_fluxes)
         if to_dense:
             H = H.to_dense()
         return H
@@ -174,7 +177,11 @@ class OrderingOptimization(Optimization):
 
     def spectrumOrdered(self,external_flux):
         H = self.circuitHamiltonian(external_flux)
-        spectrum = eigvalsh(H)
+        if H.is_sparse:
+            spectrum = lobpcg(H.to(float),k=3,largest=False)[0]
+        else:
+            spectrum = eigvalsh(H)
+        
         #spectrum = spectrum.real
         #order = argsort(spectrum)#.clone().detach() # break point : retain graph
         return spectrum,None
@@ -461,7 +468,7 @@ def lossDegeneracyWeighted(delta0,D0):
         neighbour = -1
         e20 = Spectrum[half][0][2]-Spectrum[half][0][0]
         e10 = Spectrum[half][0][1]-Spectrum[half][0][0]
-        D = log(e20/e10)
+        D = log(e20/e10)/log(tensor(10))
         degen_point = flux_profile[0]['Lx']
         n10 = Spectrum[neighbour][0][1]-Spectrum[neighbour][0][0]
         #delta = Spectrum[neighbour][0][1]-Spectrum[neighbour][0][0]-e10
@@ -469,7 +476,7 @@ def lossDegeneracyWeighted(delta0,D0):
         #delta = delta.abs()
         #sensitivity = grad(e10,degen_point,create_graph=True)[0] # local fluctuations
         #sensitivity = log(sensitivity.abs())
-        delta = log((n10-e10).abs()/e20)
+        delta = log((n10-e10).abs()/e20)/log(tensor(10.))
         loss = delta*delta0 - D*D0
         return loss,{'delta':delta.detach().item(),'D':D.detach().item(),'E10':e10.detach().item()}
     return Loss
