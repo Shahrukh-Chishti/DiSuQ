@@ -3,13 +3,13 @@ import matplotlib.pyplot as plt
 
 import DiSuQ.Torch.dense as Dense
 import DiSuQ.Torch.sparse as Sparse
-from torch import exp,det,tensor,arange,zeros,zeros_like,sqrt,diagonal,argsort,set_num_threads,full as full_torch
+from torch import exp,det,tensor,arange,zeros,zeros_like,sqrt,diagonal,argsort,lobpcg,set_num_threads,full as full_torch
 from torch.linalg import eigvalsh as eigsolve,inv,eigh
 from DiSuQ.Torch.components import diagonalisation,null,J,L,C,im,pi,complex
 from time import perf_counter
 from numpy.linalg import matrix_rank
 from numpy.linalg import eigvalsh
-from numpy import prod,array,sort,full as full_numpy
+from numpy import prod,flip,array,sort,full as full_numpy
 
 
 def inverse(A,zero=1e-15):
@@ -319,10 +319,10 @@ class Circuit:
         No,Ni,Nj = self.No,self.Ni,self.Nj
         N = self.Nn
 
-        L_ = inv(R) @ Ln_ @ R
+        L_ = inv(R.T) @ Ln_ @ inv(R)
         Lo_ = L_[:No,:No]
         
-        C_ = inv(R) @ Cn_ @ R
+        C_ = R @ Cn_ @ R.T
         Co_ = C_[:No,:No]
         Coi_ = C_[:No,No:No+Ni]
         Coj_ = C_[:No,No+Ni:]
@@ -345,7 +345,7 @@ class Circuit:
         return impedance
 
     def linearCombination(self,index):
-        invR = self.R.conj().T
+        invR = inv(self.R)
         combination = invR[index]
         assert len(combination) == self.Nn
         return combination
@@ -722,12 +722,13 @@ class Circuit:
         H = H_LC + H_J(external_fluxes)
         if grad:
             if self.sparse:
-                H = H.to_dense()
-            eigenenergies = hamiltonianEnergy(H)
+                eigenenergies = lobpcg(H.to(float),k=3,largest=False)[0]
+            else:
+                eigenenergies = hamiltonianEnergy(H)
         else:
             if self.sparse:
                 H = self.backend.scipyfy(H)
-                eigenenergies = self.backend.sparse.linalg.eigsh(H,return_eigenvectors=False)
+                eigenenergies = self.backend.sparse.linalg.eigsh(H,return_eigenvectors=False,which='SA')
                 eigenenergies = sort(eigenenergies)
             else:
                 H = H.detach().numpy() 
