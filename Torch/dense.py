@@ -123,7 +123,7 @@ def chargeStates(n,dtype=int):
 
 def fluxStates(N_flux,n_flux=1,dtype=complex):
     flux = linspace(n_flux,-n_flux,N_flux,dtype=dtype)
-    return flux/N_flux
+    return flux#/N_flux
 
 def transformationMatrix(n_charge,N_flux,n_flux=1):
     charge_states = chargeStates(n_charge,complex)
@@ -162,10 +162,34 @@ def basisFf(n):
     F = diag(flux)
     return F
 
+def basisFf(N,n):
+    flux = fluxStates(N,n)/2/pi
+    # range in 0-1 and not 0-2pi
+    F = diag(flux)
+    return F
+
 def basisQf(n):
     F = basisFf(n).to(complex)
     U = transformationMatrix(n,2*n+1,n)
     return U@F@U.conj().T*2*(2*n+1)
+
+def basisFiniteI(n,bound):
+    delta = (bound[1]-bound[0])/(n-1)
+    stencil = [-1 / 60, 3 / 20, -3 / 4, 0.0, 3 / 4, -3 / 20, 1 / 60]
+    I = zeros(n,n)
+    for index,coeff in enumerate(stencil):
+        index -= 3
+        I += diag(tensor([coeff]*(n-numpy.abs(index))),index)
+    return I/delta
+
+def basisFiniteII(n,bound):
+    delta = (bound[1]-bound[0])/(n-1)
+    stencil = [1 / 90, -3 / 20, 3 / 2, -49 / 18, 3 / 2, -3 / 20, 1 / 90]
+    II = zeros(n,n)
+    for index,coeff in enumerate(stencil):
+        index -= 3
+        II += diag(tensor([coeff]*(n-numpy.abs(index))),index)
+    return II/delta/delta    
 
 def chargeDisplacePlus(n):
     """n : charge basis truncation"""
@@ -193,6 +217,11 @@ def displacementFlux(n,a):
     D = basisFf(n)
     D = expm(im*2*pi*a*D)
     return D
+
+def displacementFlux(N,n,a):
+    flux = fluxStates(N,n)/2/pi
+    flux = exp(im*2*pi*a*flux)
+    return diag(flux)
 
 if __name__=='__main__':
     Qo = basisQo(30,tensor(4))
