@@ -67,10 +67,11 @@ def zeroPi(basis,Ej=10.,Ec=50.,El=10.,EcJ=100.,sparse=True,symmetry=False,_L_=(L
         circuit.R = tensor([[1,-1,-1],[-1,1,-1],[-1,-1,1]])/2.
         def ridgeHamiltonianLC(self):
             basis = self.basis
-            Ln_,Cn_ = self.Ln_,self.Cn_
-            R = self.R
-            L_ = inv(R.T) @ Ln_ @ inv(R); L_ = diag(diag(L_))
-            C_ = R @ Cn_ @ R.T; C_ = diag(diag(C_))
+            #Ln_,Cn_ = self.Ln_,self.Cn_
+            #R = self.R
+            #L_ = inv(R.T) @ Ln_ @ inv(R); L_ = diag(diag(L_))
+            #C_ = R @ Cn_ @ R.T; C_ = diag(diag(C_))
+            L_,C_ = self.modeTransformation()
             # Chi mode impedance
             z = sqrt(C_[0,0]/L_[0,0])
             

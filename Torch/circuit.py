@@ -63,9 +63,11 @@ class Circuit:
         self.pairs = pairs
         self.symmetrize(self.pairs)
         self.Cn_,self.Ln_ = self.componentMatrix()
-        self.No,self.Ni,self.Nj = self.modeDistribution()
-        self.R = self.modeTransformation().real
-        self.Lo_,self.C_ = self.transformComponents()
+        # default : Kerman transformation
+        #self.No,self.Ni,self.Nj = self.kermanDistribution()
+        self.R = self.kermanTransform().real
+        self.L_,self.C_ = modeTransformation()
+        #self.Lo_,self.C_ = self.kermanComponents()
 
         self.basis = basis
         # basis : list of basis_size of ith mode
@@ -88,7 +90,8 @@ class Circuit:
                 
         self.symmetrize(self.pairs)
         self.Cn_,self.Ln_ = self.componentMatrix()
-        self.Lo_,self.C_ = self.transformComponents()
+        self.L_,self.C_ = modeTransformation()
+        #self.Lo_,self.C_ = self.transformComponents()
         
     def symmetrize(self,pairs):
         components = self.circuitComposition()
@@ -287,6 +290,10 @@ class Circuit:
             if 0 not in sub:
                 Ni += 1
         return Ni
+    
+    def canonicalBasisSize(self):
+        N = prod([2*size+1 for size in self.basis])
+        return N
 
     def kermanBasisSize(self):
         N = 1
@@ -296,33 +303,25 @@ class Circuit:
         N *= prod([2*size+1 for size in basis['J']])
         return int(N)
 
-    def canonicalBasisSize(self):
-        N = prod([2*size+1 for size in self.basis])
-        return N
-
-    def modeDistribution(self):
+    def kermanDistribution(self):
         Ln_ = self.Ln_
         Ni = self.islandModes()
         No = matrix_rank(Ln_.detach().numpy())
         Nj = self.Nn - Ni - No
         return No,Ni,Nj
 
-    def modeTransformation(self):
+    def kermanTransform(self):
         Ln_ = self.Ln_
         R = diagonalisation(Ln_.detach(),True)
         return R
-
-    def transformComponents(self):
-        Cn_,Ln_ = self.componentMatrix()
-
-        R = self.R
-        No,Ni,Nj = self.No,self.Ni,self.Nj
+    
+    def kermanComponents(self):
+        L_,C_ = self.L_,self.C_
+        No,Ni,Nj = self.kermanDistribution() #self.No,self.Ni,self.Nj
         N = self.Nn
 
-        L_ = inv(R.T) @ Ln_ @ inv(R)
         Lo_ = L_[:No,:No]
         
-        C_ = R @ Cn_ @ R.T
         Co_ = C_[:No,:No]
         Coi_ = C_[:No,No:No+Ni]
         Coj_ = C_[:No,No+Ni:]
@@ -333,6 +332,13 @@ class Circuit:
         C_ = Co_,Coi_,Coj_,Ci_,Cij_,Cj_
 
         return Lo_,C_
+    
+    def modeTransformation(self):
+        Cn_,Ln_ = self.componentMatrix()
+        R = self.R
+        L_ = inv(R.T) @ Ln_ @ inv(R)
+        C_ = R @ Cn_ @ R.T
+        return L_,C_    
 
     def modeImpedance(self):
         Cn_,Ln_,basis = self.Cn_,self.Ln_,self.basis
@@ -352,7 +358,7 @@ class Circuit:
 
     def displacementCombination(self,combination):
         basis = self.basis
-        No,Ni,Nj = self.No,self.Ni,self.Nj
+        No,Ni,Nj = self.kermanDistribution()#self.No,self.Ni,self.Nj
         O = combination[:No]
         I = combination[No:No+Ni]
         J = combination[No+Ni:]
@@ -403,10 +409,12 @@ class Circuit:
             basis : {O:(,,,),I:(,,,),J:(,,,)}
         """
         basis = self.basis
-        Lo_ = self.Lo_
-        Co_,Coi_,Coj_,Ci_,Cij_,Cj_ = self.C_
+        Lo_,C_ = self.kermanComponents()
+
+        #Lo_ = self.Lo_
+        Co_,Coi_,Coj_,Ci_,Cij_,Cj_ = C_
         n_baseO,n_baseI,n_baseJ = self.modeBasisSize(basis)
-        No,Ni,Nj = self.No,self.Ni,self.Nj
+        No,Ni,Nj = self.kermanDistribution() #No,self.Ni,self.Nj
 
         Z = sqrt(diagonal(Co_)/diagonal(Lo_))
         Qo = [self.backend.basisQo(basis_max,Zi) for Zi,basis_max in zip(Z,basis['O'])]
@@ -438,7 +446,7 @@ class Circuit:
             charge[self.nodes_[node]] = dQ
         charge = self.R@charge
         
-        No,Ni,Nj = self.No,self.Ni,self.Nj
+        No,Ni,Nj = self.kermanDistribution() #No,self.Ni,self.Nj
         
         Qo = [self.backend.basisQq(basis_max) for basis_max in basis['O']]
         Qi = [self.backend.basisQq(basis_max) for basis_max in basis['I']]
@@ -449,7 +457,8 @@ class Circuit:
         Ij = [self.backend.identity(2*basis_max+1)*charge[index+No+Ni]*2 for index,basis_max in enumerate(basis['J'])]
         I = Io + Ii + Ij
         
-        Co_,Coi_,Coj_,Ci_,Cij_,Cj_ = self.C_
+        Lo_,C_ = self.kermanComponents()
+        Co_,Coi_,Coj_,Ci_,Cij_,Cj_ = C_
         
         H = self.backend.modeMatrixProduct(Q,Coi_,I,(0,No))
         H += self.backend.modeMatrixProduct(Q,Coj_,I,(0,No+Ni))
