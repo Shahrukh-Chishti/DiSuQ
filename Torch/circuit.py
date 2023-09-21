@@ -66,7 +66,7 @@ class Circuit:
         # default : Kerman transformation
         #self.No,self.Ni,self.Nj = self.kermanDistribution()
         self.R = self.kermanTransform().real
-        self.L_,self.C_ = modeTransformation()
+        self.L_,self.C_ = self.modeTransformation()
         #self.Lo_,self.C_ = self.kermanComponents()
 
         self.basis = basis
@@ -89,8 +89,11 @@ class Circuit:
                 component.initJunc(parameters[component.ID])
                 
         self.symmetrize(self.pairs)
+        # recalculate capacitances and inductances
+        # for 1) nodes-formalism 2) mode-formalism
+        # Transformation Invariant
         self.Cn_,self.Ln_ = self.componentMatrix()
-        self.L_,self.C_ = modeTransformation()
+        self.L_,self.C_ = self.modeTransformation()
         #self.Lo_,self.C_ = self.transformComponents()
         
     def symmetrize(self,pairs):
@@ -334,7 +337,7 @@ class Circuit:
         return Lo_,C_
     
     def modeTransformation(self):
-        Cn_,Ln_ = self.componentMatrix()
+        Cn_,Ln_ = self.Cn_,self.Ln_ #componentMatrix()
         R = self.R
         L_ = inv(R.T) @ Ln_ @ inv(R)
         C_ = R @ Cn_ @ R.T
@@ -409,6 +412,8 @@ class Circuit:
             basis : {O:(,,,),I:(,,,),J:(,,,)}
         """
         basis = self.basis
+        self.Cn_,self.Ln_ = self.componentMatrix()
+        self.L_,self.C_ = self.modeTransformation()
         Lo_,C_ = self.kermanComponents()
 
         #Lo_ = self.Lo_
@@ -457,6 +462,8 @@ class Circuit:
         Ij = [self.backend.identity(2*basis_max+1)*charge[index+No+Ni]*2 for index,basis_max in enumerate(basis['J'])]
         I = Io + Ii + Ij
         
+        self.Cn_,self.Ln_ = self.componentMatrix()
+        self.L_,self.C_ = self.modeTransformation()
         Lo_,C_ = self.kermanComponents()
         Co_,Coi_,Coj_,Ci_,Cij_,Cj_ = C_
         
