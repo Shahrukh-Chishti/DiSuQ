@@ -65,7 +65,7 @@ def zeroPi(basis,Ej=10.,Ec=50.,El=10.,EcJ=100.,sparse=True,symmetry=False,_L_=(L
     circuit = Circuit(circuit,basis,sparse,pairs)
     if ridge :
         circuit.R = tensor([[1,-1,-1],[-1,1,-1],[-1,-1,1]])/2.
-        self.L_,self.C_ = self.modeTransformation()
+        circuit.L_,circuit.C_ = circuit.modeTransformation()
         def ridgeHamiltonianLC(self):
             basis = self.basis
             #Ln_,Cn_ = self.Ln_,self.Cn_

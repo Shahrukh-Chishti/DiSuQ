@@ -1,10 +1,10 @@
 from torch.optim import SGD,RMSprop,Adam,LBFGS,Rprop
 import torch,pandas
-from torch import tensor,argsort,zeros,abs,mean,stack,var,log,isnan,lobpcg
+from torch import tensor,argsort,zeros,abs,mean,stack,var,log,isnan,lobpcg,std
 from torch.autograd import grad
 from torch.linalg import det,inv,eigh as eigsolve, eigvalsh
 from torch.nn.utils import clip_grad_norm_,clip_grad_value_
-from numpy import arange,set_printoptions,meshgrid,linspace,array,sqrt,sort
+from numpy import arange,set_printoptions,meshgrid,linspace,array,sqrt,sort,log10,random,logspace
 from scipy.optimize import minimize
 from time import perf_counter,sleep
 from DiSuQ.Torch.non_attacking_rooks import charPoly
@@ -246,12 +246,15 @@ class OrderingOptimization(Optimization):
             #import pdb;pdb.set_trace()
             #if isnan(loss):
             #import pdb;pdb.set_trace()
-            loss.backward(retain_graph=True)
+            loss.backward(retain_graph=False)
             parameters = dict(zip(self.IDs,self.parameters))
             gradients = []
             for iD in keys:
                 parameter = parameters[iD]
-                if parameter.grad is None: # spectrum degeneracy:torch.eigh destablize
+                if parameter.grad is None: 
+                    # spectrum degeneracy:torch.eigh destablize
+                    # loss detached from computation graph
+                    #import ipdb;ipdb.set_trace()
                     gradients.append(0.0)
                 else:
                     gradients.append(parameter.grad.detach().item())
@@ -288,7 +291,8 @@ class OrderingOptimization(Optimization):
         if len(dLog)>0:
             dLog['time'] = dLog['time'].diff()
         else:
-            import pdb;pdb.set_trace()
+            #import pdb;pdb.set_trace()
+            print('Failure initial')
         dParams = pandas.DataFrame(dParams)
         dCircuit = pandas.DataFrame(dCircuit)
         return dLog,dParams,dCircuit
@@ -403,7 +407,7 @@ def truncNormalParameters(circuit,subspace,N,var=5):
             loc = component.energy().item()
             a,b = component.bounds()
             a = (a - loc)/var ; b = (b - loc)/var
-            domain.append(truncnorm.rvs(a,b,loc,var,size=N))
+            domain.append(truncnorm.rvs(a,b,loc,var,size=N,random_state=random.seed(101)))
     grid = array(domain)
     space = []
     for point in grid.T:
@@ -417,19 +421,25 @@ def uniformParameters(circuit,subspace,N):
     for component in circuit.network:
         if component.ID in subspace:
             iDs.append(component.ID)
-            if component.__class__ == C :
-                bound = component.C0
-            elif component.__class__ == L :
-                bound = component.L0
-            elif component.__class__ == J :
-                bound = component.J0
-            domain.append(linspace(0,bound,N+1,endpoint=False)[1:])
+            a,b = component.bounds()
+            a = log10(a.item()); b = log10(b.item())
+            domain.append(logspace(a,b,N+1,endpoint=False)[1:])
     grid = array(meshgrid(*domain))
     grid = grid.reshape(len(iDs),-1)
     space = []
     for point in grid.T:
         state = circuit.circuitState()
         state.update(dict(zip(iDs,point)))
+        space.append(state)
+    return space
+
+def domainParameters(domain,circuit,subspace):
+    grid = array(meshgrid(*domain))
+    grid = grid.reshape(len(subspace),-1)
+    space = []
+    for point in grid.T:
+        state = circuit.circuitState()
+        state.update(dict(zip(subspace,point)))
         space.append(state)
     return space
 
@@ -461,24 +471,39 @@ def lossTransitionFlatness(Spectrum,flux_profile):
     loss = var(spectrum[:,1]-spectrum[:,0])
     loss += var(spectrum[:,2]-spectrum[:,1])
     return loss,dict()
+        
+# def std(E):
+#     N = len(E)
+#     profile = tensor([0.]*N)
+#     for index,e in enumerate(E):
+#         profile += e
+    
 
-def lossDegeneracyWeighted(delta0,D0):
+def lossDegeneracyWeighted(delta0,D0,N=2):
     def Loss(Spectrum,flux_profile):
-        half = 0#int(len(flux_profile)/2)
-        neighbour = -1
-        e20 = Spectrum[half][0][2]-Spectrum[half][0][0]
-        e10 = Spectrum[half][0][1]-Spectrum[half][0][0]
-        D = log(e20/e10)/log(tensor(10))
-        degen_point = flux_profile[0]['Lx']
-        n10 = Spectrum[neighbour][0][1]-Spectrum[neighbour][0][0]
+        spot = 0
+        E0 = [E[0][0] for E in Spectrum]
+        E1 = [E[0][1] for E in Spectrum]
+        E2 = [E[0][2] for E in Spectrum]
+        
+        E10 = [E[0][1]-E[0][0] for E in Spectrum]
+        E20 = [E[0][2]-E[0][0] for E in Spectrum]
+        
+        Ist = abs(E10[0]-E10[1])
+        #E10 = tensor(E10,requires_grad=True)
+
+        # n10 = Spectrum[neighbour][0][1]-Spectrum[neighbour][0][0]
+        #        degen_point = flux_profile[0]['Lx']
         #delta = Spectrum[neighbour][0][1]-Spectrum[neighbour][0][0]-e10
         #delta = delta/e10
         #delta = delta.abs()
         #sensitivity = grad(e10,degen_point,create_graph=True)[0] # local fluctuations
         #sensitivity = log(sensitivity.abs())
-        delta = log((n10-e10).abs()/e20)/log(tensor(10.))
+        
+        D = log((E20[0])/(E10[0]))/log(tensor(10.))
+        delta = log(Ist/E10[0])/log(tensor(10.))
         loss = delta*delta0 - D*D0
-        return loss,{'delta':delta.detach().item(),'D':D.detach().item(),'E10':e10.detach().item()}
+        return loss,{'delta':delta.detach().item(),'D':D.detach().item(),'E10':E10[0].detach().item()}
     return Loss
 
 def lossDegeneracyTarget(delta0,D0):
