@@ -268,7 +268,6 @@ class OrderingOptimization(Optimization):
                 parameters[slave] = parameters[master]
             self.circuit.initialization(parameters)
             self.parameters,self.IDs = self.circuitParameters(subspace)
-            
             Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
             loss,metrics = loss_function(Spectrum,flux_profile)
             loss = loss.detach().item()
@@ -482,9 +481,6 @@ def lossTransitionFlatness(Spectrum,flux_profile):
 def lossDegeneracyWeighted(delta0,D0,N=2):
     def Loss(Spectrum,flux_profile):
         spot = 0
-        E0 = [E[0][0] for E in Spectrum]
-        E1 = [E[0][1] for E in Spectrum]
-        E2 = [E[0][2] for E in Spectrum]
         
         E10 = [E[0][1]-E[0][0] for E in Spectrum]
         E20 = [E[0][2]-E[0][0] for E in Spectrum]
@@ -503,7 +499,7 @@ def lossDegeneracyWeighted(delta0,D0,N=2):
         D = log((E20[0])/(E10[0]))/log(tensor(10.))
         delta = log(Ist/E10[0])/log(tensor(10.))
         loss = delta*delta0 - D*D0
-        return loss,{'delta':delta.detach().item(),'D':D.detach().item(),'E10':E10[0].detach().item()}
+        return loss,{'delta':delta.detach().item(),'D':D.detach().item(),'E10':E10[0].detach().item(),'E20':E20[0].detach().item()}
     return Loss
 
 def lossDegeneracyTarget(delta0,D0):
@@ -517,7 +513,7 @@ def lossDegeneracyTarget(delta0,D0):
         n10 = Spectrum[neighbour][0][1]-Spectrum[neighbour][0][0]
         delta = log((n10-e10).abs()/e20)
         loss = (delta0+delta)**2 + (D0-D)**2
-        return loss,{'delta':delta.detach().item(),'D':D.detach().item(),'E10':e10.detach().item()}
+        return loss,{'delta':delta.detach().item(),'D':D.detach().item(),'E10':e10.detach().item(),'E20':e20.detach().item()}
     return Loss
 
 # def lossDegeneracy(Spectrum,flux_profile):

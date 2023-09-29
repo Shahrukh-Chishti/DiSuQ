@@ -49,7 +49,7 @@ def zeroPi(basis,Ej=10.,Ec=50.,El=10.,EcJ=100.,sparse=True,symmetry=False,_L_=(L
     circuit = Circuit(circuit,basis,sparse,pairs)
     return circuit
 
-def zeroPi(basis,Ej=10.,Ec=50.,El=10.,EcJ=100.,sparse=True,symmetry=False,_L_=(L_,L0),_C_=(C_,C0),_J_=(J_,J0),_CJ_=(4*C_,4*C0),ridge = False):
+def zeroPi(basis,Ej=10.,Ec=50.,El=10.,EcJ=100.,sparse=True,symmetry=False,_L_=(L_,L0),_C_=(C_,C0),_J_=(J_,J0),_CJ_=(4*C_,4*C0),ridge = False,flux0=numpy.pi*6):
     circuit = [J(0,1,Ej,'Jx',_J_[1],_J_[0]),J(2,3,Ej,'Jy',_J_[1],_J_[0])]
     circuit += [C(0,1,EcJ,'CJx',_CJ_[1],_CJ_[0]),C(2,3,EcJ,'CJy',_CJ_[1],_CJ_[0])]
     circuit += [L(3,0,El,'Lx',True,_L_[1],_L_[0]),L(1,2,El,'Ly',True,_L_[1],_L_[0])]
@@ -61,7 +61,6 @@ def zeroPi(basis,Ej=10.,Ec=50.,El=10.,EcJ=100.,sparse=True,symmetry=False,_L_=(L
         pairs['Jy'] = 'Jx'
         pairs['CJy'] = 'CJx'
     
-    flux0 = numpy.pi*6
     circuit = Circuit(circuit,basis,sparse,pairs)
     if ridge :
         circuit.R = tensor([[1,-1,-1],[-1,1,-1],[-1,-1,1]])/2.

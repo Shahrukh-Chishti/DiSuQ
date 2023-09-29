@@ -19,7 +19,7 @@ def empty(shape):
 def render(fig,title,size,html,export):
     fig.update_layout(font={'size':30})
     fig.update_layout(margin_t=10,margin_r=10)
-    fig.update_layout(legend=dict(yanchor="top",y=0.99,xanchor="right",x=0.99))
+    fig.update_layout(legend=dict(yanchor="top",y=0.99,xanchor="right",x=0.99,bgcolor="rgba(0,0,0,.05)"))
     if size:
         height,width = size
         fig.update_layout(width=width,height=height)
@@ -44,12 +44,12 @@ def plotBox(plot,title=None,x_label=None,y_label=None,size=None,html=False,expor
     
     render(fig,title,size,html,export)        
 
-def plotCombine(plot,title=None,x_label=None,y_label=None,mode='lines',size=None,html=False,export=None):
+def plotCombine(plot,title=None,x_label=None,y_label=None,mode='lines',width=5,size=None,html=False,export=None,legend=True):
     fig = go.Figure()
     for name,(x,y) in plot.items():
-        fig.add_trace(go.Scatter(x=x,y=y,name=name,mode=mode,line={'width':5}))
+        fig.add_trace(go.Scatter(x=x,y=y,name=name,mode=mode,line={'width':width},marker={'size':width}))
     fig.update_layout(xaxis_title=x_label,yaxis_title=y_label)
-    
+    fig.update_layout(showlegend=legend)
     render(fig,title,size,html,export)
     
 def plotScatter(x,plot,title=None,x_label=None,y_label=None,size=None,dot_size=1,html=False,export=None,legend=True):
@@ -100,7 +100,7 @@ def plotHeatmap(z,x,y,title=None,xaxis=None,yaxis=None,size=None,html=False,expo
     
 def plotTrajectory(evo,plot,title=None,x_label=None,y_label=None,size=None,html=False,export=None,legend=False):
     fig = go.Figure()
-    evo = evo/max(evo)*20
+    evo = evo/max(evo)*15
     for name,path in plot.items():
         fig.add_trace(go.Scatter(x=path[:,0],y=path[:,1],name=name,mode='lines+markers',
                                 marker={'size':evo},line={'width':5}))
