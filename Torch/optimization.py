@@ -262,12 +262,12 @@ class OrderingOptimization(Optimization):
 
         logs = []; dParams = [self.parameterState()]; dCircuit = [self.circuitState()]
         def logger(parameters):
-            parameters = dict(zip(keys,parameters))
-            parameters.update(static)
-            for slave,master in self.circuit.pairs.items():
-                parameters[slave] = parameters[master]
-            self.circuit.initialization(parameters)
-            self.parameters,self.IDs = self.circuitParameters(subspace)
+            #parameters = dict(zip(keys,parameters))
+            #parameters.update(static)
+            #for slave,master in self.circuit.pairs.items():
+            #    parameters[slave] = parameters[master]
+            #self.circuit.initialization(parameters)
+            #self.parameters,self.IDs = self.circuitParameters(subspace)
             Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
             loss,metrics = loss_function(Spectrum,flux_profile)
             loss = loss.detach().item()
