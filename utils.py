@@ -60,10 +60,10 @@ def plotScatter(x,plot,title=None,x_label=None,y_label=None,size=None,dot_size=1
     fig.update_layout(showlegend=legend)
     render(fig,title,size,html,export)
 
-def plotCompare(x,plot,title=None,x_label=None,y_label=None,size=None,html=False,export=None,legend=True):
+def plotCompare(x,plot,title=None,x_label=None,y_label=None,width=5,size=None,html=False,export=None,legend=True):
     fig = go.Figure()
     for name,values in plot.items():
-        fig.add_trace(go.Scatter(x=x,y=values,name=name,line={'width':5}))
+        fig.add_trace(go.Scatter(x=x,y=values,name=name,line={'width':width}))
     fig.update_layout(xaxis_title=x_label,yaxis_title=y_label)
     fig.update_layout(showlegend=legend)
     render(fig,title,size,html,export)

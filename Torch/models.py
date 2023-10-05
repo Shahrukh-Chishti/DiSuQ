@@ -1,4 +1,4 @@
-import numpy,sys
+import numpy,sys,scqubits
 from DiSuQ.Torch.circuit import Circuit, hamiltonianEnergy, phase
 from DiSuQ.Torch.components import J,C,L,pi,h
 from DiSuQ.Torch.components import C0,J0,L0,capE,indE,C_,J_,L_
@@ -118,7 +118,21 @@ def zeroPi(basis,Ej=10.,Ec=50.,El=10.,EcJ=100.,sparse=True,symmetry=False,_L_=(L
     
     return circuit
 
-
+def SCzeroPi(basis,flux0,Ej=10.,Ec=50.,El=10.,EcJ=100.):
+    flux_grid = scqubits.Grid1d(-flux0, flux0, basis['Phi'])
+    zero_pi = scqubits.FullZeroPi(grid = flux_grid,
+                           EJ   = Ej,
+                           EL   = El,
+                           ECJ  = EcJ,
+                           EC  = Ec,
+                           ng   = 0, dEJ  = 0.0,
+                             dCJ  = 0.0,
+                             dEL  = 0.0,
+                             dC   = 0.0,
+                           flux = 0.,
+                           ncut = basis['Theta'], zeropi_cutoff = 5,
+                             zeta_cutoff = basis['Chi'])
+    return zero_pi
 
 def prismon(basis,Ej=10.,Ec=50.,El=10.,EcJ=100.,sparse=True,symmetry=False,_L_=(L_,L0),_C_=(C_,C0),_J_=(J_,J0),_CJ_=(4*C_,4*C0)):
     circuit =  [L(0,1,El,'La',True,_L_[1],_L_[0]),C(0,2,Ec,'Ca',_C_[1],_C_[0]),J(1,2,Ej,'Ja',_J_[1],_J_[0]),C(1,2,EcJ,'CJa',_CJ_[1],_CJ_[0])]
