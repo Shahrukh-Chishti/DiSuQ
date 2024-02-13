@@ -738,7 +738,7 @@ class Circuit:
         H = H_LC + H_J(external_fluxes)
         if grad:
             if self.sparse:
-                eigenenergies = lobpcg(H.to(float),k=3,largest=False)[0]
+                eigenenergies = lobpcg(H.to(float),k=4,largest=False)[0]
             else:
                 eigenenergies = hamiltonianEnergy(H)
         else:

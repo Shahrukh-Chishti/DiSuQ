@@ -178,13 +178,14 @@ class OrderingOptimization(Optimization):
     def spectrumOrdered(self,external_flux):
         H = self.circuitHamiltonian(external_flux)
         if H.is_sparse:
-            spectrum = lobpcg(H.to(float),k=3,largest=False)[0]
+            spectrum = lobpcg(H.to(float),k=4,largest=False)[0]; states = None
         else:
-            spectrum = eigvalsh(H)
+            #spectrum = eigvalsh(H); states = None
+            spectrum,states = eigsolve(H)
         
         #spectrum = spectrum.real
         #order = argsort(spectrum)#.clone().detach() # break point : retain graph
-        return spectrum,None
+        return spectrum,states
 
     def orderTransition(self,spectrum,order,levels=[0,1,2]):
         sorted = argsort(spectrum)
