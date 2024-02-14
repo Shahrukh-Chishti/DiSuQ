@@ -175,8 +175,10 @@ class OrderingOptimization(Optimization):
         order = argsort(spectrum)#.clone().detach() # break point : retain graph
         return spectrum[order],state[order]
 
-    def spectrumOrdered(self,external_flux):
+    def spectrumOrdered(self,external_flux,device=None):
         H = self.circuitHamiltonian(external_flux)
+        if device is not None:
+            H = H.to(device)
         if H.is_sparse:
             spectrum = lobpcg(H.to(float),k=4,largest=False)[0]; states = None
         else:
@@ -362,7 +364,7 @@ class OrderingOptimization(Optimization):
         dCircuit = pandas.DataFrame(dCircuit)
         return dLog,dParams,dCircuit
 
-    def optimization(self,loss_function,flux_profile,iterations=100,lr=1e-5):
+    def optimization(self,loss_function,flux_profile,iterations=100,lr=1e-5,device=None):
         # flux profile :: list of flux points dict{}
         # loss_function : list of Hamiltonian on all flux points
         logs = []; dParams = []; dCircuit = []
@@ -371,7 +373,7 @@ class OrderingOptimization(Optimization):
         dCircuit.append(self.circuitState())
         start = perf_counter()
         for epoch in range(iterations):            
-            Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
+            Spectrum = [self.spectrumOrdered(flux,device) for flux in flux_profile]
             loss,metrics = loss_function(Spectrum,flux_profile)
             metrics['loss'] = loss.detach().item()
             optimizer.zero_grad()
@@ -382,7 +384,7 @@ class OrderingOptimization(Optimization):
             dCircuit.append(self.circuitState())
             logs.append(metrics)
             if breakPoint(logs[-15:]):
-                print('Optimization Break Point xxxxxx')
+                print('Optimization Break Point :',epoch)
                 break
 
         dLog = pandas.DataFrame(logs)

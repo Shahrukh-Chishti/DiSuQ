@@ -25,6 +25,7 @@ temp-plot.html
 
 # Data File
 #*.pickle
+*.csv
 
 # Swap files
 *.swp
