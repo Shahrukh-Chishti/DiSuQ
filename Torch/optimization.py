@@ -448,6 +448,7 @@ def domainParameters(domain,circuit,subspace):
 def initializationSequential(parameters,optimizer,lossFunction,flux_profile,iterations=100,lr=.005):
     Search = []
     for index,parameter in enumerate(parameters):
+        print(index,'--------------------')
         optimizer.circuit.initialization(parameter)
         optimizer.parameters,_ = optimizer.circuitParameters()
         Search.append(optimizer.optimization(lossFunction,flux_profile,iterations=iterations,lr=lr))

@@ -64,7 +64,7 @@ class Circuit:
         self.symmetrize(self.pairs)
         self.Cn_,self.Ln_ = self.componentMatrix()
         # default : Kerman transformation
-        #self.No,self.Ni,self.Nj = self.kermanDistribution()
+        self.No,self.Ni,self.Nj = self.kermanDistribution()
         self.R = self.kermanTransform().real
         self.L_,self.C_ = self.modeTransformation()
         #self.Lo_,self.C_ = self.kermanComponents()
@@ -94,6 +94,7 @@ class Circuit:
         # Transformation Invariant
         self.Cn_,self.Ln_ = self.componentMatrix()
         self.L_,self.C_ = self.modeTransformation()
+        self.No,self.Ni,self.Nj = self.kermanDistribution()
         #self.Lo_,self.C_ = self.transformComponents()
         
     def symmetrize(self,pairs):
@@ -320,7 +321,7 @@ class Circuit:
     
     def kermanComponents(self):
         L_,C_ = self.L_,self.C_
-        No,Ni,Nj = self.kermanDistribution() #self.No,self.Ni,self.Nj
+        No,Ni,Nj = self.No,self.Ni,self.Nj #self.kermanDistribution()
         N = self.Nn
 
         Lo_ = L_[:No,:No]
@@ -361,7 +362,7 @@ class Circuit:
 
     def displacementCombination(self,combination):
         basis = self.basis
-        No,Ni,Nj = self.kermanDistribution()#self.No,self.Ni,self.Nj
+        No,Ni,Nj = self.No,self.Ni,self.Nj # self.kermanDistribution()
         O = combination[:No]
         I = combination[No:No+Ni]
         J = combination[No+Ni:]
@@ -435,7 +436,7 @@ class Circuit:
         F = Fo + Fi + Fj
 
         H += self.backend.modeMatrixProduct(F,Lo_,F,(0,0))/2
-
+        
         H += self.backend.modeMatrixProduct(Q,Coi_,Q,(0,No))
         H += self.backend.modeMatrixProduct(Q,Coj_,Q,(0,No+Ni))
         H += self.backend.modeMatrixProduct(Q,Cij_,Q,(No,No+Ni))
