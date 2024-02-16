@@ -8,6 +8,7 @@ from pyvis import network as pvnet
 import networkx as nx
 from networkx.drawing.nx_pydot import write_dot
 from numpy import full,nan,zeros,arange
+from sklearn.decomposition import PCA
 
 def empty(shape):
     E = zeros(shape)
@@ -123,6 +124,20 @@ def plotOptimization(z,x,y,paths,title=None,xaxis=None,yaxis=None,size=None,html
     render(fig,title,size,html,export)
     
 # graph plots
+
+def viewPCA(X,index,size=(8,6),title=None,x=None,y=None):
+    pca = PCA(n_components=2)
+    X_pca = pca.fit_transform(X)
+
+    # Visualize in 2D
+    plt.figure(figsize=size)
+    plt.scatter(X_pca[:, 0], X_pca[:, 1], c=index, cmap='viridis')
+    plt.xlabel(x)
+    plt.ylabel(y)
+    plt.title(title)
+    plt.colorbar(label='index')
+    plt.show()
+    
     
 def view_pydot(G):
     #import ipdb; ipdb.set_trace()
