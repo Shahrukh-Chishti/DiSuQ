@@ -52,6 +52,7 @@ class Circuit:
     """
 
     def __init__(self,network,basis,sparse=True,pairs=dict()):
+        # circuit network
         self.network = network
         self.G = self.parseCircuit()
         self.spanning_tree = self.spanningTree()
@@ -62,12 +63,8 @@ class Circuit:
         self.Nb = len(self.edges_inductive)
         self.pairs = pairs
         self.symmetrize(self.pairs)
+        # circuit components
         self.Cn_,self.Ln_ = self.componentMatrix()
-        # default : Kerman transformation
-        self.No,self.Ni,self.Nj = self.kermanDistribution()
-        self.R = self.kermanTransform().real
-        self.L_,self.C_ = self.modeTransformation()
-        #self.Lo_,self.C_ = self.kermanComponents()
 
         self.basis = basis
         # basis : list of basis_size of ith mode
@@ -77,7 +74,7 @@ class Circuit:
             self.backend = Sparse
         else:
             self.backend = Dense
-            
+
     def initialization(self,parameters):
         # parameters : GHz unit
         for component in self.network:
@@ -87,7 +84,6 @@ class Circuit:
                 component.initInd(parameters[component.ID])
             elif component.__class__ == J :
                 component.initJunc(parameters[component.ID])
-                
         self.symmetrize(self.pairs)
         # recalculate capacitances and inductances
         # for 1) nodes-formalism 2) mode-formalism
@@ -278,13 +274,6 @@ class Circuit:
 
         return Rbn
 
-    def modeBasisSize(self,basis):
-        n_baseO = prod(array(basis['O']))
-        n_baseI = prod(array(basis['I']))
-        n_baseJ = prod(array(basis['J']))
-
-        return n_baseO,n_baseI,n_baseJ
-
     def islandModes(self):
         islands = self.graphGL(elements=[C])
         islands = networkx.connected_components(islands)
@@ -294,6 +283,21 @@ class Circuit:
             if 0 not in sub:
                 Ni += 1
         return Ni
+
+class Kerman(Circuit):
+    def __init__(self,network,basis,sparse=True,pairs=dict()):
+        super().__init__(network,basis,sparse,pairs,device)
+        self.No,self.Ni,self.Nj = self.kermanDistribution()
+        self.R = self.kermanTransform().real
+        self.L_,self.C_ = self.modeTransformation()
+        #self.Lo_,self.C_ = self.kermanComponents()
+
+    def modeBasisSize(self,basis):
+        n_baseO = prod(array(basis['O']))
+        n_baseI = prod(array(basis['I']))
+        n_baseJ = prod(array(basis['J']))
+
+        return n_baseO,n_baseI,n_baseJ
     
     def canonicalBasisSize(self):
         N = prod([2*size+1 for size in self.basis])
@@ -420,9 +424,14 @@ class Circuit:
         #Lo_ = self.Lo_
         Co_,Coi_,Coj_,Ci_,Cij_,Cj_ = C_
         n_baseO,n_baseI,n_baseJ = self.modeBasisSize(basis)
-        No,Ni,Nj = self.kermanDistribution() #No,self.Ni,self.Nj
+        No,Ni,Nj = self.No,self.Ni,self.Nj
 
         Z = sqrt(diagonal(Co_)/diagonal(Lo_))
+        # editing Oscillator basis
+        for index,Zi in enumerate(Z):
+            Qo[index] *= sqrt(1/Zi)
+            Fo[index] *= sqrt(1/Zi)
+
         Qo = [self.backend.basisQo(basis_max,Zi) for Zi,basis_max in zip(Z,basis['O'])]
         Qi = [self.backend.basisQq(basis_max) for basis_max in basis['I']]
         Qj = [self.backend.basisQq(basis_max) for basis_max in basis['J']]
