@@ -40,6 +40,8 @@ def wavefunction(H,level=[0]):
     states = vec.T[indices[level]]
     return states
 
+# operator construction
+
 class Circuit:
     """
         * no external fluxes must be in parallel : redundant
@@ -51,7 +53,8 @@ class Circuit:
         * i,j : indices of indexed graph : mode correspondence
     """
 
-    def __init__(self,network,basis,sparse=True,pairs=dict()):
+    def __init__(self,network,basis,sparse=True,pairs=dict(),rep='K',device=None):
+        # circuit network
         self.network = network
         self.G = self.parseCircuit()
         self.spanning_tree = self.spanningTree()
@@ -62,6 +65,7 @@ class Circuit:
         self.Nb = len(self.edges_inductive)
         self.pairs = pairs
         self.symmetrize(self.pairs)
+        # components
         self.Cn_,self.Ln_ = self.componentMatrix()
         # default : Kerman transformation
         self.No,self.Ni,self.Nj = self.kermanDistribution()
@@ -77,7 +81,7 @@ class Circuit:
             self.backend = Sparse
         else:
             self.backend = Dense
-            
+
     def initialization(self,parameters):
         # parameters : GHz unit
         for component in self.network:
@@ -445,7 +449,7 @@ class Circuit:
         H += self.backend.modeMatrixProduct(Q,Cj_,Q,(No+Ni,No+Ni))/2
 
         return H
-    
+
     def kermanChargeOffset(self,charge_offset=dict()):
         charge = zeros(self.Nn)
         for node,dQ in charge_offset.items():
@@ -572,7 +576,6 @@ class Circuit:
             elif base == 'f':
                 Dplus.append(self.backend.displacementFlux(n,1))
                 Dminus.append(self.backend.displacementFlux(n,-1))
-                
         assert len(Dplus) == len(basis)
         N = prod([len(D) for D in Dplus])
         def Hj(external_fluxes=dict()):
@@ -596,7 +599,6 @@ class Circuit:
 
             return H/2
         return Hj
-        
 
     def fluxInducerEnergy(self):
         basis = self.basis
