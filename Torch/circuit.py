@@ -124,6 +124,19 @@ def fluxScape(self,flux_points,flux_manifold):
     EII = tensor(EII).detach().numpy()
     return EI,EII
 
+def impedanceUpdateQ(Q,Z):
+    n = len(Z)
+    assert len(Q) >= n
+    Qo = [Q[i]*sqrt(1/z) for i,z in enumerate(Z)]
+    return Qo+Q[n:]
+
+def impedanceUpdateF(F,Z):
+    n = len(Z)
+    assert len(F) >= n
+    Fo = [F[i]*sqrt(z) for i,z in enumerate(Z)]
+    return Fo+F[n:]
+
+
 class Circuit:
     """
         * no external fluxes must be in parallel : redundant
@@ -375,19 +388,17 @@ class Kerman(Circuit):
         self.R = self.kermanTransform().real
         self.L_,self.C_ = self.modeTransformation()
         #self.Lo_,self.C_ = self.kermanComponents()
+        self.Q,self.F = operatorInitialization()
 
-    def modeBasisSize(self,basis):
-        n_baseO = prod(array(basis['O']))
-        n_baseI = prod(array(basis['I']))
-        n_baseJ = prod(array(basis['J']))
-        return n_baseO,n_baseI,n_baseJ
-
-    def kermanBasisSize(self):
-        N = 1
+    def basisSize(self,modes=False):
+        N = dict()
         basis = self.basis
-        N *= prod([size for size in basis['O']])
-        N *= prod([2*size+1 for size in basis['I']])
-        N *= prod([2*size+1 for size in basis['J']])
+        N['O'] = [size for size in basis['O']]
+        N['I'] = [2*size+1 for size in basis['I']]
+        N['J'] = [2*size+1 for size in basis['J']]
+        if modes:
+            return N
+        N = prod(N['O'])*prod(N['I'])*prod(N['J'])
         return int(N)
 
     def kermanDistribution(self):
@@ -438,6 +449,21 @@ class Kerman(Circuit):
         assert len(combination) == self.Nn
         return combination
 
+    def operatorInitialization(self):
+        basis = self.basis
+
+        Qo = [self.backend.basisQo(basis_max,1.) for basis_max in basis['O']]
+        Qi = [self.backend.basisQq(basis_max) for basis_max in basis['I']]
+        Qj = [self.backend.basisQq(basis_max) for basis_max in basis['J']]
+        Q = Qo + Qi + Qj
+
+        Fo = [self.backend.basisFo(basis_max,1.) for basis_max in basis['O']]
+        Fi = [self.backend.basisFq(basis_max) for basis_max in basis['I']]
+        Fj = [self.backend.basisFq(basis_max) for basis_max in basis['J']]
+        F = Fo + Fi + Fj
+
+        return Q,F
+
     def displacementCombination(self,combination):
         basis = self.basis
         No,Ni,Nj = self.No,self.Ni,self.Nj # self.kermanDistribution()
@@ -454,16 +480,16 @@ class Kerman(Circuit):
         DI_minus = [self.backend.displacementCharge(basis_max,-i) for i,basis_max in zip(I,basis['I'])]
         DJ_plus = [self.backend.displacementCharge(basis_max,j) for j,basis_max in zip(J,basis['J'])]
         DJ_minus = [self.backend.displacementCharge(basis_max,-j) for j,basis_max in zip(J,basis['J'])]
-        
+
         Dplus = DO_plus+DI_plus+DJ_plus
         Dminus = DO_minus+DI_minus+DJ_minus
         assert len(combination)==len(Dplus)
         assert len(combination)==len(Dminus)
         return Dplus,Dminus
 
-    def kermanHamiltonianJosephson(self,external_fluxes=dict()):
+    def hamiltonianJosephson(self,external_fluxes=dict()):
         edges,Ej = self.josephsonComponents()
-        N = self.kermanBasisSize()
+        N = self.basisSize()
         H = self.backend.null(N)
         for (u,v,key),E in zip(edges,Ej):
             i,j = self.nodes_[u],self.nodes_[v]
@@ -486,40 +512,28 @@ class Kerman(Circuit):
 
         return H/2
 
-    def kermanHamiltonianLC(self):
+    def hamiltonianLC(self):
         """
             basis : {O:(,,,),I:(,,,),J:(,,,)}
         """
-        basis = self.basis
         self.Cn_,self.Ln_ = self.componentMatrix()
         self.L_,self.C_ = self.modeTransformation()
         Lo_,C_ = self.kermanComponents()
 
         #Lo_ = self.Lo_
         Co_,Coi_,Coj_,Ci_,Cij_,Cj_ = C_
-        n_baseO,n_baseI,n_baseJ = self.modeBasisSize(basis)
         No,Ni,Nj = self.No,self.Ni,self.Nj
 
+        Q,F = self.Q,self.F
+        # impedance update - Oscillator mode
         Z = sqrt(diagonal(Co_)/diagonal(Lo_))
-        # editing Oscillator basis
-        for index,Zi in enumerate(Z):
-            Qo[index] *= sqrt(1/Zi)
-            Fo[index] *= sqrt(1/Zi)
-
-        Qo = [self.backend.basisQo(basis_max,Zi) for Zi,basis_max in zip(Z,basis['O'])]
-        Qi = [self.backend.basisQq(basis_max) for basis_max in basis['I']]
-        Qj = [self.backend.basisQq(basis_max) for basis_max in basis['J']]
-        Q = Qo + Qi + Qj
+        Q = impedanceUpdateQ(Q,Z)
+        F = impedanceUpdateF(F,Z)
 
         H = self.backend.modeMatrixProduct(Q,Co_,Q,(0,0))/2
 
-        Fo = [self.backend.basisFo(basis_max,Zi) for Zi,basis_max in zip(Z,basis['O'])]
-        Fi = [self.backend.basisFq(basis_max) for basis_max in basis['I']]
-        Fj = [self.backend.basisFq(basis_max) for basis_max in basis['J']]
-        F = Fo + Fi + Fj
-
         H += self.backend.modeMatrixProduct(F,Lo_,F,(0,0))/2
-        
+
         H += self.backend.modeMatrixProduct(Q,Coi_,Q,(0,No))
         H += self.backend.modeMatrixProduct(Q,Coj_,Q,(0,No+Ni))
         H += self.backend.modeMatrixProduct(Q,Cij_,Q,(No,No+Ni))
@@ -672,10 +686,21 @@ class Flux(Circuit):
 class Charge(Circuit):
     def __init__(self,network,basis,sparse=True,pairs=dict()):
         super().__init__(network,basis,sparse,pairs,device)
+        self.Q,self.F,self.Dplus,self.Dminus = operatorInitialization()
 
-    def canonicalBasisSize(self):
-        N = prod([2*size+1 for size in self.basis])
-        return N
+    def basisSize(self,modes=False):
+        N = [2*size+1 for size in self.basis]
+        if modes:
+            return N
+        return prod(N)
+
+    def operatorInitialization(self):
+        basis = self.basis
+        Q = [self.backend.basisQq(basis_max) for basis_max in basis]
+        F = [self.backend.basisFq(basis_max) for basis_max in basis]
+        Dplus = [self.backend.chargeDisplacePlus(basis_max) for basis_max in basis]
+        Dminus = [self.backend.chargeDisplaceMinus(basis_max) for basis_max in basis]
+        return Q,F,Dplus,Dminus
 
     def potentialCharge(self,external_fluxes=dict()):
         Ln_ = self.Ln_
@@ -691,26 +716,23 @@ class Charge(Circuit):
         impedance = [sqrt(Cn_[i,i]/Ln_[i,i]) for i in range(len(basis))]
         return impedance
 
-    def chargeHamiltonianLC(self):
+    def hamiltonianLC(self):
         """
             basis : [basis_size] charge
         """
         Cn_,Ln_ = self.Cn_,self.Ln_
-        basis = self.basis
-        Q = [self.backend.basisQq(basis_max) for basis_max in basis]
-        F = [self.backend.basisFq(basis_max) for basis_max in basis]
+        Q = self.Q
+        F = self.F
         H = self.backend.modeMatrixProduct(Q,Cn_,Q)
         H += self.backend.modeMatrixProduct(F,Ln_,F)
 
         return H/2
 
-    def josephsonCharge(self,external_fluxes=dict()):
-        basis = self.basis
-        Dplus = [self.backend.chargeDisplacePlus(basis_max) for basis_max in basis]
-        Dminus = [self.backend.chargeDisplaceMinus(basis_max) for basis_max in basis]
+    def hamiltonianJosephson(self,external_fluxes=dict()):
         edges,Ej = self.josephsonComponents()
-        N = self.canonicalBasisSize()
+        N = self.basisSize()
         H = self.backend.null(N)
+        Dplus,Dminus = self.Dplus,self.Dminus
         for (u,v,key),E in zip(edges,Ej):
             i,j = self.nodes_[u],self.nodes_[v]
             flux = self.loopFlux(u,v,key,external_fluxes)
@@ -723,7 +745,6 @@ class Charge(Circuit):
                 Jplus = self.backend.crossBasisProduct(Dplus,Dminus,i,j)
                 Jminus = self.backend.crossBasisProduct(Dplus,Dminus,j,i)
                 #assert (Jminus == Jplus.conj().T).all()
-                
             #print(E,flux)
             H -= E*(Jplus*phase(flux) + Jminus*phase(-flux))
 
