@@ -440,7 +440,9 @@ class Kerman(Circuit):
 
     def oscillatorImpedance(self):
         Cn_,Ln_,basis = self.Cn_,self.Ln_,self.basis
-        impedance = [sqrt(Cn_[i,i]/Ln_[i,i]) for i in range(len(basis['O']))]
+        self.L_,self.C_ = self.modeTransformation()
+        Lo_,C_ = self.kermanComponents()
+        impedance = [sqrt(C_[0][i,i]/Lo_[i,i]) for i in range(len(basis['O']))]
         return impedance
 
     def linearCombination(self,index):
