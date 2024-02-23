@@ -388,7 +388,7 @@ class Kerman(Circuit):
         self.R = self.kermanTransform().real
         self.L_,self.C_ = self.modeTransformation()
         #self.Lo_,self.C_ = self.kermanComponents()
-        self.Q,self.F = operatorInitialization()
+        self.Q,self.F,self.DI_plus,self.DI_minus,self.DJ_plus,self.DJ_minus = operatorInitialization()
 
     def basisSize(self,modes=False):
         N = dict()
@@ -445,14 +445,21 @@ class Kerman(Circuit):
         impedance = [sqrt(C_[0][i,i]/Lo_[i,i]) for i in range(len(basis['O']))]
         return impedance
 
-    def linearCombination(self,index):
+    def linearCombination(self,edge):
         invR = inv(self.R)
-        combination = invR[index]
-        assert len(combination) == self.Nn
+        i,j = edge
+        if i<0 or j<0 :
+            # grounded josephson
+            i = max(i,j)
+            combination = invR(i)
+            self.linearCombination(i)
+        else:
+            combination = invR(i) - invR(j)
         return combination
 
     def operatorInitialization(self):
         basis = self.basis
+        No,Ni,Nj = self.No,self.Ni,self.Nj
 
         Qo = [self.backend.basisQo(basis_max,1.) for basis_max in basis['O']]
         Qi = [self.backend.basisQq(basis_max) for basis_max in basis['I']]
@@ -464,11 +471,26 @@ class Kerman(Circuit):
         Fj = [self.backend.basisFq(basis_max) for basis_max in basis['J']]
         F = Fo + Fi + Fj
 
-        return Q,F
+        DI_plus,DI_minus = dict(),dict()
+        DJ_plus,DJ_minus = dict(),dict()
+        edges,Ej = self.josephsonComponents()
+        for (u,v,key),E in zip(edges,Ej):
+            i,j = self.nodes_[u],self.nodes_[v]
+            edge = u,v
+            combination = self.linearCombination((i,j))
+            I = combination[No:No+Ni]
+            J = combination[No+Ni:]
 
-    def displacementCombination(self,combination):
+            DI_plus[edge] = [self.backend.displacementCharge(basis_max,i) for i,basis_max in zip(I,basis['I'])]
+            DI_minus[edge] = [self.backend.displacementCharge(basis_max,-i) for i,basis_max in zip(I,basis['I'])]
+            DJ_plus[edge] = [self.backend.displacementCharge(basis_max,j) for j,basis_max in zip(J,basis['J'])]
+            DJ_minus[edge] = [self.backend.displacementCharge(basis_max,-j) for j,basis_max in zip(J,basis['J'])]
+
+        return Q,F,DI_plus,DI_minus,DJ_plus,DJ_minus
+
+    def displacementCombination(self,combination,edge):
         basis = self.basis
-        No,Ni,Nj = self.No,self.Ni,self.Nj # self.kermanDistribution()
+        No,Ni,Nj = self.No,self.Ni,self.Nj
         O = combination[:No]
         I = combination[No:No+Ni]
         J = combination[No+Ni:]
@@ -478,10 +500,9 @@ class Kerman(Circuit):
         # re-calculation with parameter iteration
         DO_plus = [self.backend.displacementOscillator(basis_max,z,o) for o,z,basis_max in zip(O,Z,basis['O'])]
         DO_minus = [self.backend.displacementOscillator(basis_max,z,-o) for o,z,basis_max in zip(O,Z,basis['O'])]
-        DI_plus = [self.backend.displacementCharge(basis_max,i) for i,basis_max in zip(I,basis['I'])]
-        DI_minus = [self.backend.displacementCharge(basis_max,-i) for i,basis_max in zip(I,basis['I'])]
-        DJ_plus = [self.backend.displacementCharge(basis_max,j) for j,basis_max in zip(J,basis['J'])]
-        DJ_minus = [self.backend.displacementCharge(basis_max,-j) for j,basis_max in zip(J,basis['J'])]
+
+        DI_plus,DI_minus = self.DI_plus[edge],self.DI_minus[edge]
+        DJ_plus,DJ_minus = self.DJ_plus[edge],self.DJ_minus[edge]
 
         Dplus = DO_plus+DI_plus+DJ_plus
         Dminus = DO_minus+DI_minus+DJ_minus
@@ -496,20 +517,11 @@ class Kerman(Circuit):
         for (u,v,key),E in zip(edges,Ej):
             i,j = self.nodes_[u],self.nodes_[v]
             flux = self.loopFlux(u,v,key,external_fluxes)
-            if i<0 or j<0 :
-                # grounded josephson
-                i = max(i,j)
-                combination = self.linearCombination(i)
-                Dplus,Dminus = self.displacementCombination(combination)
+            combination = self.linearCombination((i,j))
+            Dplus,Dminus = self.displacementCombination(combination,(u,v))
 
-                Jplus = self.backend.basisProduct(Dplus)
-                Jminus = self.backend.basisProduct(Dminus)
-            else:
-                combination = self.linearCombination(i) - self.linearCombination(j)
-                Dplus,Dminus = self.displacementCombination(combination)
-
-                Jplus = self.backend.basisProduct(Dplus)
-                Jminus = self.backend.basisProduct(Dminus)
+            Jplus = self.backend.basisProduct(Dplus)
+            Jminus = self.backend.basisProduct(Dminus)
             H -= E*(Jplus*phase(flux) + Jminus*phase(-flux))
 
         return H/2
