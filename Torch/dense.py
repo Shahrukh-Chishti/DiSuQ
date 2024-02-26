@@ -41,6 +41,9 @@ def basisProduct(O,indices=None):
             B = kron(B,identity(len(O[i])))
     return B
 
+def modeProduct(A,i,B,j):
+    return mul(basisProduct(A,[i]),basisProduct(B,[j]))
+
 def modeMatrixProduct(A,M,B,mode=(0,0)):
     """
         M : mode operator, implementing mode interactions
@@ -56,7 +59,7 @@ def modeMatrixProduct(A,M,B,mode=(0,0)):
     for i in range(nA):
         for j in range(nB):
             if not M[i,j]==0:
-                H += M[i,j]*mul(basisProduct(A,[i+a]),basisProduct(B,[j+b]))
+                H += M[i,j]*modeProduct(A,i+a,B,j+b)
 
     return H
 

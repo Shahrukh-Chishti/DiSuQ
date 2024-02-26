@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 import DiSuQ.Torch.dense as Dense
 import DiSuQ.Torch.sparse as Sparse
-from torch import exp,det,tensor,arange,zeros,zeros_like,sqrt,diagonal,argsort,lobpcg,set_num_threads,full as full_torch
+from torch import exp,det,tensor,arange,ones,zeros,zeros_like,sqrt,diagonal,argsort,lobpcg,set_num_threads,full as full_torch
 from torch.linalg import eigvalsh as eigsolve,inv,eigh
 from DiSuQ.Torch.components import diagonalisation,null,J,L,C,im,pi,complex
 from time import perf_counter
@@ -124,18 +124,25 @@ def fluxScape(self,flux_points,flux_manifold):
     EII = tensor(EII).detach().numpy()
     return EI,EII
 
-def impedanceUpdateQ(Q,Z):
+def impedanceUpdateQ(Co_,Z):
     n = len(Z)
     assert len(Q) >= n
     Qo = [Q[i]*sqrt(1/z) for i,z in enumerate(Z)]
     return Qo+Q[n:]
 
-def impedanceUpdateF(F,Z):
+def impedanceUpdateF(Fo_,Z):
     n = len(Z)
     assert len(F) >= n
     Fo = [F[i]*sqrt(z) for i,z in enumerate(Z)]
     return Fo+F[n:]
 
+def coeffProduct(H,Coeff,M):
+    nA,nB = Coeff.shape
+    for i in range(nA):
+        for j in range(nB):
+            if not M[i,j] == 0:
+                H += Coeff[i,j]*M[(i,j)]
+    return H
 
 class Circuit:
     """
@@ -389,6 +396,7 @@ class Kerman(Circuit):
         self.L_,self.C_ = self.modeTransformation()
         #self.Lo_,self.C_ = self.kermanComponents()
         self.Q,self.F,self.DI_plus,self.DI_minus,self.DJ_plus,self.DJ_minus = operatorInitialization()
+        self.Qoo,self.Foo,self.Qoi,self.Qoj,self.Qij,self.Qij,self.Qii,self.Qjj = Qoo,Foo,Qoi,Qoj,Qij,Qij,Qii,Qjj
 
     def basisSize(self,modes=False):
         N = dict()
@@ -452,7 +460,6 @@ class Kerman(Circuit):
             # grounded josephson
             i = max(i,j)
             combination = invR(i)
-            self.linearCombination(i)
         else:
             combination = invR(i) - invR(j)
         return combination
@@ -487,6 +494,35 @@ class Kerman(Circuit):
             DJ_minus[edge] = [self.backend.displacementCharge(basis_max,-j) for j,basis_max in zip(J,basis['J'])]
 
         return Q,F,DI_plus,DI_minus,DJ_plus,DJ_minus
+
+    def kroneckerInitialization(self):
+        # persistence/initialization of mode matrix product
+        No,Ni,Nj = self.No,self.Ni,self.Nj
+        Q,F = self.Q,self.F
+        Qoo,Foo = dict(),dict()
+        Qoi,Qoj,Qij = dict(),dict(),dict()
+        Qii,Qjj = dict(),dict()
+        for i in range(No):
+            for j in range(No):
+                Qoo[(i,j)] = self.backend.modeProduct(Q,i,Q,j)
+                Foo[(i,j)] = self.backend.modeProduct(F,i,F,j)
+            for j in range(Ni):
+                Qoi[(i,j)] = self.backend.modeProduct(Q,i,Q,j+No)
+            for j in range(Nj):
+                Qoj[(i,j)] = self.backend.modeProduct(Q,i,Q,j+No+Ni)
+
+        for i in range(Ni):
+            for j in range(Ni):
+                Qii[(i,j)] = self.backend.modeProduct(Q,i+No,Q,j+No)
+            for j in range(Nj):
+                Qii[(i,j)] = self.backend.modeProduct(Q,i+No,Q,j+No+Ni)
+
+        for i in range(Nj):
+            for j in range(Nj):
+                Qjj[(i,j)] = self.backend.modeProduct(Q,i+No+Ni,Q,j+No+Ni)
+
+        return Qoo,Foo,Qoi,Qoj,Qij,Qij,Qii,Qjj
+
 
     def displacementCombination(self,combination,edge):
         basis = self.basis
@@ -538,22 +574,25 @@ class Kerman(Circuit):
         Co_,Coi_,Coj_,Ci_,Cij_,Cj_ = C_
         No,Ni,Nj = self.No,self.Ni,self.Nj
 
-        Q,F = self.Q,self.F
-        # impedance update - Oscillator mode
+        # impedance update to Cap/Ind matrix - Oscillator mode
         Z = sqrt(diagonal(Co_)/diagonal(Lo_))
-        Q = impedanceUpdateQ(Q,Z)
-        F = impedanceUpdateF(F,Z)
+        Co_ = impedanceUpdateQ(Co_,Z)
+        Fo_ = impedanceUpdateF(Fo_,Z)
 
-        H = self.backend.modeMatrixProduct(Q,Co_,Q,(0,0))/2
+        Q,F = self.Q,self.F
 
-        H += self.backend.modeMatrixProduct(F,Lo_,F,(0,0))/2
+        H = self.backend.null(self.basisSize())
 
-        H += self.backend.modeMatrixProduct(Q,Coi_,Q,(0,No))
-        H += self.backend.modeMatrixProduct(Q,Coj_,Q,(0,No+Ni))
-        H += self.backend.modeMatrixProduct(Q,Cij_,Q,(No,No+Ni))
+        H = coeffProduct(H,Co_,self.Qoo)/2
 
-        H += self.backend.modeMatrixProduct(Q,Ci_,Q,(No,No))/2
-        H += self.backend.modeMatrixProduct(Q,Cj_,Q,(No+Ni,No+Ni))/2
+        H = coeffProduct(H,Lo_,self.Foo)/2
+
+        H = coeffProduct(H,Coi_,self.Qoi)
+        H = coeffProduct(H,Coj_,self.Qoj)
+        H = coeffProduct(H,Cij_,self.Qij)
+
+        H = coeffProduct(H,Ci_,self.Qii)/2
+        H = coeffProduct(H,Cj_,self.Qjj)/2
 
         return H
     
