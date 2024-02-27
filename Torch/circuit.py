@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 import DiSuQ.Torch.dense as Dense
 import DiSuQ.Torch.sparse as Sparse
-from torch import exp,det,tensor,arange,ones,zeros,zeros_like,sqrt,diagonal,argsort,lobpcg,set_num_threads,full as full_torch
+from torch import exp,det,tensor,tile,arange,ones,zeros,zeros_like,sqrt,diagonal,argsort,lobpcg,set_num_threads,full as full_torch
 from torch.linalg import eigvalsh as eigsolve,inv,eigh
 from DiSuQ.Torch.components import diagonalisation,null,J,L,C,im,pi,complex
 from time import perf_counter
@@ -124,17 +124,15 @@ def fluxScape(self,flux_points,flux_manifold):
     EII = tensor(EII).detach().numpy()
     return EI,EII
 
-def impedanceUpdateQ(Co_,Z):
-    n = len(Z)
-    assert len(Q) >= n
-    Qo = [Q[i]*sqrt(1/z) for i,z in enumerate(Z)]
-    return Qo+Q[n:]
+def impedanceUpdateCap(Co_,Z):
+    Z = 1/sqrt(Z)
+    Co_ = tile(Z.transpose(),(N,))*Co_*tile(Z,(,N))
+    return Co_
 
-def impedanceUpdateF(Fo_,Z):
-    n = len(Z)
-    assert len(F) >= n
-    Fo = [F[i]*sqrt(z) for i,z in enumerate(Z)]
-    return Fo+F[n:]
+def impedanceUpdateInd(Lo_,Z):
+    Z = sqrt(Z)
+    Lo_ = tile(Z.transpose(),(N,))*Lo_*tile(Z,(,N))
+    return Lo_
 
 def coeffProduct(H,Coeff,M):
     nA,nB = Coeff.shape
@@ -395,8 +393,9 @@ class Kerman(Circuit):
         self.R = self.kermanTransform().real
         self.L_,self.C_ = self.modeTransformation()
         #self.Lo_,self.C_ = self.kermanComponents()
-        self.Q,self.F,self.DI_plus,self.DI_minus,self.DJ_plus,self.DJ_minus = operatorInitialization()
-        self.Qoo,self.Foo,self.Qoi,self.Qoj,self.Qij,self.Qij,self.Qii,self.Qjj = Qoo,Foo,Qoi,Qoj,Qij,Qij,Qii,Qjj
+        self.Q,self.F,self.DI_plus,self.DI_minus,self.DJ_plus,self.DJ_minus = self.operatorInitialization()
+        self.Qoo,self.Foo,self.Qoi,self.Qoj,self.Qij,self.Qij,self.Qii,self.Qjj = self.oscillatorInitialization()
+        self.Dplus,self.Dminus = self.josephsonInitialization()
 
     def basisSize(self,modes=False):
         N = dict()
@@ -495,7 +494,7 @@ class Kerman(Circuit):
 
         return Q,F,DI_plus,DI_minus,DJ_plus,DJ_minus
 
-    def kroneckerInitialization(self):
+    def oscillatorInitialization(self):
         # persistence/initialization of mode matrix product
         No,Ni,Nj = self.No,self.Ni,self.Nj
         Q,F = self.Q,self.F
@@ -523,6 +522,14 @@ class Kerman(Circuit):
 
         return Qoo,Foo,Qoi,Qoj,Qij,Qij,Qii,Qjj
 
+    def josephsonInitialization(self):
+        edges,Ej = self.josephsonComponents()
+        Dplus,Dminus = dict(),dict()
+        for (u,v,key),E in zip(edges,Ej):
+            edge = u,v
+            Dplus[edge] = self.backend.basisProduct(self.DI_plus[edge]+self.DJ_plus[edge])
+            Dminus[edge] = self.backend.basisProduct(self.DI_minus[edge]+self.DJ_minus[edge])
+        return Dplus,Dminus
 
     def displacementCombination(self,combination,edge):
         basis = self.basis
@@ -533,17 +540,13 @@ class Kerman(Circuit):
         #assert I==0
         #assert J==1 or 0
         Z = self.oscillatorImpedance() * 2 # cooper pair factor
-        # re-calculation with parameter iteration
+        # re-calculation with parameter
         DO_plus = [self.backend.displacementOscillator(basis_max,z,o) for o,z,basis_max in zip(O,Z,basis['O'])]
         DO_minus = [self.backend.displacementOscillator(basis_max,z,-o) for o,z,basis_max in zip(O,Z,basis['O'])]
 
-        DI_plus,DI_minus = self.DI_plus[edge],self.DI_minus[edge]
-        DJ_plus,DJ_minus = self.DJ_plus[edge],self.DJ_minus[edge]
+        Dplus = DO_plus+self.Dplus[edge]
+        Dminus = DO_minus+self.Dminus[edge]
 
-        Dplus = DO_plus+DI_plus+DJ_plus
-        Dminus = DO_minus+DI_minus+DJ_minus
-        assert len(combination)==len(Dplus)
-        assert len(combination)==len(Dminus)
         return Dplus,Dminus
 
     def hamiltonianJosephson(self,external_fluxes=dict()):
@@ -570,16 +573,13 @@ class Kerman(Circuit):
         self.L_,self.C_ = self.modeTransformation()
         Lo_,C_ = self.kermanComponents()
 
-        #Lo_ = self.Lo_
         Co_,Coi_,Coj_,Ci_,Cij_,Cj_ = C_
         No,Ni,Nj = self.No,self.Ni,self.Nj
 
         # impedance update to Cap/Ind matrix - Oscillator mode
         Z = sqrt(diagonal(Co_)/diagonal(Lo_))
-        Co_ = impedanceUpdateQ(Co_,Z)
-        Fo_ = impedanceUpdateF(Fo_,Z)
-
-        Q,F = self.Q,self.F
+        Co_ = impedanceUpdateCap(Co_,Z)
+        Lo_ = impedanceUpdateInd(Lo_,Z)
 
         H = self.backend.null(self.basisSize())
 
