@@ -114,21 +114,24 @@ def classComponents(component):
     return var,energy,phys
 
 class Elements:
-    def __init__(self,plus,minus,ID=None):
+    def __init__(self,plus,minus,ID=None,device=None,dtype=float,requires_grad=True):
         self.plus = plus
         self.minus = minus
         if ID is None:
             ID = uuid.uuid4().hex
         self.ID = ID
+        self.device = device
+        self.dtype = dtype
+        self.requires_grad = requires_grad
 
 class J(Elements):
-    def __init__(self,plus,minus,Ej,ID=None,J0=J0,J_=J_):
-        super().__init__(plus,minus,ID)
+    def __init__(self,plus,minus,Ej,ID=None,J0=J0,J_=J_,device=None,dtype=float,requires_grad=True):
+        super().__init__(plus,minus,ID,device,dtype,requires_grad)
         self.J0 = J0; self.J_ = J_
         self.initJunc(Ej) # Ej[GHz]
         
     def initJunc(self,Ej):
-        self.jo = tensor(sigmoidInverse((Ej-self.J_)/self.J0),dtype=float,requires_grad=True)
+        self.jo = tensor(sigmoidInverse((Ej-self.J_)/self.J0),device=self.device,dtype=self.dtype,requires_grad=self.requires_grad)
         
     def variable(self):
         return self.jo
@@ -137,18 +140,18 @@ class J(Elements):
         return sigmoid(self.jo) * self.J0 + self.J_ # GHz
     
     def bounds(self):
-        upper = sigmoid(tensor(1e6))*self.J0 + self.J_
-        lower = sigmoid(-tensor(1e6))*self.J0 + self.J_
+        upper = sigmoid(tensor(1e6,device=self.device,dtype=self.dtype,requires_grad=False))*self.J0 + self.J_
+        lower = sigmoid(-tensor(1e6,device=self.device,dtype=self.dtype,requires_grad=False))*self.J0 + self.J_
         return lower,upper
 
 class C(Elements):
-    def __init__(self,plus,minus,Ec,ID=None,C0=C0,C_=C_):
-        super().__init__(plus,minus,ID)
+    def __init__(self,plus,minus,Ec,ID=None,C0=C0,C_=C_,device=None,dtype=float,requires_grad=True):
+        super().__init__(plus,minus,ID,device,dtype,requires_grad)
         self.C0 = C0; self.C_ = C_
         self.initCap(Ec) # Ec[GHz]
         
     def initCap(self,Ec):
-        self.cap = tensor(sigmoidInverse((Ec-self.C_)/self.C0),dtype=float,requires_grad=True)
+        self.cap = tensor(sigmoidInverse((Ec-self.C_)/self.C0),device=self.device,dtype=self.dtype,requires_grad=self.requires_grad)
         
     def variable(self):
         return self.cap
@@ -160,19 +163,19 @@ class C(Elements):
         return capEnergy(self.energy()) # he9/e/e : natural unit
     
     def bounds(self):
-        upper = sigmoid(tensor(1e6))*self.C0 + self.C_
-        lower = sigmoid(-tensor(1e6))*self.C0 + self.C_
+        upper = sigmoid(tensor(1e6,device=self.device,dtype=self.dtype,requires_grad=False))*self.C0 + self.C_
+        lower = sigmoid(-tensor(1e6,device=self.device,dtype=self.dtype,requires_grad=False))*self.C0 + self.C_
         return lower,upper
 
 class L(Elements):
-    def __init__(self,plus,minus,El,ID=None,external=False,L0=L0,L_=L_):
-        super().__init__(plus,minus,ID)
+    def __init__(self,plus,minus,El,ID=None,external=False,L0=L0,L_=L_,device=None,dtype=float,requires_grad=True):
+        super().__init__(plus,minus,ID,device,dtype,requires_grad)
         self.L0 = L0; self.L_ = L_
         self.external = external # duplication : doesn't requires_grad
         self.initInd(El) # El[GHz]
         
     def initInd(self,El):
-        self.ind = tensor(sigmoidInverse((El-self.L_)/self.L0),dtype=float,requires_grad=True)
+        self.ind = tensor(sigmoidInverse((El-self.L_)/self.L0),device=self.device,dtype=self.dtype,requires_grad=self.requires_grad)
         
     def variable(self):
         return self.ind
@@ -184,8 +187,8 @@ class L(Elements):
         return indEnergy(self.energy()) # 4e9 e^2/h : natural unit
     
     def bounds(self):
-        upper = sigmoid(tensor(1e6))*self.L0 + self.L_
-        lower = sigmoid(-tensor(1e6))*self.L0 + self.L_
+        upper = sigmoid(tensor(1e6,device=self.device,dtype=self.dtype,requires_grad=False))*self.L0 + self.L_
+        lower = sigmoid(-tensor(1e6,device=self.device,dtype=self.dtype,requires_grad=False))*self.L0 + self.L_
         return lower,upper
 
 if __name__=='__main__':
