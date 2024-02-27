@@ -153,7 +153,7 @@ class Circuit:
         * i,j : indices of indexed graph : mode correspondence
     """
 
-    def __init__(self,network,basis,sparse=True,pairs=dict()):
+    def __init__(self,network,basis,sparse=True,pairs=dict(),device=None):
         # circuit network
         self.network = network
         self.G = self.parseCircuit()
@@ -176,6 +176,7 @@ class Circuit:
             self.backend = Sparse
         else:
             self.backend = Dense
+        self.device = device
 
     def initialization(self,parameters):
         # parameters : GHz unit
@@ -340,7 +341,7 @@ class Circuit:
         return edges,L_ext
 
     def nodeCapacitance(self):
-        Cn = zeros((self.Nn,self.Nn))
+        Cn = zeros((self.Nn,self.Nn)) ##
         for i,node in self.nodes.items():
             for u,v,component in self.G.edges(node,data=True):
                 component = component['component']
@@ -353,7 +354,7 @@ class Circuit:
         return Cn
 
     def branchInductance(self):
-        Lb = zeros((self.Nb,self.Nb))
+        Lb = zeros((self.Nb,self.Nb)) ##
         #fill_diagonal(Lb,L_limit)
         for index,(u,v,key) in self.edges_inductive.items():
             component = self.G[u][v][key]['component']
@@ -363,7 +364,7 @@ class Circuit:
         return Lb
 
     def mutualInductance(self):
-        M = zeros((self.Nb,self.Nb))
+        M = zeros((self.Nb,self.Nb)) ##
         return M
 
     def connectionPolarity(self):
@@ -387,7 +388,7 @@ class Circuit:
         return Ni
 
 class Kerman(Circuit):
-    def __init__(self,network,basis,sparse=True,pairs=dict()):
+    def __init__(self,network,basis,sparse=True,pairs=dict(),device=None):
         super().__init__(network,basis,sparse,pairs,device)
         self.No,self.Ni,self.Nj = self.kermanDistribution()
         self.R = self.kermanTransform().real
@@ -443,10 +444,9 @@ class Kerman(Circuit):
         R = self.R
         L_ = inv(R.T) @ Ln_ @ inv(R)
         C_ = R @ Cn_ @ R.T
-        return L_,C_    
+        return L_,C_
 
     def oscillatorImpedance(self):
-        Cn_,Ln_,basis = self.Cn_,self.Ln_,self.basis
         self.L_,self.C_ = self.modeTransformation()
         Lo_,C_ = self.kermanComponents()
         impedance = [sqrt(C_[0][i,i]/Lo_[i,i]) for i in range(len(basis['O']))]
@@ -467,14 +467,14 @@ class Kerman(Circuit):
         basis = self.basis
         No,Ni,Nj = self.No,self.Ni,self.Nj
 
-        Qo = [self.backend.basisQo(basis_max,1.) for basis_max in basis['O']]
-        Qi = [self.backend.basisQq(basis_max) for basis_max in basis['I']]
-        Qj = [self.backend.basisQq(basis_max) for basis_max in basis['J']]
+        Qo = [self.backend.basisQo(basis_max,1.,self.device) for basis_max in basis['O']]
+        Qi = [self.backend.basisQq(basis_max,self.device) for basis_max in basis['I']]
+        Qj = [self.backend.basisQq(basis_max,self.device) for basis_max in basis['J']]
         Q = Qo + Qi + Qj
 
-        Fo = [self.backend.basisFo(basis_max,1.) for basis_max in basis['O']]
-        Fi = [self.backend.basisFq(basis_max) for basis_max in basis['I']]
-        Fj = [self.backend.basisFq(basis_max) for basis_max in basis['J']]
+        Fo = [self.backend.basisFo(basis_max,1.,self.device) for basis_max in basis['O']]
+        Fi = [self.backend.basisFq(basis_max,self.device) for basis_max in basis['I']]
+        Fj = [self.backend.basisFq(basis_max,self.device) for basis_max in basis['J']]
         F = Fo + Fi + Fj
 
         DI_plus,DI_minus = dict(),dict()
@@ -487,10 +487,10 @@ class Kerman(Circuit):
             I = combination[No:No+Ni]
             J = combination[No+Ni:]
 
-            DI_plus[edge] = [self.backend.displacementCharge(basis_max,i) for i,basis_max in zip(I,basis['I'])]
-            DI_minus[edge] = [self.backend.displacementCharge(basis_max,-i) for i,basis_max in zip(I,basis['I'])]
-            DJ_plus[edge] = [self.backend.displacementCharge(basis_max,j) for j,basis_max in zip(J,basis['J'])]
-            DJ_minus[edge] = [self.backend.displacementCharge(basis_max,-j) for j,basis_max in zip(J,basis['J'])]
+            DI_plus[edge] = [self.backend.displacementCharge(basis_max,i,self.device) for i,basis_max in zip(I,basis['I'])]
+            DI_minus[edge] = [self.backend.displacementCharge(basis_max,-i,self.device) for i,basis_max in zip(I,basis['I'])]
+            DJ_plus[edge] = [self.backend.displacementCharge(basis_max,j,self.device) for j,basis_max in zip(J,basis['J'])]
+            DJ_minus[edge] = [self.backend.displacementCharge(basis_max,-j,self.device) for j,basis_max in zip(J,basis['J'])]
 
         return Q,F,DI_plus,DI_minus,DJ_plus,DJ_minus
 
@@ -537,8 +537,8 @@ class Kerman(Circuit):
         O = combination[:No]
         Z = self.oscillatorImpedance() * 2 # cooper pair factor
         # oscillator-calculation
-        DO_plus = [self.backend.displacementOscillator(basis_max,z,o) for o,z,basis_max in zip(O,Z,basis['O'])]
-        DO_minus = [self.backend.displacementOscillator(basis_max,z,-o) for o,z,basis_max in zip(O,Z,basis['O'])]
+        DO_plus = [self.backend.displacementOscillator(basis_max,z,o,self.device) for o,z,basis_max in zip(O,Z,basis['O'])]
+        DO_minus = [self.backend.displacementOscillator(basis_max,z,-o,self.device) for o,z,basis_max in zip(O,Z,basis['O'])]
 
         Dplus = DO_plus+self.Dplus[edge]
         Dminus = DO_minus+self.Dminus[edge]
@@ -733,7 +733,7 @@ class Flux(Circuit):
         return H/2
 
 class Charge(Circuit):
-    def __init__(self,network,basis,sparse=True,pairs=dict()):
+    def __init__(self,network,basis,sparse=True,pairs=dict(),device=None):
         super().__init__(network,basis,sparse,pairs,device)
         self.Q,self.F,self.D_plus,self.D_minus = self.operatorInitialization()
         self.QQ,self.FF = self.oscillatorInitialization()
@@ -747,10 +747,10 @@ class Charge(Circuit):
 
     def operatorInitialization(self):
         basis = self.basis
-        Q = [self.backend.basisQq(basis_max) for basis_max in basis]
-        F = [self.backend.basisFq(basis_max) for basis_max in basis]
-        Dplus = [self.backend.chargeDisplacePlus(basis_max) for basis_max in basis]
-        Dminus = [self.backend.chargeDisplaceMinus(basis_max) for basis_max in basis]
+        Q = [self.backend.basisQq(basis_max,self.device) for basis_max in basis]
+        F = [self.backend.basisFq(basis_max,self.device) for basis_max in basis]
+        Dplus = [self.backend.chargeDisplacePlus(basis_max,self.device) for basis_max in basis]
+        Dminus = [self.backend.chargeDisplaceMinus(basis_max,self.device) for basis_max in basis]
         return Q,F,Dplus,Dminus
 
     def potentialCharge(self,external_fluxes=dict()):

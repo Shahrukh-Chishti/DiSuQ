@@ -8,7 +8,7 @@ def modeTensorProduct(pre,M,post):
         extend mode to full system basis
         sequentially process duplication
     """
-    H = identity(1)
+    H = identity(1) ##
     for dim in pre:
         H = kron(H,identity(dim))
     H = kron(H,M)
@@ -19,7 +19,7 @@ def modeTensorProduct(pre,M,post):
 def crossBasisProduct(A,B,a,b):
     assert len(A)==len(B)
     n = len(A)
-    product = identity(1)
+    product = identity(1) ##
     for i in range(n):
         if i==a:
             product = kron(product,A[i])
@@ -31,7 +31,7 @@ def crossBasisProduct(A,B,a,b):
 
 def basisProduct(O,indices=None):
     n = len(O)
-    B = identity(1)
+    B = identity(1) ##
     if indices is None:
         indices = arange(n)
     for i in range(n):
@@ -63,32 +63,32 @@ def modeMatrixProduct(A,M,B,mode=(0,0)):
 
     return H
 
-""" Operator Objects """
-
 def unitaryTransformation(M,U):
     M = U.conj().T@ M@ U
     return M
 
-def identity(n,dtype=float):
-    return eye(n,dtype=dtype)
-
-def null(N=1,dtype=complex):
-    return zeros(N,N,dtype=complex)
-
 def mul(A,B):
     return A@B
 
-def basisQo(n,impedance):
-    Qo = arange(1,n)
+""" Operator Objects """
+
+def identity(n,dtype=float,device=None):
+    return eye(n,dtype=dtype,device=device) ##
+
+def null(N=1,dtype=complex,device=None):
+    return zeros(N,N,dtype=complex,device=device) ##
+
+def basisQo(n,impedance,device=None):
+    Qo = arange(1,n,device=device) ##
     Qo = sqrt(Qo)
-    Qo = -diag(Qo,diagonal=1) + diag(Qo,diagonal=-1)
+    Qo = -diag(Qo,diagonal=1) + diag(Qo,diagonal=-1) ##
     return Qo*im*sqrt(1/2/pi/impedance)
 
-def basisFo(n,impedance):
-    Po = arange(1,n)
-    Po = sqrt(Po)
-    Po = diag(Po,diagonal=1) + diag(Po,diagonal=-1)
-    return Po.to(dtype=complex)*sqrt(impedance/2/pi)
+def basisFo(n,impedance,device=None):
+    Fo = arange(1,n,device=device) ##
+    Fo = sqrt(Fo)
+    Fo = diag(Fo,diagonal=1) + diag(Fo,diagonal=-1) ##
+    return Fo.to(dtype=complex)*sqrt(impedance/2/pi)
 
 def fluxFlux(n,impedance):
     N = 2*n+1
@@ -120,27 +120,27 @@ def fluxCharge(n,impedance):
     Pq = unitaryTransformation(Po,D)
     return Pq
 
-def chargeStates(n,dtype=int):
-    charge = linspace(n,-n,2*n+1,dtype=dtype)
+def chargeStates(n,dtype=int,device=None):
+    charge = linspace(n,-n,2*n+1,dtype=dtype,device=None) ##
     return charge
 
-def fluxStates(N_flux,n_flux=1,dtype=complex):
-    flux = linspace(n_flux,-n_flux,N_flux,dtype=dtype)
+def fluxStates(N_flux,n_flux=1,dtype=complex,device=None):
+    flux = linspace(n_flux,-n_flux,N_flux,dtype=dtype,device=device) ##
     return flux#/N_flux
 
-def transformationMatrix(n_charge,N_flux,n_flux=1):
-    charge_states = chargeStates(n_charge,complex)
-    flux_states = fluxStates(N_flux,n_flux,complex)*N_flux
+def transformationMatrix(n_charge,N_flux,n_flux=1,device=None):
+    charge_states = chargeStates(n_charge,complex,device)
+    flux_states = fluxStates(N_flux,n_flux,complex,device)*N_flux
 
-    T = outer(flux_states,charge_states)
+    T = outer(flux_states,charge_states) ##
     T *= 2*pi*im/N_flux
     T = exp(T)/sqroot(N_flux)
     return T # unitary transformation
 
-def basisQq(n):
+def basisQq(n,device=None):
     # charge basis
-    charge = chargeStates(n,complex)
-    Q = diag(charge.clone().detach())
+    charge = chargeStates(n,complex,device)
+    Q = diag(charge.clone().detach(),device) ##
     return Q * 2
 
 def basisFqKerman(n):
@@ -155,9 +155,9 @@ def basisFqKerman(n):
                 P[q,p] /= -im*N*(1-cos(2*pi*(q-p)/N))*N
     return P
 
-def basisFq(n):
-    Q = basisQq(n)
-    U = transformationMatrix(n,2*n+1,n)
+def basisFq(n,device=None):
+    Q = basisQq(n,device)
+    U = transformationMatrix(n,2*n+1,n,device)
     return U@Q@U.conj().T/2/(2.0*n+1.0)
 
 def basisFf(n):
@@ -206,13 +206,13 @@ def chargeDisplaceMinus(n):
     D = diag(diagonal,diagonal=1)
     return D
 
-def displacementCharge(n,a):
-    D = basisFq(n)
+def displacementCharge(n,a,device=None):
+    D = basisFq(n,device)
     D = expm(im*2*pi*a*D)
     return D
 
-def displacementOscillator(n,z,a):
-    D = basisFo(n,z)
+def displacementOscillator(n,z,a,device=None):
+    D = basisFo(n,z,device)
     D = expm(im*2*pi*a*D)
     return D
 

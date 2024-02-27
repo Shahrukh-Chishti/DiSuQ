@@ -70,18 +70,6 @@ def modeMatrixProduct(A,M,B,mode=(0,0)):
                 H += M[i,j]*modeProduct(A,i+a,B,j+b)
     return H
 
-"""" Operator Object """
-
-def unitaryTransformation(M,U):
-    M = mul( transpose(U.conj(),0,1), mul(M, U))
-    return M
-
-def indicesSparse(A):
-    return A.coalesce().indices().T
-
-def valuesSparse(A):
-    return A.coalesce().values()
-
 def kron(A,B):
     nA,nB = A.shape[0],B.shape[0]
     N = nA*nB
@@ -93,28 +81,42 @@ def kron(A,B):
     indices = vstack((rows,cols))
     return sparse_coo_tensor(indices,values,(N,N))
 
+def unitaryTransformation(M,U):
+    M = mul( transpose(U.conj(),0,1), mul(M, U))
+    return M
+
+""" Sparse Methods """
+
+def indicesSparse(A):
+    return A.coalesce().indices().T
+
+def valuesSparse(A):
+    return A.coalesce().values()
+
 def scipyfy(H):
     indices = indicesSparse(H).numpy().T
     values = valuesSparse(H).detach().numpy()
     shape = H.size()
     return sparse.coo_matrix((values,indices),shape=shape)
 
-def sparsify(T):
+def sparsify(T,dense=None,device=None):
     indices = nonzero(T,as_tuple=True)
     shape = T.shape
     values = T[indices]
     indices = vstack(indices)
-    return sparse_coo_tensor(indices,values,shape)
+    return sparse_coo_tensor(indices,values,shape,device=device) ##
 
-def identity(n,dtype=float):
-    return sparsify(eye(n,dtype=dtype))
+"""" Operator Object """
 
-def null(shape=1,dtype=complex):
-    return sparse_coo_tensor([[],[]],[],[shape]*2,dtype=dtype)
+def identity(n,dtype=float,device=None):
+    return sparsify(eye(n,dtype=dtype),device=device)
 
-def diagSparse(values,diagonal=0):
+def null(shape=1,dtype=complex,device=None):
+    return sparse_coo_tensor([[],[]],[],[shape]*2,dtype=dtype,device=device) ##
+
+def diagSparse(values,diagonal=0,device=None):
     N = len(values)+absolute(diagonal)
-    rows = arange(N,dtype=int)
+    rows = arange(N,dtype=int,device=device) ##
     cols = rows.clone()
     if diagonal > 0:
         cols += diagonal
@@ -125,41 +127,41 @@ def diagSparse(values,diagonal=0):
         rows = rows[:diagonal]
         cols = cols[:diagonal]
     indices = vstack([rows,cols])
-    return sparse_coo_tensor(indices,values,(N,N))
+    return sparse_coo_tensor(indices,values,(N,N),device=device) ##
 
-def basisQo(n,impedance):
-    Qo = arange(1,n)
+def basisQo(n,impedance,device=None):
+    Qo = arange(1,n,device=device) ##
     Qo = sqrt(Qo)
-    Qo = -diagSparse(Qo,diagonal=1) + diagSparse(Qo,diagonal=-1)
+    Qo = -diagSparse(Qo,1,device) + diagSparse(Qo,-1,device)
     return Qo*im*sqrt(1/2/pi/impedance)
 
-def basisFo(n,impedance):
-    Po = arange(1,n)
+def basisFo(n,impedance,device=None):
+    Po = arange(1,n,device=device) ##
     Po = sqrt(Po)
-    Po = diagSparse(Po,diagonal=1) + diagSparse(Po,diagonal=-1)
+    Po = diagSparse(Po,1,device) + diagSparse(Po,-1,device)
     return Po*sqrt(impedance/2/pi)
 
-def chargeStates(n):
-    charge = linspace(n,-n,2*n+1,dtype=complex)
+def chargeStates(n,device=None):
+    charge = linspace(n,-n,2*n+1,dtype=complex,device=device) ##
     return charge
 
-def fluxStates(N_flux,n_flux=1):
-    flux = linspace(n_flux,-n_flux,N_flux,dtype=complex)
+def fluxStates(N_flux,n_flux=1,device=None):
+    flux = linspace(n_flux,-n_flux,N_flux,dtype=complex,device=device) ##
     return flux#/N_flux
 
-def transformationMatrix(n_charge,N_flux,n_flux=1):
-    charge_states = chargeStates(n_charge)
-    flux_states = fluxStates(N_flux,n_flux)*N_flux
+def transformationMatrix(n_charge,N_flux,n_flux=1,device=None):
+    charge_states = chargeStates(n_charge,device)
+    flux_states = fluxStates(N_flux,n_flux,device)*N_flux
 
     T = outer(flux_states,charge_states)
     T *= 2*pi*im/N_flux
     T = exp(T)/sqroot(N_flux)
-    return sparsify(T)
+    return sparsify(T,device=device)
 
-def basisQq(n):
+def basisQq(n,device=None):
     # charge basis
-    charge = chargeStates(n).to(complex)
-    Q = diagSparse(charge.clone().detach())
+    charge = chargeStates(n,device)
+    Q = diagSparse(charge.clone().detach(),device=device) ##
     return Q * 2
 
 def basisFq(n):
@@ -174,9 +176,9 @@ def basisFq(n):
                 P[q,p] /= -im*N*(1-cos(2*pi*(q-p)/N))*N
     return P
 
-def basisFq(n):
-    Q = basisQq(n)
-    U = transformationMatrix(n,2*n+1,n)
+def basisFq(n,device=None):
+    Q = basisQq(n,device)
+    U = transformationMatrix(n,2*n+1,n,device)
     #return unitaryTransformation(Q,transpose(U.conj(),0,1))/(2.0*n+1.0)/2.0
     return U@Q@U.conj().T/2/(2.0*n+1.0)
 
@@ -214,9 +216,9 @@ def basisFiniteII(n,bound):
         II += diagSparse(tensor([coeff]*(n-numpy.abs(index))),index)
     return II/delta/delta    
 
-def chargeDisplacePlus(n):
+def chargeDisplacePlus(n,device=None):
     """n : charge basis truncation"""
-    diagonal = ones((2*n+1)-1,dtype=complex)
+    diagonal = ones((2*n+1)-1,dtype=complex,device=device) ##
     D = diagSparse(diagonal,diagonal=-1)
     return D
 
@@ -228,15 +230,15 @@ def chargeDisplaceMinus(n):
 
 # better implementation of matrix exponential for sparse matrices
 
-def displacementCharge(n,a):
-    D = basisFq(n).to_dense()
+def displacementCharge(n,a,device=None):
+    D = basisFq(n,device).to_dense()
     D = expm(im*2*pi*a*D)
-    return sparsify(D)
+    return sparsify(D,device=device)
 
-def displacementOscillator(n,z,a):
-    D = basisFo(n,z).to_dense()
+def displacementOscillator(n,z,a,device=None):
+    D = basisFo(n,z,device).to_dense()
     D = expm(im*2*pi*a*D)
-    return sparsify(D)
+    return sparsify(D,device=device)
 
 def displacementFlux(n,a):
     flux = fluxStates(2*n+1,n)
