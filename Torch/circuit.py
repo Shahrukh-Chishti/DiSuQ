@@ -535,12 +535,8 @@ class Kerman(Circuit):
         basis = self.basis
         No,Ni,Nj = self.No,self.Ni,self.Nj
         O = combination[:No]
-        I = combination[No:No+Ni]
-        J = combination[No+Ni:]
-        #assert I==0
-        #assert J==1 or 0
         Z = self.oscillatorImpedance() * 2 # cooper pair factor
-        # re-calculation with parameter
+        # oscillator-calculation
         DO_plus = [self.backend.displacementOscillator(basis_max,z,o) for o,z,basis_max in zip(O,Z,basis['O'])]
         DO_minus = [self.backend.displacementOscillator(basis_max,z,-o) for o,z,basis_max in zip(O,Z,basis['O'])]
 
@@ -739,7 +735,9 @@ class Flux(Circuit):
 class Charge(Circuit):
     def __init__(self,network,basis,sparse=True,pairs=dict()):
         super().__init__(network,basis,sparse,pairs,device)
-        self.Q,self.F,self.Dplus,self.Dminus = operatorInitialization()
+        self.Q,self.F,self.D_plus,self.D_minus = self.operatorInitialization()
+        self.QQ,self.FF = self.oscillatorInitialization()
+        self.Jplus,self.Jminus = self.josephsonInitialization()
 
     def basisSize(self,modes=False):
         N = [2*size+1 for size in self.basis]
@@ -769,37 +767,52 @@ class Charge(Circuit):
         impedance = [sqrt(Cn_[i,i]/Ln_[i,i]) for i in range(len(basis))]
         return impedance
 
+    def oscillatorInitialization(self):
+        Q,F = self.Q,self.F
+        N = self.Nn
+        QQ,FF = dict(),dict()
+        for i in range(N):
+            for j in range(N):
+                QQ[(i,j)] = self.backend.modeProduct(Q,i,Q,j)
+                FF[(i,j)] = self.backend.modeProduct(F,i,F,j)
+        return QQ,FF
+
+    def josephsonInitialization(self):
+        N = self.basisSize()
+        H = self.backend.null(N)
+        Dplus,Dminus = self.D_plus,self.D_minus
+        Jplus,Jminus = dict(),dict()
+        edges,Ej = self.josephsonComponents()
+        for (u,v,key),E in zip(edges,Ej):
+            edge = u,v
+            i,j = self.nodes_[u],self.nodes_[v]
+            if i<0 or j<0 :
+                # grounded josephson
+                i = max(i,j)
+                Jplus[edge] = self.backend.basisProduct(Dplus,[i])
+                Jminus[edge] = self.backend.basisProduct(Dminus,[i])
+            else:
+                Jplus[edge] = self.backend.crossBasisProduct(Dplus,Dminus,i,j)
+                Jminus[edge] = self.backend.crossBasisProduct(Dplus,Dminus,j,i)
+
+        return Jplus,Jminus
+
     def hamiltonianLC(self):
-        """
-            basis : [basis_size] charge
-        """
         Cn_,Ln_ = self.Cn_,self.Ln_
-        Q = self.Q
-        F = self.F
-        H = self.backend.modeMatrixProduct(Q,Cn_,Q)
-        H += self.backend.modeMatrixProduct(F,Ln_,F)
+        H = self.backend.null(self.basisSize())
+
+        H = coeffProduct(H,Cn_,self.QQ)
+        H = coeffProduct(H,Ln_,self.FF)
 
         return H/2
 
     def hamiltonianJosephson(self,external_fluxes=dict()):
         edges,Ej = self.josephsonComponents()
-        N = self.basisSize()
-        H = self.backend.null(N)
         Dplus,Dminus = self.Dplus,self.Dminus
         for (u,v,key),E in zip(edges,Ej):
-            i,j = self.nodes_[u],self.nodes_[v]
+            edge = u,v
             flux = self.loopFlux(u,v,key,external_fluxes)
-            if i<0 or j<0 :
-                # grounded josephson
-                i = max(i,j)
-                Jplus = self.backend.basisProduct(Dplus,[i])
-                Jminus = self.backend.basisProduct(Dminus,[i])
-            else:
-                Jplus = self.backend.crossBasisProduct(Dplus,Dminus,i,j)
-                Jminus = self.backend.crossBasisProduct(Dplus,Dminus,j,i)
-                #assert (Jminus == Jplus.conj().T).all()
-            #print(E,flux)
-            H -= E*(Jplus*phase(flux) + Jminus*phase(-flux))
+            H -= E*(self.Jplus[edge]*phase(flux) + self.Jminus[edge]*phase(-flux))
 
         return H/2
     
