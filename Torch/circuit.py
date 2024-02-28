@@ -125,13 +125,15 @@ def fluxScape(self,flux_points,flux_manifold):
     return EI,EII
 
 def impedanceUpdateCap(Co_,Z):
+    N = len(Z)
     Z = 1/sqrt(Z)
-    Co_ = tile(Z.transpose(),(N,))*Co_*tile(Z,(,N))
+    Co_ = Z.view(N,1).expand(N,N)*Co_*Z.expand(N,N)
     return Co_
 
 def impedanceUpdateInd(Lo_,Z):
+    N = len(Z)
     Z = sqrt(Z)
-    Lo_ = tile(Z.transpose(),(N,))*Lo_*tile(Z,(,N))
+    Lo_ = Z.view(N,1).expand(N,N)*Lo_*Z.expand(N,N)
     return Lo_
 
 def coeffProduct(H,Coeff,M):
