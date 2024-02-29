@@ -140,7 +140,7 @@ def transformationMatrix(n_charge,N_flux,n_flux=1,device=None):
 def basisQq(n,device=None):
     # charge basis
     charge = chargeStates(n,complex,device)
-    Q = diag(charge.clone().detach(),device) ##
+    Q = diag(charge.clone().detach()) ##
     return Q * 2
 
 def basisFqKerman(n):
@@ -194,15 +194,15 @@ def basisFiniteII(n,bound):
         II += diag(tensor([coeff]*(n-numpy.abs(index))),index)
     return II/delta/delta    
 
-def chargeDisplacePlus(n):
+def chargeDisplacePlus(n,device=None):
     """n : charge basis truncation"""
-    diagonal = ones((2*n+1)-1,dtype=complex)
+    diagonal = ones((2*n+1)-1,dtype=complex,device=device)
     D = diag(diagonal,diagonal=-1)
     return D
 
-def chargeDisplaceMinus(n):
+def chargeDisplaceMinus(n,device=None):
     """n : charge basis truncation"""
-    diagonal = ones((2*n+1)-1,dtype=complex)
+    diagonal = ones((2*n+1)-1,dtype=complex,device=device)
     D = diag(diagonal,diagonal=1)
     return D
 

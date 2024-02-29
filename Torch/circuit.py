@@ -140,8 +140,8 @@ def coeffProduct(H,Coeff,M):
     nA,nB = Coeff.shape
     for i in range(nA):
         for j in range(nB):
-            if not M[i,j] == 0:
-                H += Coeff[i,j]*M[(i,j)]
+            #if not M[i,j] == 0:
+            H += Coeff[i,j]*M[(i,j)]
     return H
 
 class Circuit:
@@ -810,7 +810,8 @@ class Charge(Circuit):
 
     def hamiltonianJosephson(self,external_fluxes=dict()):
         edges,Ej = self.josephsonComponents()
-        Dplus,Dminus = self.Dplus,self.Dminus
+        N = self.basisSize()
+        H = self.backend.null(N)
         for (u,v,key),E in zip(edges,Ej):
             edge = u,v
             flux = self.loopFlux(u,v,key,external_fluxes)

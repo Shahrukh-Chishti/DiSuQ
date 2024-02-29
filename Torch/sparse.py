@@ -222,9 +222,9 @@ def chargeDisplacePlus(n,device=None):
     D = diagSparse(diagonal,diagonal=-1)
     return D
 
-def chargeDisplaceMinus(n):
+def chargeDisplaceMinus(n,device=None):
     """n : charge basis truncation"""
-    diagonal = ones((2*n+1)-1,dtype=complex)
+    diagonal = ones((2*n+1)-1,dtype=complex,device=device) ## 
     D = diagSparse(diagonal,diagonal=1)
     return D
 
