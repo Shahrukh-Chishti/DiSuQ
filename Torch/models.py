@@ -1,5 +1,6 @@
 import numpy,sys,scqubits
 from DiSuQ.Torch.circuit import Circuit, hamiltonianEnergy, phase
+from DiSuQ.Torch.circuit import Charge,Kerman
 from DiSuQ.Torch.components import J,C,L,pi,h
 from DiSuQ.Torch.components import C0,J0,L0,capE,indE,C_,J_,L_
 from DiSuQ.Torch.components import e,h,flux_quanta,hbar
@@ -46,7 +47,7 @@ def zeroPi(basis,Ej=10.,Ec=50.,El=10.,EcJ=100.,sparse=True,symmetry=False,_L_=(L
         pairs['Jy'] = 'Jx'
         pairs['CJy'] = 'CJx'
     
-    circuit = Circuit(circuit,basis,sparse,pairs)
+    circuit = Charge(circuit,basis,sparse,pairs)
     return circuit
 
 def zeroPiRidge(basis,Ej=10.,Ec=50.,El=10.,EcJ=100.,sparse=True,symmetry=False,_L_=(L_,L0),_C_=(C_,C0),_J_=(J_,J0),_CJ_=(4*C_,4*C0),ridge = False,flux0=numpy.pi*6):
