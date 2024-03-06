@@ -53,7 +53,7 @@ class Circuit:
         * i,j : indices of indexed graph : mode correspondence
     """
 
-    def __init__(self,network,basis,sparse=True,pairs=dict(),rep='K',device=None):
+    def __init__(self,network,basis,sparse=True,pairs=dict(),device=None):
         # circuit network
         self.network = network
         self.G = self.parseCircuit()
@@ -67,11 +67,6 @@ class Circuit:
         self.symmetrize(self.pairs)
         # components
         self.Cn_,self.Ln_ = self.componentMatrix()
-        # default : Kerman transformation
-        self.No,self.Ni,self.Nj = self.kermanDistribution()
-        self.R = self.kermanTransform().real
-        self.L_,self.C_ = self.modeTransformation()
-        #self.Lo_,self.C_ = self.kermanComponents()
 
         self.basis = basis
         # basis : list of basis_size of ith mode
@@ -298,11 +293,99 @@ class Circuit:
             if 0 not in sub:
                 Ni += 1
         return Ni
-    
-    def canonicalBasisSize(self):
-        N = prod([2*size+1 for size in self.basis])
-        return N
 
+    def fluxInducerEnergy(self):
+        basis = self.basis
+        fluxModes = [basisPj(basis_max) for basis_max in basis]
+        edges,L_ext = self.fluxBiasComponents()
+        H = tensor([[0.0]])
+        for (u,v,key),L in zip(edges,L_ext):
+            i,j = self.nodes_[u],self.nodes_[v]
+            #print(u,v,i,j,L)
+            if i<0 or j<0 :
+                # grounded inducer
+                i = max(i,j)
+                P = self.backend.basisProduct(fluxModes,[i])
+            else:
+                P = self.backend.basisProduct(fluxModes,[i]) - self.backend.basisProduct(fluxModes,[j])
+            H = H + P@P / 2 / L
+        return H
+    
+    def operatorExpectation(self,bra,O,mode,ket):
+        basis = self.basis
+        O = [O(basis_max) for basis_max in basis]
+        O = self.backend.basisProduct(O,[mode])
+        return bra.conj()@ O@ ket
+
+    def circuitEnergy(self,H_LC=tensor(0.0),H_J=None,external_fluxes=dict(),grad=True):
+        ## this could be improved : removing if clause, sub-class, sparse/dense and grad/numer segregation
+        if H_J is None:
+            H_J = null(H_LC)
+        #H_LC = self.hamiltonianLC()
+        #H_ext = self.fluxInducerEnergy()
+        H = H_LC + H_J(external_fluxes)
+        if grad:
+            if self.sparse:
+                eigenenergies = lobpcg(H.to(float),k=4,largest=False)[0]
+            else:
+                eigenenergies = hamiltonianEnergy(H)
+        else:
+            if self.sparse:
+                H = self.backend.scipyfy(H)
+                eigenenergies = self.backend.sparse.linalg.eigsh(H,return_eigenvectors=False,which='SA')
+                eigenenergies = sort(eigenenergies)
+            else:
+                H = H.detach().numpy() 
+                eigenenergies = eigvalsh(H)
+        
+        return eigenenergies
+
+    def spectrumManifold(self,flux_points,flux_manifold,H_LC=tensor(0.0),H_J=None,excitation=[1],grad=True,log=False):
+        """
+            flux_points : inductor identifier for external introduction
+            flux_manifold : [(fluxes)]
+        """
+        if H_J is None:
+            H_J = null(H_LC)
+        #manifold of flux space M
+        if not grad:
+            Ex = full_numpy((len(excitation),len(flux_manifold)),float('nan'))
+        else:
+            Ex = full_torch((len(excitation),len(flux_manifold)),float('nan'))
+        E0 = []
+        #H_LC = self.hamiltonianLC()
+        #H_ext = self.fluxInducerEnergy()
+        start = perf_counter()
+        for index,fluxes in enumerate(flux_manifold):
+            if log:
+                if index%50 == 0:
+                    print(index,'\t',perf_counter()-start)
+            external_fluxes = dict(zip(flux_points,fluxes))
+            #H_J = self.josephsonEnergy(external_fluxes)
+            #H = H_LC + H_J(external_fluxes)
+            eigenenergies = self.circuitEnergy(H_LC,H_J,external_fluxes,grad)
+            #eigenenergies = hamiltonianEnergy(H)
+            
+            E0.append(eigenenergies[0])
+            Ex[:,index] = eigenenergies[excitation]-eigenenergies[0]
+        return E0,Ex
+    
+    def fluxScape(self,flux_points,flux_manifold):
+        H_LC = self.kermanHamiltonianLC()
+        H_J = self.kermanHamiltonianJosephson
+        E0,EI = self.spectrumManifold(flux_point,flux_profile,H_LC,H_J,excitation=1)
+        E0,EII = self.spectrumManifold(flux_point,flux_profile,H_LC,H_J,excitation=2)
+        EI = tensor(EI).detach().numpy()
+        EII = tensor(EII).detach().numpy()
+        return EI,EII
+
+class Kerman(Circuit):
+    def __init__(self,network,basis,sparse=True,pairs=dict(),device=None):
+        super().__init__(network,basis,sparse,pairs,device)
+        self.No,self.Ni,self.Nj = self.kermanDistribution()
+        self.R = self.kermanTransform().real
+        self.L_,self.C_ = self.modeTransformation()
+    
     def kermanBasisSize(self):
         N = 1
         basis = self.basis
@@ -489,29 +572,7 @@ class Circuit:
 
         return -H
 
-    def josephsonFlux(self,external_fluxes=dict()):
-        basis = self.basis
-        Z = self.modeImpedance() * 2 # cooper pair factor
-        Dplus = [self.backend.displacementFlux(basis_max,1) for z,basis_max in zip(Z,basis)]
-        Dminus = [self.backend.displacementFlux(basis_max,-1) for z,basis_max in zip(Z,basis)]
-        edges,Ej = self.josephsonComponents()
-        N = self.canonicalBasisSize()
-        H = self.backend.null(N)
-        for (u,v,key),E in zip(edges,Ej):
-            i,j = self.nodes_[u],self.nodes_[v]
-            flux = self.loopFlux(u,v,key,external_fluxes)
-            if i<0 or j<0 :
-                # grounded josephson
-                i = max(i,j)
-                Jplus = self.backend.basisProduct(Dplus,[i])
-                Jminus = self.backend.basisProduct(Dminus,[i])
-            else:
-                Jplus = self.backend.crossBasisProduct(Dplus,Dminus,i,j)
-                Jminus = self.backend.crossBasisProduct(Dplus,Dminus,j,i)
-                #assert (Jminus == Jplus.conj().T).all()
-            H -= E*(Jplus*phase(flux) + Jminus*phase(-flux))
-
-        return H/2
+class Oscillator(Circuit):
 
     def josephsonOscillator(self,external_fluxes=dict()):
         basis = self.basis
@@ -537,12 +598,97 @@ class Circuit:
 
         return H/2
 
+    def potentialOscillator(self,external_fluxes=dict()):
+        Ln_ = self.Ln_
+        basis = self.basis
+
+        impedance = self.modeImpedance()
+        F = [self.backend.basisFo(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
+        H = self.backend.modeMatrixProduct(F,Ln_,F)/2
+        H += self.josephsonOscillator(external_fluxes)
+        return H
+
+    def oscillatorHamiltonianLC(self):
+        """
+            basis : [basis_size] charge
+        """
+        Cn_,Ln_ = self.Cn_,self.Ln_
+        basis = self.basis
+
+        impedance = self.modeImpedance()
+        Q = [self.backend.basisQo(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
+        F = [self.backend.basisFo(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
+
+        H = self.backend.modeMatrixProduct(Q,Cn_,Q)
+        H += self.backend.modeMatrixProduct(F,Ln_,F)
+
+        return H/2
+
+class Flux(Circuit):
+
+    def fluxHamiltonianLC(self):
+        """
+            basis : [basis_size] charge
+        """
+        Cn_,Ln_ = self.Cn_,self.Ln_
+        basis = self.basis
+
+        Q = [self.backend.basisQf(basis_max) for basis_max in basis]
+        F = [self.backend.basisFf(basis_max) for basis_max in basis]
+        H = self.backend.modeMatrixProduct(Q,Cn_,Q)
+        H += self.backend.modeMatrixProduct(F,Ln_,F)
+
+        return H/2
+
+    def josephsonFlux(self,external_fluxes=dict()):
+        basis = self.basis
+        Z = self.modeImpedance() * 2 # cooper pair factor
+        Dplus = [self.backend.displacementFlux(basis_max,1) for z,basis_max in zip(Z,basis)]
+        Dminus = [self.backend.displacementFlux(basis_max,-1) for z,basis_max in zip(Z,basis)]
+        edges,Ej = self.josephsonComponents()
+        N = self.canonicalBasisSize()
+        H = self.backend.null(N)
+        for (u,v,key),E in zip(edges,Ej):
+            i,j = self.nodes_[u],self.nodes_[v]
+            flux = self.loopFlux(u,v,key,external_fluxes)
+            if i<0 or j<0 :
+                # grounded josephson
+                i = max(i,j)
+                Jplus = self.backend.basisProduct(Dplus,[i])
+                Jminus = self.backend.basisProduct(Dminus,[i])
+            else:
+                Jplus = self.backend.crossBasisProduct(Dplus,Dminus,i,j)
+                Jminus = self.backend.crossBasisProduct(Dplus,Dminus,j,i)
+                #assert (Jminus == Jplus.conj().T).all()
+            H -= E*(Jplus*phase(flux) + Jminus*phase(-flux))
+
+        return H/2
+
+    def potentialFlux(self,external_fluxes=dict()):
+        Ln_ = self.Ln_
+        basis = self.basis
+
+        F = [self.backend.basisFf(basis_max) for basis_max in basis]
+        H = self.backend.modeMatrixProduct(F,Ln_,F)/2
+        H += self.josephsonFlux(external_fluxes)
+        return H
+
+class Charge(Circuit):
+    def __init__(self,network,basis,sparse=True,pairs=dict(),device=None):
+        super().__init__(network,basis,sparse,pairs,device)
+
+    def basisSize(self,modes=False):
+        N = [2*size+1 for size in self.basis]
+        if modes:
+            return N
+        return prod(N)
+
     def josephsonCharge(self,external_fluxes=dict()):
         basis = self.basis
         Dplus = [self.backend.chargeDisplacePlus(basis_max) for basis_max in basis]
         Dminus = [self.backend.chargeDisplaceMinus(basis_max) for basis_max in basis]
         edges,Ej = self.josephsonComponents()
-        N = self.canonicalBasisSize()
+        N = self.basisSize()
         H = self.backend.null(N)
         for (u,v,key),E in zip(edges,Ej):
             i,j = self.nodes_[u],self.nodes_[v]
@@ -559,6 +705,68 @@ class Circuit:
                 
             #print(E,flux)
             H -= E*(Jplus*phase(flux) + Jminus*phase(-flux))
+
+        return H/2
+
+    def chargeHamiltonianLC(self):
+        """
+            basis : [basis_size] charge
+        """
+        Cn_,Ln_ = self.Cn_,self.Ln_
+        basis = self.basis
+        Q = [self.backend.basisQq(basis_max) for basis_max in basis]
+        F = [self.backend.basisFq(basis_max) for basis_max in basis]
+        H = self.backend.modeMatrixProduct(Q,Cn_,Q)
+        H += self.backend.modeMatrixProduct(F,Ln_,F)
+
+        return H/2
+    
+    def chargeChargeOffset(self,charge_offset=dict()):
+        charge = zeros(self.Nn)
+        basis = self.basis
+        Cn_ = self.Cn_
+        for node,dQ in charge_offset.items():
+            charge[self.nodes_[node]] = dQ
+            
+        Q = [self.backend.basisQq(basis_max) for basis_max in basis]
+        I = [self.backend.identity(2*basis_max+1,complex)*charge[index]*2 for index,basis_max in enumerate(basis)]
+        H = self.backend.modeMatrixProduct(Q,Cn_,I)
+        H += self.backend.modeMatrixProduct(I,Cn_,Q)
+        H += self.backend.modeMatrixProduct(I,Cn_,I)
+        
+        return H/2.
+
+    def potentialCharge(self,external_fluxes=dict()):
+        Ln_ = self.Ln_
+        basis = self.basis
+
+        F = [self.backend.basisFq(basis_max) for basis_max in basis]
+        H = self.backend.modeMatrixProduct(F,Ln_,F)/2
+        H += self.josephsonCharge(external_fluxes)
+        return H
+    
+class Mixed(Circuit):
+
+    def mixedHamiltonianLC(self,basis,n_trunc):
+        assert len(basis)==len(n_trunc)
+        Cn_,Ln_ = self.Cn_,self.Ln_
+        Q,F = [],[]
+        Z = self.modeImpedance()
+        for base,n,z in zip(basis,n_trunc,Z):
+            if base=='o':
+                Q.append(self.backend.basisQo(n,z))
+                F.append(self.backend.basisFo(n,z))
+            elif base == 'q':
+                Q.append(self.backend.basisQq(n))
+                F.append(self.backend.basisFq(n))
+            elif base == 'f':
+                Q.append(self.backend.basisQf(n))
+                F.append(self.backend.basisFf(n))
+                
+        assert len(Q) == len(basis)
+        assert len(F) == len(basis)
+        H = self.backend.modeMatrixProduct(Q,Cn_,Q)
+        H += self.backend.modeMatrixProduct(F,Ln_,F)
 
         return H/2
     
@@ -599,200 +807,6 @@ class Circuit:
 
             return H/2
         return Hj
-
-    def fluxInducerEnergy(self):
-        basis = self.basis
-        fluxModes = [basisPj(basis_max) for basis_max in basis]
-        edges,L_ext = self.fluxBiasComponents()
-        H = tensor([[0.0]])
-        for (u,v,key),L in zip(edges,L_ext):
-            i,j = self.nodes_[u],self.nodes_[v]
-            #print(u,v,i,j,L)
-            if i<0 or j<0 :
-                # grounded inducer
-                i = max(i,j)
-                P = self.backend.basisProduct(fluxModes,[i])
-            else:
-                P = self.backend.basisProduct(fluxModes,[i]) - self.backend.basisProduct(fluxModes,[j])
-            H = H + P@P / 2 / L
-        return H
-
-    def oscillatorHamiltonianLC(self):
-        """
-            basis : [basis_size] charge
-        """
-        Cn_,Ln_ = self.Cn_,self.Ln_
-        basis = self.basis
-
-        impedance = self.modeImpedance()
-        Q = [self.backend.basisQo(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
-        F = [self.backend.basisFo(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
-
-        H = self.backend.modeMatrixProduct(Q,Cn_,Q)
-        H += self.backend.modeMatrixProduct(F,Ln_,F)
-
-        return H/2
-
-    def fluxHamiltonianLC(self):
-        """
-            basis : [basis_size] charge
-        """
-        Cn_,Ln_ = self.Cn_,self.Ln_
-        basis = self.basis
-
-        Q = [self.backend.basisQf(basis_max) for basis_max in basis]
-        F = [self.backend.basisFf(basis_max) for basis_max in basis]
-        H = self.backend.modeMatrixProduct(Q,Cn_,Q)
-        H += self.backend.modeMatrixProduct(F,Ln_,F)
-
-        return H/2
-
-    def chargeHamiltonianLC(self):
-        """
-            basis : [basis_size] charge
-        """
-        Cn_,Ln_ = self.Cn_,self.Ln_
-        basis = self.basis
-        Q = [self.backend.basisQq(basis_max) for basis_max in basis]
-        F = [self.backend.basisFq(basis_max) for basis_max in basis]
-        H = self.backend.modeMatrixProduct(Q,Cn_,Q)
-        H += self.backend.modeMatrixProduct(F,Ln_,F)
-
-        return H/2
-    
-    def mixedHamiltonianLC(self,basis,n_trunc):
-        assert len(basis)==len(n_trunc)
-        Cn_,Ln_ = self.Cn_,self.Ln_
-        Q,F = [],[]
-        Z = self.modeImpedance()
-        for base,n,z in zip(basis,n_trunc,Z):
-            if base=='o':
-                Q.append(self.backend.basisQo(n,z))
-                F.append(self.backend.basisFo(n,z))
-            elif base == 'q':
-                Q.append(self.backend.basisQq(n))
-                F.append(self.backend.basisFq(n))
-            elif base == 'f':
-                Q.append(self.backend.basisQf(n))
-                F.append(self.backend.basisFf(n))
-                
-        assert len(Q) == len(basis)
-        assert len(F) == len(basis)
-        H = self.backend.modeMatrixProduct(Q,Cn_,Q)
-        H += self.backend.modeMatrixProduct(F,Ln_,F)
-
-        return H/2
-    
-    def chargeChargeOffset(self,charge_offset=dict()):
-        charge = zeros(self.Nn)
-        basis = self.basis
-        Cn_ = self.Cn_
-        for node,dQ in charge_offset.items():
-            charge[self.nodes_[node]] = dQ
-            
-        Q = [self.backend.basisQq(basis_max) for basis_max in basis]
-        I = [self.backend.identity(2*basis_max+1,complex)*charge[index]*2 for index,basis_max in enumerate(basis)]
-        H = self.backend.modeMatrixProduct(Q,Cn_,I)
-        H += self.backend.modeMatrixProduct(I,Cn_,Q)
-        H += self.backend.modeMatrixProduct(I,Cn_,I)
-        
-        return H/2.
-
-    def potentialOscillator(self,external_fluxes=dict()):
-        Ln_ = self.Ln_
-        basis = self.basis
-
-        impedance = self.modeImpedance()
-        F = [self.backend.basisFo(basis_max,impedance[index]) for index,basis_max in enumerate(basis)]
-        H = self.backend.modeMatrixProduct(F,Ln_,F)/2
-        H += self.josephsonOscillator(external_fluxes)
-        return H
-
-    def potentialCharge(self,external_fluxes=dict()):
-        Ln_ = self.Ln_
-        basis = self.basis
-
-        F = [self.backend.basisFq(basis_max) for basis_max in basis]
-        H = self.backend.modeMatrixProduct(F,Ln_,F)/2
-        H += self.josephsonCharge(external_fluxes)
-        return H
-
-    def potentialFlux(self,external_fluxes=dict()):
-        Ln_ = self.Ln_
-        basis = self.basis
-
-        F = [self.backend.basisFf(basis_max) for basis_max in basis]
-        H = self.backend.modeMatrixProduct(F,Ln_,F)/2
-        H += self.josephsonFlux(external_fluxes)
-        return H
-    
-    def operatorExpectation(self,bra,O,mode,ket):
-        basis = self.basis
-        O = [O(basis_max) for basis_max in basis]
-        O = self.backend.basisProduct(O,[mode])
-        return bra.conj()@ O@ ket
-
-    def circuitEnergy(self,H_LC=tensor(0.0),H_J=None,external_fluxes=dict(),grad=True):
-        ## this could be improved : removing if clause, sub-class, sparse/dense and grad/numer segregation
-        if H_J is None:
-            H_J = null(H_LC)
-        #H_LC = self.hamiltonianLC()
-        #H_ext = self.fluxInducerEnergy()
-        H = H_LC + H_J(external_fluxes)
-        if grad:
-            if self.sparse:
-                eigenenergies = lobpcg(H.to(float),k=4,largest=False)[0]
-            else:
-                eigenenergies = hamiltonianEnergy(H)
-        else:
-            if self.sparse:
-                H = self.backend.scipyfy(H)
-                eigenenergies = self.backend.sparse.linalg.eigsh(H,return_eigenvectors=False,which='SA')
-                eigenenergies = sort(eigenenergies)
-            else:
-                H = H.detach().numpy() 
-                eigenenergies = eigvalsh(H)
-        
-        return eigenenergies
-
-    def spectrumManifold(self,flux_points,flux_manifold,H_LC=tensor(0.0),H_J=None,excitation=[1],grad=True,log=False):
-        """
-            flux_points : inductor identifier for external introduction
-            flux_manifold : [(fluxes)]
-        """
-        if H_J is None:
-            H_J = null(H_LC)
-        #manifold of flux space M
-        if not grad:
-            Ex = full_numpy((len(excitation),len(flux_manifold)),float('nan'))
-        else:
-            Ex = full_torch((len(excitation),len(flux_manifold)),float('nan'))
-        E0 = []
-        #H_LC = self.hamiltonianLC()
-        #H_ext = self.fluxInducerEnergy()
-        start = perf_counter()
-        for index,fluxes in enumerate(flux_manifold):
-            if log:
-                if index%50 == 0:
-                    print(index,'\t',perf_counter()-start)
-            external_fluxes = dict(zip(flux_points,fluxes))
-            #H_J = self.josephsonEnergy(external_fluxes)
-            #H = H_LC + H_J(external_fluxes)
-            eigenenergies = self.circuitEnergy(H_LC,H_J,external_fluxes,grad)
-            #eigenenergies = hamiltonianEnergy(H)
-            
-            E0.append(eigenenergies[0])
-            Ex[:,index] = eigenenergies[excitation]-eigenenergies[0]
-        return E0,Ex
-    
-    def fluxScape(self,flux_points,flux_manifold):
-        H_LC = self.kermanHamiltonianLC()
-        H_J = self.kermanHamiltonianJosephson
-        E0,EI = self.spectrumManifold(flux_point,flux_profile,H_LC,H_J,excitation=1)
-        E0,EII = self.spectrumManifold(flux_point,flux_profile,H_LC,H_J,excitation=2)
-        EI = tensor(EI).detach().numpy()
-        EII = tensor(EII).detach().numpy()
-        return EI,EII
 
 if __name__=='__main__':
     import models
