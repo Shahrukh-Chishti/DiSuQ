@@ -35,7 +35,7 @@ def zeroPi(basis,Ej=10.,Ec=50.,El=10.,EcJ=100.,sparse=True,symmetry=False,_L_=(L
     circuit = Circuit(circuit,basis,sparse,pairs)
     return circuit
 
-def zeroPi(basis,Ej=10.,Ec=50.,El=10.,EcJ=100.,sparse=True,symmetry=False,_L_=(L_,L0),_C_=(C_,C0),_J_=(J_,J0),_CJ_=(4*C_,4*C0)):
+def zeroPiCharge(basis,Ej=10.,Ec=50.,El=10.,EcJ=100.,sparse=True,symmetry=False,_L_=(L_,L0),_C_=(C_,C0),_J_=(J_,J0),_CJ_=(4*C_,4*C0)):
     circuit = [L(0,1,El,'Lx',True,_L_[1],_L_[0]),L(2,3,El,'Ly',True,_L_[1],_L_[0])]
     circuit += [C(1,2,Ec,'Cx',_C_[1],_C_[0]),C(3,0,Ec,'Cy',_C_[1],_C_[0])]
     circuit += [J(1,3,Ej,'Jx',_J_[1],_J_[0]),J(2,0,Ej,'Jy',_J_[1],_J_[0])]
