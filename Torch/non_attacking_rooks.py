@@ -82,3 +82,40 @@ def charPoly(coeffs,M,N,data,stats,sigma=dict()):
     else:
         stats['leaf'] += 1
         return product_poly(coeffs,M,data,sigma.copy())
+
+### Polynomial EigenSpectrum Decomposition
+
+class PolynomialOptimization(Optimization):
+    """
+        * multi-initialization starting : single point
+        * sparse Hamiltonian exploration
+        * Characteristic polynomial Root evaluation
+        * variable parameter space : {C,L,J}
+        * loss functions
+        * circuit tuning
+    """
+
+    def __init__(self,circuit,representation='K',sparse=True):
+        super().__init__(circuit,representation,sparse=True)
+
+    def characterisiticPoly(self,H):
+        # Non-Attacking Rooks algorithm
+        # Implement multi-threading
+        indices = H.coalesce().indices().T.detach().numpy()
+        values = H.coalesce().values()
+        N = len(H)
+        data = dict(zip([tuple(index) for index in indices],values))
+        coeffs = zeros(N+1); coeffs[0] = tensor(1.)
+        stats = {'terminal':0,'leaf':0}
+        poly = charPoly(coeffs,indices,N,data,stats)
+        return poly
+
+    def groundEigen(self,poly,start=tensor(-10.0),steps=5):
+        # mid Netwon root minimum for characterisiticPoly
+        # square polynomial
+        # nested iteration
+        return eigen
+
+    def eigenState(self,energy,H):
+        return state
+

@@ -90,43 +90,14 @@ class Optimization:
         elif self.representation == 'R':
             H_J = self.circuit.ridgeJosephson(self.circuit)
             H = self.circuit.ridgeHamiltonianLC(self.circuit) + H_J(external_fluxes)
-        if to_dense:
-            H = H.to_dense()
         return H
-
-class PolynomialOptimization(Optimization):
-    """
-        * multi-initialization starting : single point
-        * sparse Hamiltonian exploration
-        * Characteristic polynomial Root evaluation
-        * variable parameter space : {C,L,J}
-        * loss functions
-        * circuit tuning
-    """
-
-    def __init__(self,circuit,representation='K',sparse=True):
-        super().__init__(circuit,representation,sparse=True)
-
-    def characterisiticPoly(self,H):
-        # Non-Attacking Rooks algorithm
-        # Implement multi-threading
-        indices = H.coalesce().indices().T.detach().numpy()
-        values = H.coalesce().values()
-        N = len(H)
-        data = dict(zip([tuple(index) for index in indices],values))
-        coeffs = zeros(N+1); coeffs[0] = tensor(1.)
-        stats = {'terminal':0,'leaf':0}
-        poly = charPoly(coeffs,indices,N,data,stats)
-        return poly
-
-    def groundEigen(self,poly,start=tensor(-10.0),steps=5):
-        # mid Netwon root minimum for characterisiticPoly
-        # square polynomial
-        # nested iteration
-        return eigen
-
-    def eigenState(self,energy,H):
-        return state
+    
+    def breakPoint(self,logs):
+        # break optimization loop : stagnation / spiking
+        loss = pandas.DataFrame(logs)['loss'].to_numpy()
+        if loss[-1] > 1e12 and len(loss) > 10:
+            return True    
+        return False
 
     def spectrumOrdered(self,external_flux):
         H = self.circuitHamiltonian(external_flux)
@@ -392,13 +363,8 @@ class OrderingOptimization(Optimization):
         dParams = pandas.DataFrame(dParams)
         dCircuit = pandas.DataFrame(dCircuit)
         return dLog,dParams,dCircuit
-    
-def breakPoint(logs):
-    # break optimization loop : stagnation / spiking
-    loss = pandas.DataFrame(logs)['loss'].to_numpy()
-    if loss[-1] > 1e12 and len(loss) > 10:
-        return True    
-    return False
+
+### GRID initialization
 
 def truncNormalParameters(circuit,subspace,N,var=5):
     # var : std of normal distribution
@@ -467,6 +433,8 @@ def anHarmonicityProfile(optim,flux_profile):
         spectrum,state = optim.spectrumOrdered(flux)
         anHarmonicity_profile.append(anHarmonicity(spectrum).item())
     return anHarmonicity_profile
+
+### LOSS functions
 
 # Full batch of flux_profile
 def lossTransitionFlatness(Spectrum,flux_profile):
