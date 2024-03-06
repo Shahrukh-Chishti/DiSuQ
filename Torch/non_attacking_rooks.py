@@ -119,3 +119,15 @@ class PolynomialOptimization(Optimization):
     def eigenState(self,energy,H):
         return state
 
+    def orderTransition(self,spectrum,order,levels=[0,1,2]):
+        sorted = argsort(spectrum)
+        if all(sorted[levels]==order[levels]):
+            return order
+        return sorted
+
+    def spectrumOrdered(self,external_flux):
+        H = self.circuitHamiltonian(external_flux)
+        poly = self.characterisiticPoly(H)
+        E0 = self.groundEigen(poly)
+        state0 = self.groundState(E0,H)
+        return E0,state0

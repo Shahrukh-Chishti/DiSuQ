@@ -1,5 +1,4 @@
-from torch.optim import SGD,RMSprop,Adam,LBFGS,Rprop
-import torch,pandas
+from torch.optim import SGD,RMSprop,Adam,LBFGS,Rprop import torch,pandas
 from torch import tensor,argsort,zeros,abs,mean,stack,var,log,isnan,lobpcg,std
 from torch.autograd import grad
 from torch.linalg import det,inv,eigh as eigsolve, eigvalsh
@@ -7,7 +6,6 @@ from torch.nn.utils import clip_grad_norm_,clip_grad_value_
 from numpy import arange,set_printoptions,meshgrid,linspace,array,sqrt,sort,log10,random,logspace
 from scipy.optimize import minimize
 from time import perf_counter,sleep
-from DiSuQ.Torch.non_attacking_rooks import charPoly
 from DiSuQ.Torch.components import L,J,C,L0,J0,C0
 from DiSuQ.utils import empty
 from scipy.stats import truncnorm
@@ -17,7 +15,6 @@ from scipy.stats import truncnorm
     * Argument : dictionary{circuit Features}
     * Eigenvalues,Eigenvectors of Bottom 3 states
 """
-MSE = torch.nn.MSELoss()
 
 def anHarmonicity(spectrum):
     ground,Ist,IInd = spectrum[:3]
@@ -27,14 +24,30 @@ def groundEnergy(spectrum):
     return spectrum[0]
 
 class Optimization:
-    def __init__(self,circuit,representation='K',sparse=False,algo=Adam):
+    def __init__(self,circuit,flux_profile=[],loss_function=None):
         self.circuit = circuit
         self.parameters,self.IDs = self.circuitParameters()
-        self.levels = [0,1,2]
-        self.sparse = sparse
-        self.representation = representation
         self.algo = algo
-        
+        self.flux_profile = flux_profile
+        self.loss_function = loss_function
+        self.logInit()
+
+    def logInit(self):
+        self.logs = []
+        self.dParams = [self.parameterState()]
+        self.dCircuit = [self.circuitState()]
+
+    def logCompile(self):
+        dLog = pandas.DataFrame(self.logs)
+        if len(dLog)>0:
+            dLog['time'] = dLog['time'].diff()
+        else:
+            #import pdb;pdb.set_trace()
+            print('Failure initial')
+        dParams = pandas.DataFrame(self.dParams)
+        dCircuit = pandas.DataFrame(self.dCircuit)
+        return dLog,dParams,dCircuit
+
     def circuitID(self):
         IDs = []
         for component in self.circuit.network:
@@ -76,21 +89,38 @@ class Optimization:
                 parameters[component.ID] = component.jo.item()
         return parameters
 
-    def circuitHamiltonian(self,external_fluxes,to_dense=True):
-        # returns Dense Hamiltonian
-        if self.representation == 'K':
-            H = self.circuit.kermanHamiltonianLC()
-            H += self.circuit.kermanHamiltonianJosephson(external_fluxes)
-        elif self.representation == 'Q':
-            H = self.circuit.chargeHamiltonianLC()
-            H += self.circuit.josephsonCharge(external_fluxes)
-        elif self.representation == 'O':
-            H = self.circuit.oscillatorHamiltonianLC()
-            H += self.circuit.josephsonOscillator(external_fluxes)
-        elif self.representation == 'R':
-            H_J = self.circuit.ridgeJosephson(self.circuit)
-            H = self.circuit.ridgeHamiltonianLC(self.circuit) + H_J(external_fluxes)
+    def circuitHamiltonian(self,external_flux):
+        H = self.circuit.hamiltonianLC()
+        H += self.circuit.hamiltonianJosephson(external_flux)
         return H
+
+    def stateOrdered(self,external_flux):
+        H = self.circuitHamiltonian(external_flux)
+        return eigsolve(H)
+
+    def spectrumOrdered(self,external_flux):
+        H = self.circuitHamiltonian(external_flux)
+        if H.is_sparse:
+            spectrum = lobpcg(H.to(float),k=4,largest=False)[0]
+            states = None
+        else:
+            #spectrum = eigvalsh(H); states = None
+            spectrum,states = eigsolve(H)
+        return spectrum,states
+    
+    def lossScape(self,loss_function,flux_profile,scape,static):
+        # parascape : {A:[...],B:[....]} | A,B in circuit.parameters
+        A,B = scape.keys()
+        Loss = empty((len(scape[A]),len(scape[B])))
+        for id_A,a in enumerate(scape[A]):
+            for id_B,b in enumerate(scape[B]):
+                point = static.copy()
+                point.update({A:a,B:b})
+                self.circuit.initialization(point)
+                Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
+                loss,metrics = loss_function(Spectrum,flux_profile)
+                Loss[id_A,id_B] = loss.detach().item()
+        return Loss.transpose() # A -> X-axis , B -> Y-axis
     
     def breakPoint(self,logs):
         # break optimization loop : stagnation / spiking
@@ -99,12 +129,11 @@ class Optimization:
             return True    
         return False
 
-    def spectrumOrdered(self,external_flux):
-        H = self.circuitHamiltonian(external_flux)
-        poly = self.characterisiticPoly(H)
-        E0 = self.groundEigen(poly)
-        state0 = self.groundState(E0,H)
-        return E0,state0
+    def gradient(self):
+        gradients = [parameter.grad.detach().item() for parameter in self.parameters]
+        gradients = dict(zip(['grad-'+ID for ID in self.IDs],gradients))
+        return gradients
+
 
     def optimization(self,loss_function,flux_profile,iterations=50,lr=.0001):
         # flux profile :: list of flux points dict{}
@@ -127,60 +156,21 @@ class Optimization:
         dParams = pandas.DataFrame(dParams)
         return logs
 
-class OrderingOptimization(Optimization):
+     def multiInitialization(self,grid):
+         return logs
+
+class Minimization(Optimization):
     """
-        * multi-initialization starting : single point
-        * Dense Hamiltonian exploration
-        * Phase space correction
-        * variable parameter space : {C,L,J}
-        * loss functions
-        * circuit tuning
+        * implementation : scipy minimization
+        * gradient-free optimization methods
+        * exception : LBFGS
     """
+
     def __init__(self,circuit,representation='K',sparse=False):
         super().__init__(circuit,representation,sparse)
-        
-    def stateOrdered(self,external_flux):
-        H = self.circuitHamiltonian(external_flux)
-        spectrum,state = eigsolve(H)
-        spectrum = spectrum.real
-        order = argsort(spectrum)#.clone().detach() # break point : retain graph
-        return spectrum[order],state[order]
+        self.keys,self.x0 = symmetryConstraint()
 
-    def spectrumOrdered(self,external_flux,device=None):
-        H = self.circuitHamiltonian(external_flux)
-        if device is not None:
-            H = H.to(device)
-        if H.is_sparse:
-            spectrum = lobpcg(H.to(float),k=4,largest=False)[0]; states = None
-        else:
-            #spectrum = eigvalsh(H); states = None
-            spectrum,states = eigsolve(H)
-        
-        #spectrum = spectrum.real
-        #order = argsort(spectrum)#.clone().detach() # break point : retain graph
-        return spectrum,states
-
-    def orderTransition(self,spectrum,order,levels=[0,1,2]):
-        sorted = argsort(spectrum)
-        if all(sorted[levels]==order[levels]):
-            return order
-        return sorted
-    
-    def lossScape(self,loss_function,flux_profile,scape,static):
-        # parascape : {A:[...],B:[....]} | A,B in circuit.parameters
-        A,B = scape.keys()
-        Loss = empty((len(scape[A]),len(scape[B])))
-        for id_A,a in enumerate(scape[A]):
-            for id_B,b in enumerate(scape[B]):
-                point = static.copy()
-                point.update({A:a,B:b})
-                self.circuit.initialization(point)
-                Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
-                loss,metrics = loss_function(Spectrum,flux_profile)
-                Loss[id_A,id_B] = loss.detach().item()
-        return Loss.transpose() # A -> X-axis , B -> Y-axis
-        
-    def minimization(self,loss_function,flux_profile,method='Nelder-Mead',subspace=(),options=dict()):
+    def symmetryConstraint(self):
         x0 = self.circuitState()
         for slave,master in self.circuit.pairs.items():
             del x0[slave]
@@ -192,83 +182,141 @@ class OrderingOptimization(Optimization):
             del x0[key]
         keys = tuple(x0.keys()) # subspace
         x0 =  array(tuple(x0.values())) # subspace
-        def objective(parameters):
-            parameters = dict(zip(keys,parameters))
-            parameters.update(static)
-            for slave,master in self.circuit.pairs.items():
-                parameters[slave] = parameters[master]
-            self.circuit.initialization(parameters)
-            self.parameters,self.IDs = self.circuitParameters(subspace) 
-            
-            Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
-            loss,metrics = loss_function(Spectrum,flux_profile)
-            loss = loss.detach().item()
-            return loss
-        def gradient(parameters):
-            parameters = dict(zip(keys,parameters))
-            parameters.update(static)
-            for slave,master in self.circuit.pairs.items():
-                parameters[slave] = parameters[master]
-            self.circuit.initialization(parameters)
-            self.parameters,self.IDs = self.circuitParameters(subspace)
-                 
-            Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
-            loss,metrics = loss_function(Spectrum,flux_profile)
-            for parameter in self.parameters:
-                if parameter.grad:
-                    parameter.grad.zero_()
-            #import pdb;pdb.set_trace()
-            #if isnan(loss):
-            #import pdb;pdb.set_trace()
-            loss.backward(retain_graph=False)
-            parameters = dict(zip(self.IDs,self.parameters))
-            gradients = []
-            for iD in keys:
-                parameter = parameters[iD]
-                if parameter.grad is None: 
-                    # spectrum degeneracy:torch.eigh destablize
-                    # loss detached from computation graph
-                    #import ipdb;ipdb.set_trace()
-                    gradients.append(0.0)
-                else:
-                    gradients.append(parameter.grad.detach().item())
-            return gradients
+        return keys,x0
 
-        logs = []; dParams = [self.parameterState()]; dCircuit = [self.circuitState()]
-        def logger(parameters):
-            #parameters = dict(zip(keys,parameters))
-            #parameters.update(static)
-            #for slave,master in self.circuit.pairs.items():
-            #    parameters[slave] = parameters[master]
-            #self.circuit.initialization(parameters)
-            #self.parameters,self.IDs = self.circuitParameters(subspace)
-            Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
-            loss,metrics = loss_function(Spectrum,flux_profile)
-            loss = loss.detach().item()
-            metrics['loss'] = loss
-            metrics['time'] = perf_counter()-start
-            logs.append(metrics)
-            dParams.append(self.parameterState())
-            dCircuit.append(self.circuitState())
+    def objective(self,parameters):
+        parameters = dict(zip(self.keys,parameters))
+        parameters.update(static)
+        for slave,master in self.circuit.pairs.items():
+            parameters[slave] = parameters[master]
+        self.circuit.initialization(parameters)
+        self.parameters,self.IDs = self.circuitParameters(subspace) 
         
-        start = perf_counter()
+        Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
+        loss,metrics = loss_function(Spectrum,flux_profile)
+        loss = loss.detach().item()
+        return loss
+
+    def gradient(self,parameters):
+        parameters = dict(zip(self.keys,parameters))
+        parameters.update(static)
+        for slave,master in self.circuit.pairs.items():
+            parameters[slave] = parameters[master]
+        self.circuit.initialization(parameters)
+        self.parameters,self.IDs = self.circuitParameters(subspace)
+             
+        Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
+        loss,metrics = loss_function(Spectrum,flux_profile)
+        for parameter in self.parameters:
+            if parameter.grad:
+                parameter.grad.zero_()
+        #import pdb;pdb.set_trace()
+        #if isnan(loss):
+        #import pdb;pdb.set_trace()
+        loss.backward(retain_graph=False)
+        parameters = dict(zip(self.IDs,self.parameters))
+        gradients = []
+        for iD in self.keys:
+            parameter = parameters[iD]
+            if parameter.grad is None: 
+                # spectrum degeneracy:torch.eigh destablize
+                # loss detached from computation graph
+                #import ipdb;ipdb.set_trace()
+                gradients.append(0.0)
+            else:
+                gradients.append(parameter.grad.detach().item())
+        return gradients
+
+    def logger(self,parameters):
+        #parameters = dict(zip(self.keys,parameters))
+        #parameters.update(static)
+        #for slave,master in self.circuit.pairs.items():
+        #    parameters[slave] = parameters[master]
+        #self.circuit.initialization(parameters)
+        #self.parameters,self.IDs = self.circuitParameters(subspace)
+        Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
+        loss,metrics = loss_function(Spectrum,flux_profile)
+        loss = loss.detach().item()
+        metrics['loss'] = loss
+        metrics['time'] = perf_counter()-start
+        self.logs.append(metrics)
+        self.dParams.append(self.parameterState())
+        self.dCircuit.append(self.circuitState())
+        
+    def optimization(self,loss_function,flux_profile,method='Nelder-Mead',subspace=(),options=dict()):
         components = self.circuit.circuitComposition()
         Bounds = []
-        for iD in keys:
+        for iD in self.keys:
             bound = components[iD].bounds()
             Bounds.append(bound) # positive boundary exclusive
         options['disp'] = True
-        results = minimize(objective,x0,method=method,options=options,jac=gradient,bounds=Bounds,callback=logger)
-        
-        dLog = pandas.DataFrame(logs)
-        if len(dLog)>0:
-            dLog['time'] = dLog['time'].diff()
-        else:
-            #import pdb;pdb.set_trace()
-            print('Failure initial')
-        dParams = pandas.DataFrame(dParams)
-        dCircuit = pandas.DataFrame(dCircuit)
-        return dLog,dParams,dCircuit
+        start = perf_counter()
+        results = minimize(self.objective,self.x0,method=method,options=options,jac=self.gradient,bounds=Bounds,callback=self.logger)
+        return self.logCompile()
+
+class GradientDescent(Optimization):
+    """
+        * gradient descent optimization methods: Adam, LBFGS
+        * torch optimization implementation
+    """
+
+    def __init__(self,circuit,flux_profile=[],loss_function=None,algo=Adam):
+        super().__init__(circuit,flux_profile,loss_function)
+        self.algo = algo
+        self.optimizer = self.algo(self.parameters)
+        self.log_grad = False
+        self.log_spectrum = False
+        self.iteration = 0
+
+    def initLBFGS(self,lr=None,tol=1e-6,max_iter=20,history_size=5)
+        self.tol = tol
+        self.max_iter = max_iter
+        self.history_size = history_size
+        if lr is None:
+            optimizer = LBFGS(self.parameters,max_iter=max_iter,history_size=history_size,tolerance_change=tol,
+                              line_search_fn='strong_wolfe')
+        else :
+            optimizer = LBFGS(self.parameters,lr=lr,max_iter=max_iter,history_size=history_size,tolerance_change=tol,
+                              line_search_fn=None)
+
+    def logger(self,metrics,Spectrum):
+        """
+            * log every Spectrum decomposition
+            * indexing via iteration count
+            * additional gradient,Hessian logging
+            * assuming apriori backward call
+        """
+        self.dParams.append(self.parameterState())
+        self.dCircuit.append(self.circuitState())
+        self.logs.append(metrics)
+        spectrum = dict()
+        for level in range(3):
+            spectrum['0-level-'+str(level)] = Spectrum[0][0][level].detach().item()
+            spectrum['pi-level-'+str(level)] = Spectrum[int(len(flux_profile)/2)][0][level].detach().item()
+        metrics.update(spectrum)
+        gradients = [parameter.grad.detach().item() for parameter in self.parameters]
+        gradients = dict(zip(['grad-'+ID for ID in self.IDs],gradients))
+        metrics.update(gradients)
+                #hess = hessian(self.lossModel(loss_function,flux_profile))
+                #hess = tensor(hess)                    
+                #hess = dict(zip(['hess'+index for index in range(len(hess))],hess))
+                #metrics.update(hess)
+            #print([parameter.grad for parameter in self.parameters])
+
+    def closure(self):
+        """
+            * reevaluates the model and returns the loss
+            * calculate gradient
+            * register the logs
+        """
+        self.optimizer.zero_grad()
+        Spectrum = [self.spectrumOrdered(flux) for flux in self.flux_profile]
+        loss,metrics = self.loss_function(Spectrum,self.flux_profile)
+        metrics['loss'] = loss.detach().item()
+        metrics['iter'] = self.iteration
+        loss.backward(retain_graph=True)
+        self.logger(metrics,Spectrum)
+        return loss
     
     def lossModel(self,loss_function,flux_profile):
         def loss(parameters):
@@ -279,90 +327,17 @@ class OrderingOptimization(Optimization):
             loss,_ = loss_function(Spectrum,flux_profile)
             return loss
         return loss
-    
-    def optimizationLBFGS(self,loss_function,flux_profile,max_iter=20,history_size=100,tol=1e-6,iterations=100,lr=None,log=False):
-        # flux profile :: list of flux points dict{}
-        # loss_function : list of Hamiltonian on all flux points
-        logs = []; dParams = []; dCircuit = []
-        if lr is None:
-            optimizer = LBFGS(self.parameters,max_iter=max_iter,history_size=history_size,tolerance_change=tol,
-                              line_search_fn='strong_wolfe')
-        else :
-            optimizer = LBFGS(self.parameters,lr=lr,max_iter=max_iter,history_size=history_size,tolerance_change=tol,
-                              line_search_fn=None)
-        def closure():
-            optimizer.zero_grad()
-            Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
-            loss,_ = loss_function(Spectrum,flux_profile)                
-            loss.backward(retain_graph=True)
-            return loss
-        
-        dParams.append(self.parameterState())
-        dCircuit.append(self.circuitState())
+
+    def optimization(self,iterations=100,lr=1e-5):
         start = perf_counter()
-        for epoch in range(iterations):            
-            Spectrum = [self.spectrumOrdered(flux) for flux in flux_profile]
-            loss,_ = loss_function(Spectrum,flux_profile)
-            metrics = dict()
-            metrics['loss'] = loss.detach().item()
-            optimizer.step(closure)
-            metrics['time'] = perf_counter()-start
-            dParams.append(self.parameterState())
-            dCircuit.append(self.circuitState())
-            if log:
-                spectrum = dict()
-                for level in range(3):
-                    spectrum['0-level-'+str(level)] = Spectrum[0][0][level].detach().item()
-                    spectrum['pi-level-'+str(level)] = Spectrum[int(len(flux_profile)/2)][0][level].detach().item()
-                metrics.update(spectrum)
-                gradients = [parameter.grad.detach().item() for parameter in self.parameters]
-                gradients = dict(zip(['grad-'+ID for ID in self.IDs],gradients))
-                metrics.update(gradients)
-                    #hess = hessian(self.lossModel(loss_function,flux_profile))
-                    #hess = tensor(hess)                    
-                    #hess = dict(zip(['hess'+index for index in range(len(hess))],hess))
-                    #metrics.update(hess)
-                #print([parameter.grad for parameter in self.parameters])
-            
-            logs.append(metrics)
-            if breakPoint(logs[-15:]):
-                print('Optimization Break Point xxxxxx')
+        for self.iteration in range(iterations):
+            optimizer.step(self.closure)
+            self.logs[-1]['time'] = perf_counter()-start
+            if breakPoint(self.logs[-15:]):
+                print('Optimization Break Point :',self.iteration)
                 break
 
-        dLog = pandas.DataFrame(logs)
-        dLog['time'] = dLog['time'].diff()
-        dParams = pandas.DataFrame(dParams)
-        dCircuit = pandas.DataFrame(dCircuit)
-        return dLog,dParams,dCircuit
-
-    def optimization(self,loss_function,flux_profile,iterations=100,lr=1e-5,device=None):
-        # flux profile :: list of flux points dict{}
-        # loss_function : list of Hamiltonian on all flux points
-        logs = []; dParams = []; dCircuit = []
-        optimizer = self.algo(self.parameters,lr=lr)
-        dParams.append(self.parameterState())
-        dCircuit.append(self.circuitState())
-        start = perf_counter()
-        for epoch in range(iterations):            
-            Spectrum = [self.spectrumOrdered(flux,device) for flux in flux_profile]
-            loss,metrics = loss_function(Spectrum,flux_profile)
-            metrics['loss'] = loss.detach().item()
-            optimizer.zero_grad()
-            loss.backward(retain_graph=True)
-            optimizer.step()
-            metrics['time'] = perf_counter()-start
-            dParams.append(self.parameterState())
-            dCircuit.append(self.circuitState())
-            logs.append(metrics)
-            if breakPoint(logs[-15:]):
-                print('Optimization Break Point :',epoch)
-                break
-
-        dLog = pandas.DataFrame(logs)
-        dLog['time'] = dLog['time'].diff()
-        dParams = pandas.DataFrame(dParams)
-        dCircuit = pandas.DataFrame(dCircuit)
-        return dLog,dParams,dCircuit
+        return self.logCompile()
 
 ### GRID initialization
 
@@ -436,6 +411,7 @@ def anHarmonicityProfile(optim,flux_profile):
 
 ### LOSS functions
 
+MSE = torch.nn.MSELoss()
 # Full batch of flux_profile
 def lossTransitionFlatness(Spectrum,flux_profile):
     spectrum = stack([spectrum[:3] for spectrum,state in Spectrum])
