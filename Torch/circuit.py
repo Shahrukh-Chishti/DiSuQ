@@ -470,7 +470,7 @@ class Kerman(Circuit):
         assert len(combination)==len(Dminus)
         return Dplus,Dminus
 
-    def kermanHamiltonianJosephson(self,external_fluxes=dict()):
+    def hamiltonianJosephson(self,external_fluxes=dict()):
         edges,Ej = self.josephsonComponents()
         N = self.kermanBasisSize()
         H = self.backend.null(N)
@@ -495,7 +495,7 @@ class Kerman(Circuit):
 
         return H/2
 
-    def kermanHamiltonianLC(self):
+    def hamiltonianLC(self):
         """
             basis : {O:(,,,),I:(,,,),J:(,,,)}
         """
@@ -574,7 +574,7 @@ class Kerman(Circuit):
 
 class Oscillator(Circuit):
 
-    def josephsonOscillator(self,external_fluxes=dict()):
+    def hamiltonianJosephson(self,external_fluxes=dict()):
         basis = self.basis
         Z = self.modeImpedance() * 2 # cooper pair factor
         Dplus = [self.backend.displacementOscillator(basis_max,z,1) for z,basis_max in zip(Z,basis)]
@@ -608,7 +608,7 @@ class Oscillator(Circuit):
         H += self.josephsonOscillator(external_fluxes)
         return H
 
-    def oscillatorHamiltonianLC(self):
+    def hamiltonianLC(self):
         """
             basis : [basis_size] charge
         """
@@ -626,7 +626,7 @@ class Oscillator(Circuit):
 
 class Flux(Circuit):
 
-    def fluxHamiltonianLC(self):
+    def hamiltonianLC(self):
         """
             basis : [basis_size] charge
         """
@@ -640,7 +640,7 @@ class Flux(Circuit):
 
         return H/2
 
-    def josephsonFlux(self,external_fluxes=dict()):
+    def hamiltonianJosephson(self,external_fluxes=dict()):
         basis = self.basis
         Z = self.modeImpedance() * 2 # cooper pair factor
         Dplus = [self.backend.displacementFlux(basis_max,1) for z,basis_max in zip(Z,basis)]
@@ -683,7 +683,7 @@ class Charge(Circuit):
             return N
         return prod(N)
 
-    def josephsonCharge(self,external_fluxes=dict()):
+    def hamiltonianJosephson(self,external_fluxes=dict()):
         basis = self.basis
         Dplus = [self.backend.chargeDisplacePlus(basis_max) for basis_max in basis]
         Dminus = [self.backend.chargeDisplaceMinus(basis_max) for basis_max in basis]
@@ -708,7 +708,7 @@ class Charge(Circuit):
 
         return H/2
 
-    def chargeHamiltonianLC(self):
+    def hamiltonianLC(self):
         """
             basis : [basis_size] charge
         """
