@@ -11,7 +11,6 @@ from numpy.linalg import matrix_rank
 from numpy.linalg import eigvalsh
 from numpy import prod,flip,array,sort,full as full_numpy
 
-
 def inverse(A,zero=1e-15):
     if det(A) == 0:
         #return zeros_like(A)
@@ -397,7 +396,10 @@ class Kerman(Circuit):
     def kermanDistribution(self):
         Ln_ = self.Ln_
         Ni = self.islandModes()
-        No = matrix_rank(Ln_.detach().numpy())
+        if Ln_.is_cuda:
+            No = matrix_rank(Ln_.cpu().detach().numpy())
+        else:
+            No = matrix_rank(Ln_.detach().numpy())
         Nj = self.Nn - Ni - No
         return No,Ni,Nj
 
