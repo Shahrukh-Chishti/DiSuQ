@@ -6,6 +6,9 @@ __pycache__/
 # C extensions
 *.so
 
+# Visual Code
+*.vscode*
+
 # Notebooks
 *.ipynb_checkpoints/*
 */*.ipynb_checkpoints/*
