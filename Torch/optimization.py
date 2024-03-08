@@ -85,11 +85,13 @@ class Optimization:
             Bounds.append(bound) # positive boundary exclusive
         return Bounds
 
+    @torch.compile(options={"triton.cudagraphs": True}, fullgraph=False)
     def circuitHamiltonian(self,external_flux):
         H = self.circuit.hamiltonianLC()
         H += self.circuit.hamiltonianJosephson(external_flux)
         return H
 
+    @torch.compile(options={"triton.cudagraphs": True}, fullgraph=False)
     def eigenSpectrum(self):
         Spectrum = []
         # distribute over devices !!!
@@ -271,6 +273,7 @@ class GradientDescent(Optimization):
             #metrics.update(hess)
         self.logs.append(metrics)
 
+    @torch.compile
     def closure(self):
         """
             * reevaluates the model and returns the loss

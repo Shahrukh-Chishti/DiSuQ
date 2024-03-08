@@ -391,6 +391,7 @@ class Kerman(Circuit):
         self.R = self.kermanTransform().real
         self.L_,self.C_ = self.modeTransformation()
         #self.Lo_,self.C_ = self.kermanComponents()
+        # JIT-compilation indifferent pers-initialization
         self.Q,self.F,self.DI_plus,self.DI_minus,self.DJ_plus,self.DJ_minus = self.operatorInitialization()
         self.Qoo,self.Foo,self.Qoi,self.Qoj,self.Qij,self.Qij,self.Qii,self.Qjj = self.oscillatorInitialization()
         self.Dplus,self.Dminus = self.josephsonInitialization()
@@ -559,6 +560,7 @@ class Kerman(Circuit):
 
         return Dplus,Dminus
 
+    @torch.compile(options={"triton.cudagraphs": True}, fullgraph=True)
     def hamiltonianJosephson(self,external_fluxes=dict()):
         edges,Ej = self.josephsonComponents()
         N = self.basisSize()
@@ -575,6 +577,7 @@ class Kerman(Circuit):
 
         return H/2
 
+    @torch.compile(options={"triton.cudagraphs": True}, fullgraph=True)
     def hamiltonianLC(self):
         """
             basis : {O:(,,,),I:(,,,),J:(,,,)}
@@ -749,6 +752,7 @@ class Flux(Circuit):
 class Charge(Circuit):
     def __init__(self,network,basis,sparse=True,pairs=dict(),device=None):
         super().__init__(network,basis,sparse,pairs,device)
+        # JIT-compilation indifferent pers-initialization
         self.Q,self.F,self.D_plus,self.D_minus = self.operatorInitialization()
         self.QQ,self.FF = self.oscillatorInitialization()
         self.Jplus,self.Jminus = self.josephsonInitialization()
@@ -811,6 +815,7 @@ class Charge(Circuit):
 
         return Jplus,Jminus
 
+    @torch.compile(options={"triton.cudagraphs": True}, fullgraph=True)
     def hamiltonianLC(self):
         Cn_,Ln_ = self.Cn_,self.Ln_
         H = self.backend.null(self.basisSize())
@@ -819,7 +824,8 @@ class Charge(Circuit):
         H = coeffProduct(H,Ln_,self.FF)
 
         return H/2
-
+    
+    @torch.compile(options={"triton.cudagraphs": True}, fullgraph=True)
     def hamiltonianJosephson(self,external_fluxes=dict()):
         edges,Ej = self.josephsonComponents()
         N = self.basisSize()
