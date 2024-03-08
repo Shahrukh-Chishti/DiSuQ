@@ -35,7 +35,7 @@ def zeroPi(basis,Ej=10.,Ec=50.,El=10.,EcJ=100.,sparse=True,symmetry=False,_L_=(L
     circuit = Circuit(circuit,basis,sparse,pairs)
     return circuit
 
-def zeroPiCharge(basis,Ej=10.,Ec=50.,El=10.,EcJ=100.,sparse=True,symmetry=False,_L_=(L_,L0),_C_=(C_,C0),_J_=(J_,J0),_CJ_=(4*C_,4*C0)):
+def zeroPi(Rep,basis,Ej=10.,Ec=50.,El=10.,EcJ=100.,sparse=True,symmetry=False,_L_=(L_,L0),_C_=(C_,C0),_J_=(J_,J0),_CJ_=(4*C_,4*C0),device=None):
     circuit = [L(0,1,El,'Lx',True,_L_[1],_L_[0]),L(2,3,El,'Ly',True,_L_[1],_L_[0])]
     circuit += [C(1,2,Ec,'Cx',_C_[1],_C_[0]),C(3,0,Ec,'Cy',_C_[1],_C_[0])]
     circuit += [J(1,3,Ej,'Jx',_J_[1],_J_[0]),J(2,0,Ej,'Jy',_J_[1],_J_[0])]
@@ -47,7 +47,7 @@ def zeroPiCharge(basis,Ej=10.,Ec=50.,El=10.,EcJ=100.,sparse=True,symmetry=False,
         pairs['Jy'] = 'Jx'
         pairs['CJy'] = 'CJx'
     
-    circuit = Charge(circuit,basis,sparse,pairs)
+    circuit = Rep(circuit,basis,sparse,pairs,device)
     return circuit
 
 def zeroPiRidge(basis,Ej=10.,Ec=50.,El=10.,EcJ=100.,sparse=True,symmetry=False,_L_=(L_,L0),_C_=(C_,C0),_J_=(J_,J0),_CJ_=(4*C_,4*C0),ridge = False,flux0=numpy.pi*6):
@@ -151,11 +151,11 @@ def prismon(basis,Ej=10.,Ec=50.,El=10.,EcJ=100.,sparse=True,symmetry=False,_L_=(
     circuit = Circuit(circuit,basis,sparse,pairs)
     return circuit
 
-def transmon(basis,Ej=10.,Ec=0.3,sparse=True):
+def transmon(Rep,basis,Ej=10.,Ec=0.3,sparse=True):
     transmon = [J(0,1,Ej,'J')]
     transmon += [C(0,1,Ec,'C')]
 
-    transmon = Circuit(transmon,basis,sparse)
+    transmon = Rep(transmon,basis,sparse)
     return transmon
 
 def splitTransmon(basis):
@@ -184,15 +184,15 @@ def fluxoniumArray(basis,shunt=None,gamma=1.5,N=0,Ec=100,Ej=150,sparse=True):
     circuit = Circuit(circuit,basis,sparse)
     return circuit
 
-def fluxonium(basis,El=.0003,Ec=.1,Ej=20,sparse=True):
+def fluxonium(Rep,basis,El=.0003,Ec=.1,Ej=20,sparse=True):
     circuit = [C(0,1,Ec,'Cap')]
     circuit += [J(0,1,Ej,'JJ')]
     circuit += [L(0,1,El,'I',True)]
 
-    circuit = Circuit(circuit,basis,sparse)
+    circuit = Rep(circuit,basis,sparse)
     return circuit
 
-def shuntedQubit(basis,josephson=[120.,50,120.],cap=[10.,50.,10.],ind=100.,sparse=True,symmetry=False,_C_=(C_,C0),_J_=(J_,J0)):
+def shuntedQubit(Rep,basis,josephson=[120.,50,120.],cap=[10.,50.,10.],ind=100.,sparse=True,symmetry=False,_C_=(C_,C0),_J_=(J_,J0)):
     Ej1,Ej2,Ej3 = josephson
     C1,C2,C3 = cap
 
@@ -207,7 +207,7 @@ def shuntedQubit(basis,josephson=[120.,50,120.],cap=[10.,50.,10.],ind=100.,spars
         pairs['JJ3'] = 'JJ1'
         pairs['C3'] = 'C1'
     
-    circuit = Circuit(circuit,basis,sparse,pairs)
+    circuit = Rep(circuit,basis,sparse,pairs)
     return circuit
 
 def shuntedQubitFluxFree(basis,josephson=[120.,50,120.],cap=[10.,50.,10.],sparse=True):
