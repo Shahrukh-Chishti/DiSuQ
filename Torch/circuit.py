@@ -1,11 +1,12 @@
 import networkx,copy,torch
 import matplotlib.pyplot as plt
-
+from contextlib import nullcontext
 import DiSuQ.Torch.dense as Dense
 import DiSuQ.Torch.sparse as Sparse
 from torch import exp,det,tensor,tile,arange,ones,zeros,zeros_like,sqrt,diagonal,argsort,lobpcg,set_num_threads,full as full_torch
 from torch.linalg import eigvalsh as eigsolve,inv,eigh
 from DiSuQ.Torch.components import diagonalisation,null,J,L,C,im,pi,complex,float
+from DiSuQ.Torch.components import COMPILER_BACKEND
 from time import perf_counter
 from numpy.linalg import matrix_rank
 from numpy.linalg import eigvalsh
@@ -97,6 +98,7 @@ class Circuit:
         else:
             self.backend = Dense
         self.device = device
+        self.spectrum_limit = 4
 
     def initialization(self,parameters):
         # parameters : GHz unit
@@ -316,15 +318,32 @@ class Circuit:
                 P = self.backend.basisProduct(fluxModes,[i]) - self.backend.basisProduct(fluxModes,[j])
             H = H + P@P / 2 / L
         return H
-
+    
+    @torch.compile(options={COMPILER_BACKEND: True}, fullgraph=False)
     def circuitHamiltonian(self,external_flux):
+        # torch reconstruct computation graph repeatedly
         H = self.hamiltonianLC()
         H += self.hamiltonianJosephson(external_flux)
         return H
-
-    def spectrum(self,external_flux):
-        H = self.circuitHamiltonian(external_flux)
-
+    
+    @torch.compile(options={COMPILER_BACKEND: True}, fullgraph=False)
+    def eigenSpectrum(self,external_flux,vectors=False,grad=True):
+        with torch.inference_mode() if grad is False else nullcontext() as null:
+            H = self.circuitHamiltonian(external_flux)
+            import ipdb;ipdb.set_trace()
+            if vectors:
+                if H.dtype is float:
+                    # w/o : flux controls or Fourier conjugate
+                    spectrum,states = lobpcg(H,k=self.spectrum_limit,largest=False,method='ortho')
+                else:
+                    spectrum,states = eigh(H)
+                    spectrum = spectrum[:self.spectrum_limit]
+                    states = states[:self.spectrum_limit]
+            else:
+                # stable eigenvalues over degeneracy limits
+                spectrum[:self.spectrum_limit] = eigvalsh(H); states = None
+        return spectrum,states
+    
     def operatorExpectation(self,bra,O,mode,ket):
         basis = self.basis
         O = [O(basis_max) for basis_max in basis]

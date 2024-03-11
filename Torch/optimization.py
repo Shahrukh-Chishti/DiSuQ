@@ -8,6 +8,7 @@ from numpy import arange,set_printoptions,meshgrid,linspace,array,sqrt,sort,log1
 from scipy.optimize import minimize
 from time import perf_counter,sleep
 from DiSuQ.Torch.components import L,J,C,L0,J0,C0
+from DiSuQ.Torch.components import COMPILER_BACKEND
 from DiSuQ.utils import empty
 from scipy.stats import truncnorm
 
@@ -18,6 +19,9 @@ class Optimization:
         self.Bounds = self.parameterBounds()
         self.flux_profile = flux_profile
         self.loss_function = loss_function
+        # depending upon the choice of optimization & loss
+        self.vectors_calc = False
+        self.grad_calc = True
         self.logInit()
 
     def logInit(self):
@@ -85,26 +89,26 @@ class Optimization:
             Bounds.append(bound) # positive boundary exclusive
         return Bounds
 
-    @torch.compile(options={"triton.cudagraphs": True}, fullgraph=False)
+    @torch.compile(options={COMPILER_BACKEND: True}, fullgraph=False)
     def circuitHamiltonian(self,external_flux):
         H = self.circuit.hamiltonianLC()
         H += self.circuit.hamiltonianJosephson(external_flux)
         return H
 
-    @torch.compile(options={"triton.cudagraphs": True}, fullgraph=False)
-    def eigenSpectrum(self):
+    @torch.compile(options={COMPILER_BACKEND: True}, fullgraph=False)
+    def spectrumProfile(self):
         Spectrum = []
         # distribute over devices !!!
         for flux in self.flux_profile:
-            H = self.circuitHamiltonian(flux)
-            if self.circuit.sparse:
-                spectrum = lobpcg(H.to(float),k=4,largest=False)[0]
-                states = None
-            else:
-                #spectrum = eigvalsh(H); states = None
-                spectrum,states = eigsolve(H)
+            spectrum,states = self.circuit.spectrumProfile(flux,self.vectors_calc,self.grad_calc)
             Spectrum.append((spectrum,states))
         return Spectrum
+    
+    @torch.compile(options={COMPILER_BACKEND: True}, fullgraph=False)
+    def loss(self):
+        Spectrum = self.spectrumProfile()
+        loss,metrics = self.loss_function(Spectrum,self.flux_profile)
+        return loss,metrics,Spectrum
     
     def lossScape(self,loss_function,flux_profile,scape,static):
         # parascape : {A:[...],B:[....]} | A,B in circuit.parameters
@@ -115,8 +119,7 @@ class Optimization:
                 point = static.copy()
                 point.update({A:a,B:b})
                 self.circuit.initialization(point)
-                Spectrum = self.eigenSpectrum()
-                loss,metrics = loss_function(Spectrum,flux_profile)
+                loss,metrics,Spectrum = self.loss()
                 Loss[id_A,id_B] = loss.detach().item()
         return Loss.transpose() # A -> X-axis , B -> Y-axis
     
@@ -168,21 +171,21 @@ class Minimization(Optimization):
             parameters[slave] = parameters[master]
         self.circuit.initialization(parameters)
         self.parameters,self.IDs = self.circuitParameters(self.subspace) 
-        
+
+    @torch.compile(options={COMPILER_BACKEND: True}, fullgraph=False)
     def objective(self,parameters):
         self.parameterInitialization(parameters)
-        Spectrum = self.eigenSpectrum()
-        loss,metrics = self.loss_function(Spectrum,self.flux_profile)
+        loss,metrics,Spectrum = self.loss()
         loss = loss.detach().item()
         return loss
 
+    @torch.compile(options={COMPILER_BACKEND: True}, fullgraph=False)
     def gradients(self,parameters):
         # method overriding super-class
         self.parameterInitialization(parameters)
         if parameters is not self.parameters:
             # evaluate forward
-            Spectrum = self.eigenSpectrum()
-            loss,metrics = self.loss_function(Spectrum,self.flux_profile)
+            loss,metrics,Spectrum = self.loss()
         for parameter in self.parameters:
             if parameter.grad:
                 parameter.grad.zero_()
@@ -200,15 +203,10 @@ class Minimization(Optimization):
                 gradients.append(parameter.grad.detach().item())
         return gradients
 
+    @torch.compile(options={COMPILER_BACKEND: True}, fullgraph=False)
     def logger(self,parameters):
-        #parameters = dict(zip(self.keys,parameters))
-        #parameters.update(static)
-        #for slave,master in self.circuit.pairs.items():
-        #    parameters[slave] = parameters[master]
-        #self.circuit.initialization(parameters)
-        #self.parameters,self.IDs = self.circuitParameters(subspace)
-        Spectrum = self.eigenSpectrum()
-        loss,metrics = self.loss_function(Spectrum,flux_profile)
+        self.parameterInitialization(parameters)
+        loss,metrics,Spectrum = self.loss()
         loss = loss.detach().item()
         metrics['loss'] = loss
         metrics['time'] = perf_counter()-self.start # global scope
@@ -273,7 +271,7 @@ class GradientDescent(Optimization):
             #metrics.update(hess)
         self.logs.append(metrics)
 
-    @torch.compile
+    @torch.compile(options={COMPILER_BACKEND: True}, fullgraph=False)
     def closure(self):
         """
             * reevaluates the model and returns the loss
@@ -282,8 +280,7 @@ class GradientDescent(Optimization):
             * in-place parameter update
         """
         self.optimizer.zero_grad()
-        Spectrum = self.eigenSpectrum()
-        loss,metrics = self.loss_function(Spectrum,self.flux_profile)
+        loss,metrics,Spectrum = self.loss()
         metrics['loss'] = loss.detach().item()
         metrics['iter'] = self.iteration
         loss.backward(retain_graph=True)
@@ -391,7 +388,6 @@ def lossTransitionFlatness(Spectrum,flux_profile):
 #     profile = tensor([0.]*N)
 #     for index,e in enumerate(E):
 #         profile += e
-    
 
 def lossDegeneracyWeighted(delta0,D0,N=2):
     def Loss(Spectrum,flux_profile):

@@ -18,6 +18,7 @@ Z0 = h/4/e/e
 Z0 = flux_quanta / 2 / e
 zero = 1e-12
 inf = 1e12
+COMPILER_BACKEND = "inductor"
 
 # upper limit of circuit elements
 # Energy units in GHz
