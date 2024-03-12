@@ -19,6 +19,7 @@ Z0 = flux_quanta / 2 / e
 zero = 1e-12
 inf = 1e12
 COMPILER_BACKEND = "inductor"
+DISTRIBUTION_BACKEND = "nccl"
 
 # upper limit of circuit elements
 # Energy units in GHz

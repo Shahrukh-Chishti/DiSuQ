@@ -4,12 +4,12 @@ from contextlib import nullcontext
 import DiSuQ.Torch.dense as Dense
 import DiSuQ.Torch.sparse as Sparse
 from torch import exp,det,tensor,tile,arange,ones,zeros,zeros_like,sqrt,diagonal,argsort,lobpcg,set_num_threads,full as full_torch
-from torch.linalg import eigvalsh as eigsolve,inv,eigh
+from torch.linalg import eigvalsh,inv,eigh
 from DiSuQ.Torch.components import diagonalisation,null,J,L,C,im,pi,complex,float
 from DiSuQ.Torch.components import COMPILER_BACKEND
 from time import perf_counter
 from numpy.linalg import matrix_rank
-from numpy.linalg import eigvalsh
+#from numpy.linalg import eigvalsh
 from numpy import prod,flip,array,sort,full as full_numpy
 
 ### Computational Sub-routines
@@ -319,18 +319,17 @@ class Circuit:
             H = H + P@P / 2 / L
         return H
     
-    @torch.compile(options={COMPILER_BACKEND: True}, fullgraph=False)
+    #@torch.compile(backend=COMPILER_BACKEND, fullgraph=False)
     def circuitHamiltonian(self,external_flux):
         # torch reconstruct computation graph repeatedly
         H = self.hamiltonianLC()
         H += self.hamiltonianJosephson(external_flux)
         return H
     
-    @torch.compile(options={COMPILER_BACKEND: True}, fullgraph=False)
+    #@torch.compile(backend=COMPILER_BACKEND, fullgraph=False)
     def eigenSpectrum(self,external_flux,vectors=False,grad=True):
         with torch.inference_mode() if grad is False else nullcontext() as null:
             H = self.circuitHamiltonian(external_flux)
-            import ipdb;ipdb.set_trace()
             if vectors:
                 if H.dtype is float:
                     # w/o : flux controls or Fourier conjugate
@@ -341,7 +340,8 @@ class Circuit:
                     states = states[:self.spectrum_limit]
             else:
                 # stable eigenvalues over degeneracy limits
-                spectrum[:self.spectrum_limit] = eigvalsh(H); states = None
+                spectrum = eigvalsh(H); states = None
+                spectrum = spectrum[:self.spectrum_limit]
         return spectrum,states
     
     def operatorExpectation(self,bra,O,mode,ket):
@@ -579,7 +579,7 @@ class Kerman(Circuit):
 
         return Dplus,Dminus
 
-    @torch.compile(options={"triton.cudagraphs": True}, fullgraph=True)
+    #@torch.compile(backend=COMPILER_BACKEND, fullgraph=True)
     def hamiltonianJosephson(self,external_fluxes=dict()):
         edges,Ej = self.josephsonComponents()
         N = self.basisSize()
@@ -596,7 +596,7 @@ class Kerman(Circuit):
 
         return H/2
 
-    @torch.compile(options={"triton.cudagraphs": True}, fullgraph=True)
+    #@torch.compile(backend=COMPILER_BACKEND, fullgraph=True)
     def hamiltonianLC(self):
         """
             basis : {O:(,,,),I:(,,,),J:(,,,)}
@@ -834,7 +834,7 @@ class Charge(Circuit):
 
         return Jplus,Jminus
 
-    @torch.compile(options={"triton.cudagraphs": True}, fullgraph=True)
+    #@torch.compile(backend=COMPILER_BACKEND, fullgraph=True)
     def hamiltonianLC(self):
         Cn_,Ln_ = self.Cn_,self.Ln_
         H = self.backend.null(self.basisSize())
@@ -844,7 +844,7 @@ class Charge(Circuit):
 
         return H/2
     
-    @torch.compile(options={"triton.cudagraphs": True}, fullgraph=True)
+    #@torch.compile(backend=COMPILER_BACKEND, fullgraph=True)
     def hamiltonianJosephson(self,external_fluxes=dict()):
         edges,Ej = self.josephsonComponents()
         N = self.basisSize()

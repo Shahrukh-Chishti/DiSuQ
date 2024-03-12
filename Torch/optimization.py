@@ -89,22 +89,22 @@ class Optimization:
             Bounds.append(bound) # positive boundary exclusive
         return Bounds
 
-    @torch.compile(options={COMPILER_BACKEND: True}, fullgraph=False)
+    #@torch.compile(backend=COMPILER_BACKEND, fullgraph=False)
     def circuitHamiltonian(self,external_flux):
         H = self.circuit.hamiltonianLC()
         H += self.circuit.hamiltonianJosephson(external_flux)
         return H
 
-    @torch.compile(options={COMPILER_BACKEND: True}, fullgraph=False)
+    #@torch.compile(backend=COMPILER_BACKEND, fullgraph=False)
     def spectrumProfile(self):
         Spectrum = []
         # distribute over devices !!!
         for flux in self.flux_profile:
-            spectrum,states = self.circuit.spectrumProfile(flux,self.vectors_calc,self.grad_calc)
+            spectrum,states = self.circuit.eigenSpectrum(flux,self.vectors_calc,self.grad_calc)
             Spectrum.append((spectrum,states))
         return Spectrum
     
-    @torch.compile(options={COMPILER_BACKEND: True}, fullgraph=False)
+    #@torch.compile(backend=COMPILER_BACKEND, fullgraph=False)
     def loss(self):
         Spectrum = self.spectrumProfile()
         loss,metrics = self.loss_function(Spectrum,self.flux_profile)
@@ -172,14 +172,14 @@ class Minimization(Optimization):
         self.circuit.initialization(parameters)
         self.parameters,self.IDs = self.circuitParameters(self.subspace) 
 
-    @torch.compile(options={COMPILER_BACKEND: True}, fullgraph=False)
+    #@torch.compile(backend=COMPILER_BACKEND, fullgraph=False)
     def objective(self,parameters):
         self.parameterInitialization(parameters)
         loss,metrics,Spectrum = self.loss()
         loss = loss.detach().item()
         return loss
 
-    @torch.compile(options={COMPILER_BACKEND: True}, fullgraph=False)
+    #@torch.compile(backend=COMPILER_BACKEND, fullgraph=False)
     def gradients(self,parameters):
         # method overriding super-class
         self.parameterInitialization(parameters)
@@ -203,7 +203,7 @@ class Minimization(Optimization):
                 gradients.append(parameter.grad.detach().item())
         return gradients
 
-    @torch.compile(options={COMPILER_BACKEND: True}, fullgraph=False)
+    #@torch.compile(backend=COMPILER_BACKEND, fullgraph=False)
     def logger(self,parameters):
         self.parameterInitialization(parameters)
         loss,metrics,Spectrum = self.loss()
@@ -213,6 +213,7 @@ class Minimization(Optimization):
         self.logs.append(metrics)
         self.dParams.append(self.parameterState())
         self.dCircuit.append(self.circuitState())
+        #torch.compiler.cudagraph_mark_step_begin()
         
     def optimization(self,method='Nelder-Mead',options=dict()):
         options['disp'] = True
@@ -271,7 +272,7 @@ class GradientDescent(Optimization):
             #metrics.update(hess)
         self.logs.append(metrics)
 
-    @torch.compile(options={COMPILER_BACKEND: True}, fullgraph=False)
+    #@torch.compile(backend=COMPILER_BACKEND, fullgraph=False)
     def closure(self):
         """
             * reevaluates the model and returns the loss
@@ -290,6 +291,7 @@ class GradientDescent(Optimization):
     def optimization(self,iterations=100):
         start = perf_counter()
         for self.iteration in range(iterations):
+            #torch.compiler.cudagraph_mark_step_begin()
             self.optimizer.step(self.closure)
             self.logs[-1]['time'] = perf_counter()-start
             if self.breakPoint(self.logs[-15:]):
@@ -492,14 +494,15 @@ if __name__=='__main__':
     torch.set_num_threads(12)
     basis = [15]
     from models import transmon
-    circuit = transmon(basis,sparse=False)
+    from circuit import Charge,Kerman
+    circuit = transmon(Charge,basis,sparse=False)
     flux_profile = [dict()]
     loss = lossTransition(tensor(5.),tensor(4.5))
     optim = GradientDescent(circuit,flux_profile,loss)
     optim.optimizer = optim.initAlgo(lr=1e-1)
     print(circuit.circuitComponents())  
     dLogs,dParams,dCircuit = optim.optimization(10000)
+    import ipdb;ipdb.set_trace()
     optim = Minimization(circuit,flux_profile,loss)
     dLogs,dParams,dCircuit = optim.optimization()
-    import ipdb;ipdb.set_trace()
     print("refer Optimization Verification")
