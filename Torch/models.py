@@ -154,8 +154,9 @@ def prismon(basis,Ej=10.,Ec=50.,El=10.,EcJ=100.,sparse=True,symmetry=False,_L_=(
 def transmon(Rep,basis,Ej=10.,Ec=0.3,sparse=True):
     transmon = [J(0,1,Ej,'J')]
     transmon += [C(0,1,Ec,'C')]
+    control_iD = dict()
 
-    transmon = Rep(transmon,basis,sparse)
+    transmon = Rep(transmon,control_iD,basis,sparse)
     return transmon
 
 def splitTransmon(basis):

@@ -1,6 +1,6 @@
 from torch.optim import SGD,RMSprop,Adam,LBFGS,Rprop
 import torch,pandas
-from torch import tensor,argsort,zeros,abs,mean,stack,var,log,isnan,lobpcg,std
+from torch import tensor,Tensor,argsort,zeros,abs,mean,stack,var,log,isnan,lobpcg,std
 from torch.autograd import grad
 from torch.linalg import det,inv,eigh as eigsolve, eigvalsh
 from torch.nn.utils import clip_grad_norm_,clip_grad_value_
@@ -13,8 +13,9 @@ from DiSuQ.utils import empty
 from scipy.stats import truncnorm
 
 class Optimization:
-    def __init__(self,circuit,flux_profile=[],loss_function=None):
+    def __init__(self,circuit,profile,flux_profile=[],loss_function=None):
         self.circuit = circuit
+        self.profile = profile # data parallel - control profile
         self.parameters,self.IDs = self.circuitParameters()
         self.Bounds = self.parameterBounds()
         self.flux_profile = flux_profile
@@ -90,18 +91,10 @@ class Optimization:
         return Bounds
 
     #@torch.compile(backend=COMPILER_BACKEND, fullgraph=False)
-    def circuitHamiltonian(self,external_flux):
-        H = self.circuit.hamiltonianLC()
-        H += self.circuit.hamiltonianJosephson(external_flux)
-        return H
-
-    #@torch.compile(backend=COMPILER_BACKEND, fullgraph=False)
     def spectrumProfile(self):
-        Spectrum = []
         # distribute over devices !!!
-        for flux in self.flux_profile:
-            spectrum,states = self.circuit.eigenSpectrum(flux,self.vectors_calc,self.grad_calc)
-            Spectrum.append((spectrum,states))
+        # concat over DataParallel
+        Spectrum = self.profile(self.flux_profile)
         return Spectrum
     
     #@torch.compile(backend=COMPILER_BACKEND, fullgraph=False)
@@ -145,8 +138,8 @@ class Minimization(Optimization):
         * exception : LBFGS
     """
 
-    def __init__(self,circuit,flux_profile=[],loss_function=None,subspace=()):
-        super().__init__(circuit,flux_profile,loss_function)
+    def __init__(self,circuit,profile,flux_profile=[],loss_function=None,subspace=()):
+        super().__init__(circuit,profile,flux_profile,loss_function)
         self.subspace = subspace
         self.static,self.keys,self.x0 = self.symmetryConstraint()
 
@@ -227,8 +220,8 @@ class GradientDescent(Optimization):
         * torch optimization implementation
     """
 
-    def __init__(self,circuit,flux_profile=[],loss_function=None):
-        super().__init__(circuit,flux_profile,loss_function)
+    def __init__(self,circuit,profile,flux_profile=[],loss_function=None):
+        super().__init__(circuit,profile,flux_profile,loss_function)
         self.log_grad = False
         self.log_spectrum = False
         self.log_hessian = False
@@ -494,15 +487,24 @@ if __name__=='__main__':
     torch.set_num_threads(12)
     basis = [15]
     from models import transmon
+    import torch.distributed as dist
+    from torch.distributed import TCPStore
+    #store = TCPStore('localhost',12345)
+    #dist.init_process_group(backend=DISTRIBUTION_BACKEND,world_size=1,rank=0,store=store)
+    from DiSuQ.Torch.components import DISTRIBUTION_BACKEND
+    from torch.nn.parallel import DistributedDataParallel as DDP
+    from torch.nn.parallel import DataParallel as DP
     from circuit import Charge,Kerman
     circuit = transmon(Charge,basis,sparse=False)
     flux_profile = [dict()]
+    flux_profile = Tensor([[]])
+    control_iDs = dict()
     loss = lossTransition(tensor(5.),tensor(4.5))
-    optim = GradientDescent(circuit,flux_profile,loss)
+    optim = GradientDescent(circuit,DP(circuit),flux_profile,loss)
     optim.optimizer = optim.initAlgo(lr=1e-1)
     print(circuit.circuitComponents())  
     dLogs,dParams,dCircuit = optim.optimization(10000)
     import ipdb;ipdb.set_trace()
-    optim = Minimization(circuit,flux_profile,loss)
+    optim = Minimization(circuit,DP(circuit),flux_profile,loss)
     dLogs,dParams,dCircuit = optim.optimization()
     print("refer Optimization Verification")

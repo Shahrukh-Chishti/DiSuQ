@@ -11,6 +11,7 @@ from time import perf_counter
 from numpy.linalg import matrix_rank
 #from numpy.linalg import eigvalsh
 from numpy import prod,flip,array,sort,full as full_numpy
+from torch import nn
 
 ### Computational Sub-routines
 
@@ -63,7 +64,7 @@ def wavefunction(H,level=[0]):
     states = vec.T[level]
     return states
 
-class Circuit:
+class Circuit(nn.Module):
     """
         * no external fluxes must be in parallel : redundant
         * no LC component must be in parallel : redundant
@@ -74,9 +75,11 @@ class Circuit:
         * i,j : indices of indexed graph : mode correspondence
     """
 
-    def __init__(self,network,basis,sparse=True,pairs=dict(),device=None):
+    def __init__(self,network,control_iD,basis,sparse=True,pairs=dict(),device=None):
+        super().__init__()
         # circuit network
         self.network = network
+        self.control_iD = control_iD
         self.G = self.parseCircuit()
         self.spanning_tree = self.spanningTree()
         self.nodes,self.nodes_ = self.nodeIndex()
@@ -99,6 +102,10 @@ class Circuit:
             self.backend = Dense
         self.device = device
         self.spectrum_limit = 4
+        self.vectors_calc = False
+        self.grad_calc = True
+
+        self.forward = self.spectrumManifold
 
     def initialization(self,parameters):
         # parameters : GHz unit
@@ -326,11 +333,19 @@ class Circuit:
         H += self.hamiltonianJosephson(external_flux)
         return H
     
+    def controlData(self,control):
+        if len(self.control_iD) == 0:
+            return dict()
+        assert control.shape == (1,len(self.control_iD))
+        control = dict(zip(self.control_iD,control))
+        return control
+    
     #@torch.compile(backend=COMPILER_BACKEND, fullgraph=False)
-    def eigenSpectrum(self,external_flux,vectors=False,grad=True):
-        with torch.inference_mode() if grad is False else nullcontext() as null:
-            H = self.circuitHamiltonian(external_flux)
-            if vectors:
+    def eigenSpectrum(self,control):
+        control = self.controlData(control)
+        with torch.inference_mode() if self.grad_calc is False else nullcontext() as null:
+            H = self.circuitHamiltonian(control)
+            if self.vectors_calc:
                 if H.dtype is float:
                     # w/o : flux controls or Fourier conjugate
                     spectrum,states = lobpcg(H,k=self.spectrum_limit,largest=False,method='ortho')
@@ -373,39 +388,17 @@ class Circuit:
                 eigenenergies = eigvalsh(H)
         return eigenenergies
 
-    def spectrumManifold(self,flux_points,flux_manifold,H_LC=tensor(0.0),H_J=None,excitation=[1],grad=True,log=False):
-        """
-            flux_points : inductor identifier for external introduction
-            flux_manifold : [(fluxes)]
-        """
-        if H_J is None:
-            H_J = null(H_LC)
-        #manifold of flux space M
-        if not grad:
-            Ex = full_numpy((len(excitation),len(flux_manifold)),float('nan'))
-        else:
-            Ex = full_torch((len(excitation),len(flux_manifold)),float('nan'))
-        E0 = []
-        #H_LC = self.hamiltonianLC()
-        #H_ext = self.fluxInducerEnergy()
-        start = perf_counter()
-        for index,fluxes in enumerate(flux_manifold):
-            if log:
-                if index%50 == 0:
-                    print(index,'\t',perf_counter()-start)
-            external_fluxes = dict(zip(flux_points,fluxes))
-            #H_J = self.josephsonEnergy(external_fluxes)
-            #H = H_LC + H_J(external_fluxes)
-            eigenenergies = self.circuitEnergy(H_LC,H_J,external_fluxes,grad)
-            #eigenenergies = hamiltonianEnergy(H)
-            
-            E0.append(eigenenergies[0])
-            Ex[:,index] = eigenenergies[excitation]-eigenenergies[0]
-        return E0,Ex
+    def spectrumManifold(self,manifold):
+        # sequential execution within batch of control points
+        Spectrum = [] # check autograd over creation
+        for control in manifold:
+            spectrum,states = self.eigenSpectrum(control)
+            Spectrum.append((spectrum,states))
+        return Spectrum
 
 class Kerman(Circuit):
-    def __init__(self,network,basis,sparse=True,pairs=dict(),device=None):
-        super().__init__(network,basis,sparse,pairs,device)
+    def __init__(self,network,control_iD,basis,sparse=True,pairs=dict(),device=None):
+        super().__init__(network,control_iD,basis,sparse,pairs,device)
         self.No,self.Ni,self.Nj = self.kermanDistribution()
         self.R = self.kermanTransform().real
         self.L_,self.C_ = self.modeTransformation()
@@ -769,8 +762,8 @@ class Flux(Circuit):
         return H/2
 
 class Charge(Circuit):
-    def __init__(self,network,basis,sparse=True,pairs=dict(),device=None):
-        super().__init__(network,basis,sparse,pairs,device)
+    def __init__(self,network,control_iD,basis,sparse=True,pairs=dict(),device=None):
+        super().__init__(network,control_iD,basis,sparse,pairs,device)
         # JIT-compilation indifferent pers-initialization
         self.Q,self.F,self.D_plus,self.D_minus = self.operatorInitialization()
         self.QQ,self.FF = self.oscillatorInitialization()
