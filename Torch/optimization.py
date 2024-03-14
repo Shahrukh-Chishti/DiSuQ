@@ -484,8 +484,10 @@ def lossTransition(E10,E20):
 #    return MSE(anHarmonicity(spectrum),tensor(.5))
 
 if __name__=='__main__':
-    torch.set_num_threads(12)
-    basis = [15]
+    #torch.set_num_threads(12)
+    basis = [1500]
+    cuda0 = torch.device('cuda:0')
+    torch.set_default_device(cuda0)
     from models import transmon
     import torch.distributed as dist
     from torch.distributed import TCPStore
@@ -499,12 +501,13 @@ if __name__=='__main__':
     flux_profile = [dict()]
     flux_profile = Tensor([[]])
     control_iDs = dict()
+    module = DP(circuit,[cuda0],cuda0)
     loss = lossTransition(tensor(5.),tensor(4.5))
-    optim = GradientDescent(circuit,DP(circuit),flux_profile,loss)
+    optim = GradientDescent(circuit,module,flux_profile,loss)
     optim.optimizer = optim.initAlgo(lr=1e-1)
     print(circuit.circuitComponents())  
-    dLogs,dParams,dCircuit = optim.optimization(10000)
+    dLogs,dParams,dCircuit = optim.optimization(100)
     import ipdb;ipdb.set_trace()
-    optim = Minimization(circuit,DP(circuit),flux_profile,loss)
+    optim = Minimization(circuit,module,flux_profile,loss)
     dLogs,dParams,dCircuit = optim.optimization()
     print("refer Optimization Verification")
