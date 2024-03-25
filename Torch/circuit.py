@@ -12,6 +12,7 @@ from numpy.linalg import matrix_rank
 #from numpy.linalg import eigvalsh
 from numpy import prod,flip,array,sort,full as full_numpy
 from torch import nn
+from torch.nn.parameter import Parameter
 
 ### Computational Sub-routines
 
@@ -101,6 +102,9 @@ class Circuit(nn.Module):
         else:
             self.backend = Dense
         self.device = device
+        self.null_flux = tensor(0.,device=self.device)
+        self.null = self.backend.null(self.basisSize(),device=self.device)
+        
         self.spectrum_limit = 4
         self.vectors_calc = False
         self.grad_calc = True
@@ -117,6 +121,38 @@ class Circuit(nn.Module):
             elif component.__class__ == J :
                 component.initJunc(parameters[component.ID])
         self.symmetrize(self.pairs)
+
+    # check if DDP module latest version build parameters
+
+    def named_parameters(self,subspace=(),recurse=False):
+        parameters = []; IDs = []
+        slaves = self.pairs.keys()
+        for component in self.network:
+            if component.ID in subspace or len(subspace)==0:
+                if component.__class__ == C :
+                    parameter = component.cap
+                elif component.__class__ == L :
+                    parameter = component.ind
+                elif component.__class__ == J :
+                    parameter = component.jo
+                if not component.ID in slaves:
+                    IDs.append(component.ID)
+                    parameters.append(parameter)
+        return zip(IDs,parameters)
+
+    def parameters(self):
+        independent = []
+        slaves = self.pairs.keys()
+        for component in self.network:
+            if component.__class__ == C :
+                parameter = component.cap
+            elif component.__class__ == L :
+                parameter = component.ind
+            elif component.__class__ == J :
+                parameter = component.jo
+            if not component.ID in slaves:
+                independent.append(parameter)
+        return independent
         
     def symmetrize(self,pairs):
         components = self.circuitComposition()
@@ -223,7 +259,7 @@ class Circuit(nn.Module):
         """
             external_fluxes : {identifier:flux_value}
         """
-        flux = tensor(0.0)
+        flux = self.null_flux.clone()
         external = set(external_fluxes.keys())
         S = self.spanning_tree
         path = networkx.shortest_path(S,u,v)
@@ -336,7 +372,7 @@ class Circuit(nn.Module):
     def controlData(self,control):
         if len(self.control_iD) == 0:
             return dict()
-        assert control.shape == (1,len(self.control_iD))
+        assert len(control) == len(self.control_iD)
         control = dict(zip(self.control_iD,control))
         return control
     
@@ -830,8 +866,7 @@ class Charge(Circuit):
     #@torch.compile(backend=COMPILER_BACKEND, fullgraph=True)
     def hamiltonianLC(self):
         Cn_,Ln_ = self.Cn_,self.Ln_
-        H = self.backend.null(self.basisSize())
-
+        H = self.null.clone()
         H = coeffProduct(H,Cn_,self.QQ)
         H = coeffProduct(H,Ln_,self.FF)
 
@@ -840,8 +875,7 @@ class Charge(Circuit):
     #@torch.compile(backend=COMPILER_BACKEND, fullgraph=True)
     def hamiltonianJosephson(self,external_fluxes=dict()):
         edges,Ej = self.josephsonComponents()
-        N = self.basisSize()
-        H = self.backend.null(N)
+        H = self.null.clone()
         for (u,v,key),E in zip(edges,Ej):
             edge = u,v
             flux = self.loopFlux(u,v,key,external_fluxes)

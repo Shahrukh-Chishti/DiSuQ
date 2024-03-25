@@ -47,7 +47,8 @@ def zeroPi(Rep,basis,Ej=10.,Ec=50.,El=10.,EcJ=100.,sparse=True,symmetry=False,_L
         pairs['Jy'] = 'Jx'
         pairs['CJy'] = 'CJx'
     
-    circuit = Rep(circuit,basis,sparse,pairs,device)
+    control_iD = ('Lx','Ly')
+    circuit = Rep(circuit,control_iD,basis,sparse,pairs,device)
     return circuit
 
 def zeroPiRidge(basis,Ej=10.,Ec=50.,El=10.,EcJ=100.,sparse=True,symmetry=False,_L_=(L_,L0),_C_=(C_,C0),_J_=(J_,J0),_CJ_=(4*C_,4*C0),ridge = False,flux0=numpy.pi*6):
@@ -154,7 +155,7 @@ def prismon(basis,Ej=10.,Ec=50.,El=10.,EcJ=100.,sparse=True,symmetry=False,_L_=(
 def transmon(Rep,basis,Ej=10.,Ec=0.3,sparse=True):
     transmon = [J(0,1,Ej,'J')]
     transmon += [C(0,1,Ec,'C')]
-    control_iD = dict()
+    control_iD = ()
 
     transmon = Rep(transmon,control_iD,basis,sparse)
     return transmon
@@ -189,8 +190,9 @@ def fluxonium(Rep,basis,El=.0003,Ec=.1,Ej=20,sparse=True):
     circuit = [C(0,1,Ec,'Cap')]
     circuit += [J(0,1,Ej,'JJ')]
     circuit += [L(0,1,El,'I',True)]
+    control_iD = ('I')
 
-    circuit = Rep(circuit,basis,sparse)
+    circuit = Rep(circuit,control_iD,basis,sparse)
     return circuit
 
 def shuntedQubit(Rep,basis,josephson=[120.,50,120.],cap=[10.,50.,10.],ind=100.,sparse=True,symmetry=False,_C_=(C_,C0),_J_=(J_,J0)):

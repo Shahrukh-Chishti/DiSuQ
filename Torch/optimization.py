@@ -8,7 +8,7 @@ from numpy import arange,set_printoptions,meshgrid,linspace,array,sqrt,sort,log1
 from scipy.optimize import minimize
 from time import perf_counter,sleep
 from DiSuQ.Torch.components import L,J,C,L0,J0,C0
-from DiSuQ.Torch.components import COMPILER_BACKEND
+from DiSuQ.Torch.components import COMPILER_BACKEND,DISTRIBUTION_BACKEND
 from DiSuQ.utils import empty
 from scipy.stats import truncnorm
 
@@ -49,18 +49,9 @@ class Optimization:
 
     def circuitParameters(self,subspace=()):
         parameters = []; IDs = []
-        slaves = self.circuit.pairs.keys()
-        for component in self.circuit.network:
-            if component.ID in subspace or len(subspace)==0:
-                if component.__class__ == C :
-                    parameter = component.cap
-                elif component.__class__ == L :
-                    parameter = component.ind
-                elif component.__class__ == J :
-                    parameter = component.jo
-                if not component.ID in slaves:
-                    IDs.append(component.ID)
-                    parameters.append(parameter)
+        for ID,parameter in self.circuit.named_parameters(subspace):
+            parameters.append(parameter)
+            IDs.append(ID)
         return parameters,IDs
     
     def circuitState(self):
@@ -484,30 +475,73 @@ def lossTransition(E10,E20):
 #    return MSE(anHarmonicity(spectrum),tensor(.5))
 
 if __name__=='__main__':
-    #torch.set_num_threads(12)
-    basis = [1500]
-    cuda0 = torch.device('cuda:0')
-    torch.set_default_device(cuda0)
-    from models import transmon
+    import os
+    from matplotlib import pyplot as plt
+    
+    os.environ['MASTER_ADDR'] = 'localhost'
+    os.environ['MASTER_PORT'] = '12355'
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
+    os.environ["NCCL_BLOCKING_WAIT"] = '0'
+    
+    
+    import torch
+    from torch import tensor
+    from DiSuQ.Torch.optimization import lossTransition
+    from DiSuQ import utils
+    torch.cuda.device_count()
+    
+    from DiSuQ.Torch.models import transmon,fluxonium,zeroPi
+    from datetime import timedelta
     import torch.distributed as dist
-    from torch.distributed import TCPStore
-    #store = TCPStore('localhost',12345)
-    #dist.init_process_group(backend=DISTRIBUTION_BACKEND,world_size=1,rank=0,store=store)
+    from torch.distributed import TCPStore,FileStore
     from DiSuQ.Torch.components import DISTRIBUTION_BACKEND
+    
     from torch.nn.parallel import DistributedDataParallel as DDP
     from torch.nn.parallel import DataParallel as DP
-    from circuit import Charge,Kerman
-    circuit = transmon(Charge,basis,sparse=False)
+    
+    world_size = 2
+    
+    torch.set_num_threads(36)
+    cuda0 = torch.device('cuda:0')
+    cuda1 = torch.device('cuda:1')
+    cpu = torch.device('cpu')
+    torch.set_default_device(cuda0)
+    torch.cuda.set_device(cuda0)
+    
+    file_path = '/tmp/filestore'
+    if os.path.exists(file_path):
+        os.remove(file_path)
+    file_store = FileStore(file_path, world_size)
+    
+    dist.init_process_group(backend='nccl',store = file_store, world_size= world_size, rank=0, timeout=timedelta(seconds=50))
+    
+    from DiSuQ.Torch.circuit import Charge,Kerman
+    #basis = [15,15,15]
+    #flux_profile = Tensor([[0.],[.15],[.30],[.5]])
+    #circuit = zeroPi(Charge,basis,sparse=False)
+    basis = [1500]
     flux_profile = [dict()]
-    flux_profile = Tensor([[]])
+    circuit = transmon(Charge,basis,sparse=False)
+    flux_profile = tensor([[0.],[.15],[.30],[.5]],device=None)
+    circuit = fluxonium(Charge,basis,sparse=False)
     control_iDs = dict()
-    module = DP(circuit,[cuda0],cuda0)
+    
+    
+    module = DDP(circuit,device_ids=[cuda0],output_device=None)
+    
+    
+    from DiSuQ.Torch.optimization import GradientDescent
+    
     loss = lossTransition(tensor(5.),tensor(4.5))
     optim = GradientDescent(circuit,module,flux_profile,loss)
-    optim.optimizer = optim.initAlgo(lr=1e-1)
-    print(circuit.circuitComponents())  
+    optim.optimizer = optim.initAlgo(lr=1e-2)
+    print(circuit.circuitComponents())
     dLogs,dParams,dCircuit = optim.optimization(100)
+
+
+
     import ipdb;ipdb.set_trace()
     optim = Minimization(circuit,module,flux_profile,loss)
     dLogs,dParams,dCircuit = optim.optimization()
+    dist.destroy_process_group()
     print("refer Optimization Verification")
