@@ -20,6 +20,16 @@ def sigInv(sig,limit):
 
 # input order enumerates into node index
 
+def box4Branches(Rep,basis,Ej,Ec,El,sparse=True):
+    circuit = [L(0,1,El[0],'L0',True,L0,L_),C(0,1,Ec[0],'C0',C0,C_),J(0,1,Ej[0],'J0',J0,J_)]
+    circuit += [L(1,2,El[1],'L1',True,L0,L_),C(1,2,Ec[1],'C1',C0,C_),J(1,2,Ej[1],'J1',J0,J_)]
+    circuit += [L(2,3,El[2],'L2',True,L0,L_),C(2,3,Ec[2],'C2',C0,C_),J(2,3,Ej[2],'J2',J0,J_)]
+    circuit += [L(3,0,El[3],'L3',True,L0,L_),C(3,0,Ec[3],'C3',C0,C_),J(3,0,Ej[3],'J3',J0,J_)]
+    control_iD = ()
+
+    circuit = Rep(circuit,control_iD,basis,sparse=False)
+    return circuit
+
 def zeroPi(basis,Ej=10.,Ec=50.,El=10.,EcJ=100.,sparse=True,symmetry=False,_L_=(L_,L0),_C_=(C_,C0),_J_=(J_,J0),_CJ_=(4*C_,4*C0)):
     circuit = [L(1,4,El,'Lx',True,_L_[1],_L_[0]),L(2,3,El,'Ly',True,_L_[1],_L_[0])]
     circuit += [C(1,3,Ec,'Cx',_C_[1],_C_[0]),C(2,4,Ec,'Cy',_C_[1],_C_[0])]

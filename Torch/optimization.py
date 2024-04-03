@@ -12,6 +12,7 @@ from DiSuQ.Torch.components import COMPILER_BACKEND,DISTRIBUTION_BACKEND
 from DiSuQ.utils import empty
 from scipy.stats import truncnorm
 
+# PROFILE == MODULE
 class Optimization:
     def __init__(self,circuit,profile,flux_profile=[],loss_function=None):
         self.circuit = circuit
@@ -526,7 +527,7 @@ if __name__=='__main__':
     circuit = fluxonium(Charge,basis,sparse=False)
     control_iDs = dict()
     
-    
+    print('Initializing DDP')
     module = DDP(circuit,device_ids=[cuda0],output_device=None)
     
     
