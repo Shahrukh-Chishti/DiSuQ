@@ -29,6 +29,7 @@ world_size = torch.cuda.device_count()
 # control data mapping to ranks
 flux_profile = tensor([[0.],[.15],[.30],[.5]])
 # flux_profile = tensor([[0.],[.5]])
+# data distribution pre-defined for each process
 flux_profile = [flux_profile[:2],flux_profile[2:]]
 
 def circuitBuilder(rank):
@@ -66,8 +67,16 @@ def executionSetup(rank:int):
     # https://discuss.pytorch.org/t/exception-process-0-terminated-with-exit-code-1-error-when-using-torch-multiprocessing-spawn-to-parallelize-over-multiple-gpus/90636
 
 if __name__=='__main__':
-    # spawn is non-functionary on Jupyter pickle serializing
     mp.spawn(executionSetup,nprocs=world_size)
     sys.exit(0)
+    # spawn is non-functionary on Jupyter pickle serializing
+    # multi-processing program in Jupyter iPython is generally unfavourable
+    # because of the iPython scope, serializing and start method resource sharing
     with multi.Pool(processes=world_size) as pool:
         pool.map(executionSetup,range(world_size))
+
+
+
+
+# DP is single-process-multi-thread, all threads share the same autograd engine, and hence ops on different threads will be added to the same autograd graph.
+
