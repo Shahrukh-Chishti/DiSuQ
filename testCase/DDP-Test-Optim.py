@@ -57,6 +57,7 @@ def executionSetup(rank:int):
     # print(rank,torch.cuda.current_device())
     loss = lossTransition(tensor(5.),tensor(4.5))
     print(rank,torch.cuda.current_device())
+    print('Initializing DDP')
     module = DDP(circuit,device_ids=[rank])
     optim = GradientDescent(circuit,module,flux_point,loss)
     optim.optimizer = optim.initAlgo(lr=1e-2)
@@ -74,9 +75,6 @@ if __name__=='__main__':
     # because of the iPython scope, serializing and start method resource sharing
     with multi.Pool(processes=world_size) as pool:
         pool.map(executionSetup,range(world_size))
-
-
-
 
 # DP is single-process-multi-thread, all threads share the same autograd engine, and hence ops on different threads will be added to the same autograd graph.
 

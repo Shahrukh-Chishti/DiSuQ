@@ -10,17 +10,20 @@ from time import perf_counter,sleep
 from DiSuQ.Torch.components import L,J,C,L0,J0,C0
 from DiSuQ.Torch.components import COMPILER_BACKEND,DISTRIBUTION_BACKEND
 from DiSuQ.utils import empty
+from DiSuQ.Torch.parallel import stackSpectrum,packSpectrum
 from scipy.stats import truncnorm
+import torch.distributed as dist
 
 # PROFILE == MODULE
 class Optimization:
-    def __init__(self,circuit,profile,flux_profile=[],loss_function=None):
+    def __init__(self,circuit,profile,flux_profile=[],loss_function=None,distributor=None):
         self.circuit = circuit
         self.profile = profile # data parallel - control profile
         self.parameters,self.IDs = self.circuitParameters()
         self.Bounds = self.parameterBounds()
         self.flux_profile = flux_profile
         self.loss_function = loss_function
+        self.distributor = distributor
         # depending upon the choice of optimization & loss
         self.vectors_calc = False
         self.grad_calc = True
@@ -84,9 +87,20 @@ class Optimization:
 
     #@torch.compile(backend=COMPILER_BACKEND, fullgraph=False)
     def spectrumProfile(self):
-        # distribute over devices !!!
-        # concat over DataParallel
         Spectrum = self.profile(self.flux_profile)
+        if self.distributor:
+            # distribute over devices : Tensor stack packaging
+            energy,state = stackSpectrum(Spectrum)
+            Energy,State = self.distributor.placeholder()
+            # gather Spectrum from all process
+            dist.all_gather(Energy,energy)
+            dist.all_gather(State,state)
+            # replace Host data
+            rank = dist.get_rank()
+            Energy[rank] = energy
+            State[rank] = state
+            # flatten the data
+            Spectrum = packSpectrum(Energy,State)
         return Spectrum
     
     #@torch.compile(backend=COMPILER_BACKEND, fullgraph=False)
@@ -94,7 +108,13 @@ class Optimization:
         Spectrum = self.spectrumProfile()
         loss,metrics = self.loss_function(Spectrum,self.flux_profile)
         return loss,metrics,Spectrum
-    
+
+    def backProp(self,loss):
+        loss.backward(retain_graph=True)
+        if self.distributor:
+            for parameter in self.parameters:
+                dist.all_reduce(parameter.grad.data,op=dist.ReduceOp.SUM)
+
     def lossScape(self,loss_function,flux_profile,scape,static):
         # parascape : {A:[...],B:[....]} | A,B in circuit.parameters
         A,B = scape.keys()
@@ -130,8 +150,8 @@ class Minimization(Optimization):
         * exception : LBFGS
     """
 
-    def __init__(self,circuit,profile,flux_profile=[],loss_function=None,subspace=()):
-        super().__init__(circuit,profile,flux_profile,loss_function)
+    def __init__(self,circuit,profile,flux_profile=[],loss_function=None,subspace=(),distributor=None):
+        super().__init__(circuit,profile,flux_profile,loss_function,distributor)
         self.subspace = subspace
         self.static,self.keys,self.x0 = self.symmetryConstraint()
 
@@ -160,21 +180,13 @@ class Minimization(Optimization):
     #@torch.compile(backend=COMPILER_BACKEND, fullgraph=False)
     def objective(self,parameters):
         self.parameterInitialization(parameters)
-        loss,metrics,Spectrum = self.loss()
-        loss = loss.detach().item()
-        return loss
-
-    #@torch.compile(backend=COMPILER_BACKEND, fullgraph=False)
-    def gradients(self,parameters):
-        # method overriding super-class
-        self.parameterInitialization(parameters)
         if parameters is not self.parameters:
             # evaluate forward
             loss,metrics,Spectrum = self.loss()
         for parameter in self.parameters:
             if parameter.grad:
                 parameter.grad.zero_()
-        loss.backward(retain_graph=False)
+        self.backProp(loss)
         parameters = dict(zip(self.IDs,self.parameters))
         gradients = []
         for iD in self.keys:
@@ -212,8 +224,8 @@ class GradientDescent(Optimization):
         * torch optimization implementation
     """
 
-    def __init__(self,circuit,profile,flux_profile=[],loss_function=None):
-        super().__init__(circuit,profile,flux_profile,loss_function)
+    def __init__(self,circuit,profile,flux_profile=[],loss_function=None,distributor=None):
+        super().__init__(circuit,profile,flux_profile,loss_function,distributor)
         self.log_grad = False
         self.log_spectrum = False
         self.log_hessian = False
@@ -269,7 +281,7 @@ class GradientDescent(Optimization):
         loss,metrics,Spectrum = self.loss()
         metrics['loss'] = loss.detach().item()
         metrics['iter'] = self.iteration
-        loss.backward(retain_graph=True)
+        self.backProp(loss)
         self.logger(metrics,Spectrum)
         return loss
 
@@ -455,6 +467,14 @@ def lossE10(E10):
     def lossFunction(Spectrum,flux_profile):
         loss = tensor(0.0)
         spectrum = stack([spectrum[:2] for spectrum,state in Spectrum])
+        loss = MSE(anharmonicity,tensor(alpha))
+        return loss,{'anharmonicity':anharmonicity.detach().item()}
+    return lossFunction
+
+def lossE10(E10):
+    def lossFunction(Spectrum,flux_profile):
+        loss = tensor(0.0)
+        spectrum = stack([spectrum[:2] for spectrum,state in Spectrum])
         e10 = spectrum[:,1]-spectrum[:,0]
         loss += MSE(e10,tensor(E10))
         return loss,dict()
@@ -476,46 +496,17 @@ def lossTransition(E10,E20):
 #    return MSE(anHarmonicity(spectrum),tensor(.5))
 
 if __name__=='__main__':
-    import os
-    from matplotlib import pyplot as plt
-    
-    os.environ['MASTER_ADDR'] = 'localhost'
-    os.environ['MASTER_PORT'] = '12355'
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
-    os.environ["NCCL_BLOCKING_WAIT"] = '0'
-    
-    
     import torch
     from torch import tensor
     from DiSuQ.Torch.optimization import lossTransition
     from DiSuQ import utils
-    torch.cuda.device_count()
-    
     from DiSuQ.Torch.models import transmon,fluxonium,zeroPi
     from datetime import timedelta
-    import torch.distributed as dist
-    from torch.distributed import TCPStore,FileStore
-    from DiSuQ.Torch.components import DISTRIBUTION_BACKEND
-    
-    from torch.nn.parallel import DistributedDataParallel as DDP
-    from torch.nn.parallel import DataParallel as DP
-    
-    world_size = 2
-    
     torch.set_num_threads(36)
     cuda0 = torch.device('cuda:0')
     cuda1 = torch.device('cuda:1')
     cpu = torch.device('cpu')
     torch.set_default_device(cuda0)
-    torch.cuda.set_device(cuda0)
-    
-    file_path = '/tmp/filestore'
-    if os.path.exists(file_path):
-        os.remove(file_path)
-    file_store = FileStore(file_path, world_size)
-    
-    dist.init_process_group(backend='nccl',store = file_store, world_size= world_size, rank=0, timeout=timedelta(seconds=50))
-    
     from DiSuQ.Torch.circuit import Charge,Kerman
     #basis = [15,15,15]
     #flux_profile = Tensor([[0.],[.15],[.30],[.5]])
@@ -525,22 +516,12 @@ if __name__=='__main__':
     circuit = transmon(Charge,basis,sparse=False)
     flux_profile = tensor([[0.],[.15],[.30],[.5]],device=None)
     circuit = fluxonium(Charge,basis,sparse=False)
-    control_iDs = dict()
-    
-    print('Initializing DDP')
-    module = DDP(circuit,device_ids=[cuda0],output_device=None)
-    
-    
     from DiSuQ.Torch.optimization import GradientDescent
-    
     loss = lossTransition(tensor(5.),tensor(4.5))
-    optim = GradientDescent(circuit,module,flux_profile,loss)
+    optim = GradientDescent(circuit,circuit,flux_profile,loss)
     optim.optimizer = optim.initAlgo(lr=1e-2)
     print(circuit.circuitComponents())
     dLogs,dParams,dCircuit = optim.optimization(100)
-
-
-
     import ipdb;ipdb.set_trace()
     optim = Minimization(circuit,module,flux_profile,loss)
     dLogs,dParams,dCircuit = optim.optimization()
