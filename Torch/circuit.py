@@ -103,8 +103,9 @@ class Circuit(nn.Module):
             self.backend = Dense
         self.device = device
         self.null_flux = tensor(0.,device=self.device)
+        # basis Size undefined in Root class
         self.null = self.backend.null(self.basisSize(),device=self.device)
-        
+
         self.spectrum_limit = 4
         self.vectors_calc = False
         self.grad_calc = True
@@ -121,8 +122,6 @@ class Circuit(nn.Module):
             elif component.__class__ == J :
                 component.initJunc(parameters[component.ID])
         self.symmetrize(self.pairs)
-
-    # check if DDP module latest version build parameters
 
     def named_parameters(self,subspace=(),recurse=False):
         parameters = []; IDs = []
@@ -391,7 +390,8 @@ class Circuit(nn.Module):
                     states = states[:self.spectrum_limit]
             else:
                 # stable eigenvalues over degeneracy limits
-                spectrum = eigvalsh(H); states = None
+                spectrum = eigvalsh(H)
+                states = zeros(len(H),self.spectrum_limit)
                 spectrum = spectrum[:self.spectrum_limit]
         return spectrum,states
     
