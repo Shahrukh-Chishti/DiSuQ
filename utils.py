@@ -8,7 +8,6 @@ from pyvis import network as pvnet
 import networkx as nx
 from networkx.drawing.nx_pydot import write_dot
 from numpy import full,nan,zeros,arange
-from sklearn.decomposition import PCA
 
 def empty(shape):
     E = zeros(shape)
@@ -126,6 +125,7 @@ def plotOptimization(z,x,y,paths,title=None,xaxis=None,yaxis=None,size=None,html
 # graph plots
 
 def viewPCA(X,index,size=(8,6),title=None,x=None,y=None):
+    from sklearn.decomposition import PCA
     pca = PCA(n_components=2)
     X_pca = pca.fit_transform(X)
 

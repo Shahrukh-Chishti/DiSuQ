@@ -79,7 +79,7 @@ def null(N=1,dtype=complex,device=None):
     return zeros(N,N,dtype=complex,device=device) ##
 
 def basisQo(n,impedance,device=None):
-    Qo = arange(1,n,device=device) ##
+    Qo = arange(1,n,device=device) ##dev
     Qo = sqrt(Qo)
     Qo = -diag(Qo,diagonal=1) + diag(Qo,diagonal=-1) ##
     return Qo*im*sqrt(1/2/pi/impedance)
