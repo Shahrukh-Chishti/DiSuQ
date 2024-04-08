@@ -487,7 +487,8 @@ if __name__=='__main__':
     #torch.set_num_threads(12)
     basis = [1500]
     cuda0 = torch.device('cuda:0')
-    torch.set_default_device(cuda0)
+    cpu = torch.device('cpu')
+    torch.set_default_device(cpu)
     from models import transmon
     import torch.distributed as dist
     from torch.distributed import TCPStore
