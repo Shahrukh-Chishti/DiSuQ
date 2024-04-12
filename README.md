@@ -1,38 +1,49 @@
 # DiSuQ
-Discovering Superconducting Quantum circuits
+Discovering Superconducting Quantum circuits.
 
-## Automated Circuit Design
-* https://science.sciencemag.org/content/352/6281/aac7341
-* https://www.nature.com/articles/d41586-018-07662-w
+This library is aimed to provide optimization and solution to general lumped-model superconducting circuits. 
 
-# Analytic Ground State
+
+## Problem - Analytic Ground State
 Truncated approximation to ground state of Hamiltonian. It is required be functionally differentiable.
 In the context of computational graph, it draws parallel from recurrent computation networks.
 
 Approximation builds on Hessian-order optimisation of characterisitic polynomial(squared).
 With sufficient iteration, and justified starting point, the algorithm is bound to minimal solution.
 
-## Methods
-* Min-max theorem
-* https://www.pugetsystems.com/labs/hpc/PyTorch-for-Scientific-Computing---Quantum-Mechanics-Example-Part-2-Program-Before-Code-Optimizations-1222/#define-the-energy-loss-function
-* BFGS
-- https://towardsdatascience.com/bfgs-in-a-nutshell-an-introduction-to-quasi-newton-methods-21b0e13ee504
-- https://stackoverflow.com/questions/42424444/scipy-optimisation-newton-cg-vs-bfgs-vs-l-bfgs
-- https://medium.com/swlh/optimization-algorithms-the-newton-method-4bc6728fb3b6
-* numpy & scipy
-- https://scipy-lectures.org/advanced/mathematical_optimization/
-- http://www.cs.columbia.edu/~amoretti/smac_04_tutorial.html
-- https://en.wikipedia.org/wiki/Eigenvalue_algorithm#:~:text=The%20eigenvalues%20of%20a%20Hermitian,only%20if%20A%20is%20symmetric.
+# Modular Structure
+Backend design of DiSuQ is maintained felxible to allow computation over full range of resources.
 
-* LOBPCG[https://pytorch.org/docs/stable/generated/torch.lobpcg.html]
-* https://epubs.siam.org/doi/abs/10.1137/17M1129830
+### Layered Hierarchy
+Classes and functional modules are partitioned over mathematical operations. The APIs thus allow to extend this framework to diverse range of quantum system.
 
- 
+# Features
+## Autograd
+Several advantages are inherited from the Torch backend:
+* Analytic differentiation of Eigen-decomposition
+* Exact gradient calculations : avoiding difference approximates 
+* CUDA supported matrix operations : GPU acceleration
+* Distributed computation: High Performance architecture scalability
+* Backpropagation : 
+    - Faster evaluation of parameter gradients
+## Backend
 
-### Attempts
-* Generalized Eigenvalue Problem Derivatives[https://jackd.github.io/posts/generalized-eig-jvp/]
-* https://arxiv.org/pdf/2001.04121.pdf
-* https://github.com/buwantaiji/DominantSparseEigenAD
-### Automatic Differentitation
-* https://journals.aps.org/pra/abstract/10.1103/PhysRevA.95.042318
-* https://journals.aps.org/prx/pdf/10.1103/PhysRevX.9.031041 
+
+## Extension
+Faster gradient calculation enable to extend modeling of SuperCond circuits to a larger space of parameterized effective description:
+- Highly parameteric models:
+    * Element design: Generalized lumped modeling
+    * Dissipative elements: Modeling noise & decoherence
+        - Mixed state preparation : Noise controling
+    * Parametric basis evaluation
+
+- Basis description: Subclass modularity allows to design custom heuristic circuit quantization. Example:`Kerman`. 
+- Extension of `Circuit` class to other quantum systems
+    * Processors: NV-centers, trapped Ions etc.
+    * Modules inheritance: `Components`,`Optimization`,`Distribution` maintain their utility for simulation/optimization.
+
+- Smooth variation in the distribution of Flux,Charge
+
+# Notes
+* Degeneracy Vicinity:
+    - In the vicinity of degeneracy $\lambda_i - \lambda_j \to 0$, the eigvalsh should be prefered to eigh[torch](https://pytorch.org/docs/stable/generated/torch.linalg.eigh.html).
