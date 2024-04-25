@@ -14,7 +14,7 @@ With sufficient iteration, and justified starting point, the algorithm is bound 
 # Modular Structure
 Backend design of DiSuQ is maintained felxible to allow computation over full range of resources.
 
-### Layered Hierarchy
+## Layered Hierarchy
 Classes and functional modules are partitioned over mathematical operations. The APIs thus allow to extend this framework to diverse range of quantum system.
 
 # Features
@@ -26,8 +26,30 @@ Several advantages are inherited from the Torch backend:
 * Distributed computation: High Performance architecture scalability
 * Backpropagation : 
     - Faster evaluation of parameter gradients
-## Backend
 
+## Backend
+DiSuQ allows two levels of backend:
+1. Data Structure : 
+    - `numpy` v/s `torch` encoding circuit operator representation, 
+    - `numpy` implementation is to be deprecated
+2. Data Encoding:
+    - `sparse`
+        * `torch.LOBPCG` is unavailable
+    - `dense`
+        * memory-challenging
+        * full availability of `linalg` subrountines
+3. Initialization : 
+    - initialization v/s run-time calculation of Hermitian matrix operator matrices 
+    - pre-calculated matrices offer faster revaluation
+    - run-time calculation saves multiples of memory
+    - currently, distributed over branches : `performance` and `main`
+
+Intialization choice is subjective to utilization. Depending on the application, and problem size initialization backend should be decided.
+
+For example, a small sized circuit requiring high amount of reinitialization, in optimization or control-landscape calculation could be persisted in the memory.
+It would save the overhead of creating operator `tensor`. Another utilization could be repeated operator expectation over eigenstates. 
+
+However, if the circuit is memory-demanding, then pre-occupying memory for various operator `tensor` is disadvantageous.
 
 ## Extension
 Faster gradient calculation enable to extend modeling of SuperCond circuits to a larger space of parameterized effective description:

@@ -70,9 +70,6 @@ def executionSetup(rank:int):
 if __name__=='__main__':
     mp.spawn(executionSetup,nprocs=world_size)
     sys.exit(0)
-    # spawn is non-functionary on Jupyter pickle serializing
-    # multi-processing program in Jupyter iPython is generally unfavourable
-    # because of the iPython scope, serializing and start method resource sharing
     with multi.Pool(processes=world_size) as pool:
         pool.map(executionSetup,range(world_size))
 

@@ -8,10 +8,6 @@ There are several improvement suggested for further upgradation.
 
 # Hamiltonian Quantization
 
-## Control & Static decomposition
-Rebuilding Hamiltonian for each new control setting, from the ground-up is redundant. Hamiltonian maybe additively decomposed into static and dynamic subparts. Persisting the static component saves computation time at the expense of memory.
-$$H=H_{static}+H_{dynamic}(control)$$
-
 # Eigendecomposition Algorithm
 
 ## LOBPCG - Bloc size
@@ -29,3 +25,15 @@ $H' \equiv H - \lambda_0 |0\rangle \langle 0|$, ground state of $H'$ is calculat
 
 ## Multi-Init discovery
 Gradient descent methods are strongly converging under convex conditions. It might happen that during multi-init trajectory exploration ie. diverse starting point, many trajectory fall under same basin of attraction. The calculations would be redundant.
+
+# Backend Design
+
+## Static & Control Hamiltonian
+Rebuilding Hamiltonian for each new control setting, from the ground-up is redundant. Hamiltonian maybe additively decomposed into static and dynamic subparts. Persisting the static component saves computation time at the expense of memory.
+Similar to the approach of `performance` branch, backends with flexibility in persistence could be designed.
+Instead of persisting operators, hamiltonian could be decomposed on the basis of variation, for a given utilization.
+$$
+H = H_{static} + H_{control}(\theta)
+$$
+Usually, the $H_{control}$ is factorizable wrt. controls $\theta$.
+Re-calculation would still preserve the computation graph for circuit parameters.
