@@ -504,6 +504,18 @@ if __name__=='__main__':
     from datetime import timedelta
     torch.set_num_threads(36)
     cuda0 = torch.device('cuda:0')
+    cpu = torch.device('cpu')
+    torch.set_default_device(cpu)
+    from models import transmon
+    import torch.distributed as dist
+    from torch.distributed import TCPStore
+    #store = TCPStore('localhost',12345)
+    #dist.init_process_group(backend=DISTRIBUTION_BACKEND,world_size=1,rank=0,store=store)
+    from DiSuQ.Torch.components import DISTRIBUTION_BACKEND
+    from torch.nn.parallel import DistributedDataParallel as DDP
+    from torch.nn.parallel import DataParallel as DP
+    from circuit import Charge,Kerman
+    circuit = transmon(Charge,basis,sparse=False)
     cuda1 = torch.device('cuda:1')
     cpu = torch.device('cpu')
     torch.set_default_device(cuda0)
