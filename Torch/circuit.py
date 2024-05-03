@@ -377,6 +377,7 @@ class Circuit(nn.Module):
     
     #@torch.compile(backend=COMPILER_BACKEND, fullgraph=False)
     def eigenSpectrum(self,control):
+        # control data : array/list of Tensor/s
         control = self.controlData(control)
         with torch.inference_mode() if self.grad_calc is False else nullcontext() as null:
             H = self.circuitHamiltonian(control)

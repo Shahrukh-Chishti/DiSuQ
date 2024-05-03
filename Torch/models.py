@@ -25,7 +25,7 @@ def box4Branches(Rep,basis,Ej,Ec,El,sparse=True):
     circuit += [L(1,2,El[1],'L1',True,L0,L_),C(1,2,Ec[1],'C1',C0,C_),J(1,2,Ej[1],'J1',J0,J_)]
     circuit += [L(2,3,El[2],'L2',True,L0,L_),C(2,3,Ec[2],'C2',C0,C_),J(2,3,Ej[2],'J2',J0,J_)]
     circuit += [L(3,0,El[3],'L3',True,L0,L_),C(3,0,Ec[3],'C3',C0,C_),J(3,0,Ej[3],'J3',J0,J_)]
-    control_iD = ()
+    control_iD = ['L0']
 
     circuit = Rep(circuit,control_iD,basis,sparse=False)
     return circuit
