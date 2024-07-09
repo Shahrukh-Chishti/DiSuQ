@@ -379,26 +379,30 @@ class Circuit(nn.Module):
     def eigenSpectrum(self,control):
         # control data : array/list of Tensor/s
         control = self.controlData(control)
+        algo = None
         with torch.inference_mode() if self.grad_calc is False else nullcontext() as null:
             H = self.circuitHamiltonian(control)
             if self.vectors_calc:
-                if H.dtype is float:
+                if self.grad_calc is False and H.dtype is float and not self.sparse:
                     # w/o : flux controls or Fourier conjugate
                     spectrum,states = lobpcg(H,k=self.spectrum_limit,largest=False,method='ortho')
+                    algo = 'lobpcg' # inconsistent & fast
                 else:
                     spectrum,states = eigh(H)
                     spectrum = spectrum[:self.spectrum_limit]
                     states = states[:self.spectrum_limit]
+                    algo = 'eigh' # consistent
             else:
                 # stable eigenvalues over degeneracy limits
                 spectrum = eigvalsh(H)
                 states = zeros(len(H),self.spectrum_limit)
                 spectrum = spectrum[:self.spectrum_limit]
+                algo = 'eigvalsh' # consistent
         return spectrum,states
     
     def operatorExpectation(self,bra,O,mode,ket):
         basis = self.basis
-        O = [O(basis_max) for basis_max in basis]
+        O = [O[basis_max] for basis_max in basis]
         O = self.backend.basisProduct(O,[mode])
         return bra.conj()@ O@ ket
 
