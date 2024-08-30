@@ -390,7 +390,7 @@ class Circuit(nn.Module):
                 else:
                     spectrum,states = eigh(H)
                     spectrum = spectrum[:self.spectrum_limit]
-                    states = states[:self.spectrum_limit]
+                    states = states.T[:self.spectrum_limit]
                     algo = 'eigh' # consistent
             else:
                 # stable eigenvalues over degeneracy limits
@@ -670,7 +670,7 @@ class Kerman(Circuit):
         
         No,Ni,Nj = self.kermanDistribution() #No,self.Ni,self.Nj
         
-        Qo = [self.backend.basisQq(basis_max) for basis_max in basis['O']]
+        Qo = [self.backend.basisQo(basis_max) for basis_max in basis['O']]
         Qi = [self.backend.basisQq(basis_max) for basis_max in basis['I']]
         Qj = [self.backend.basisQq(basis_max) for basis_max in basis['J']]
         Q = Qo + Qi + Qj

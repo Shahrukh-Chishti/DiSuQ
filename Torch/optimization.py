@@ -352,6 +352,16 @@ def initializationSequential(parameters,optimizer,lossFunction,flux_profile,iter
         optimizer.parameters,_ = optimizer.circuitParameters()
         Search.append(optimizer.optimization(lossFunction,flux_profile,iterations=iterations,lr=lr))
     return Search
+
+def initializationSequential(parameters,optimizer,iterations=100,lr=.005):
+    Search = []
+    for index,parameter in enumerate(parameters):
+        print(index,'--------------------')
+        optimizer.circuit.initialization(parameter)
+        optimizer.initAlgo(lr=lr)
+        optimizer.parameters,_ = optimizer.circuitParameters()
+        Search.append(optimizer.optimization(iterations))
+    return Search
     
 def initializationParallelism(optimizer,lossFunction,flux_profile,iterations=100,lr=.005):
     def optimization(parameters):
