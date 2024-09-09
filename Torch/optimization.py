@@ -77,19 +77,8 @@ class Optimization:
         return parameters
 
     def circuitHamiltonian(self,external_fluxes,to_dense=True):
-        # returns Dense Hamiltonian
-        if self.representation == 'K':
-            H = self.circuit.kermanHamiltonianLC()
-            H += self.circuit.kermanHamiltonianJosephson(external_fluxes)
-        elif self.representation == 'Q':
-            H = self.circuit.chargeHamiltonianLC()
-            H += self.circuit.josephsonCharge(external_fluxes)
-        elif self.representation == 'O':
-            H = self.circuit.oscillatorHamiltonianLC()
-            H += self.circuit.josephsonOscillator(external_fluxes)
-        elif self.representation == 'R':
-            H_J = self.circuit.ridgeJosephson(self.circuit)
-            H = self.circuit.ridgeHamiltonianLC(self.circuit) + H_J(external_fluxes)
+        H = self.circuit.hamiltonianLC()
+        H += self.circuit.hamiltonianJosephson(external_fluxes)
         if to_dense:
             H = H.to_dense()
         return H
@@ -372,12 +361,23 @@ class OrderingOptimization(Optimization):
         dParams.append(self.parameterState())
         dCircuit.append(self.circuitState())
         start = perf_counter()
-        for epoch in range(iterations):            
+        for epoch in range(iterations):
             Spectrum = [self.spectrumOrdered(flux,device) for flux in flux_profile]
             loss,metrics = loss_function(Spectrum,flux_profile)
+            if isnan(loss) :
+                print('Loss NaN Point :',epoch)
+                metrics['time'] = perf_counter()-start
+                logs.append(metrics)
+                break
             metrics['loss'] = loss.detach().item()
             optimizer.zero_grad()
             loss.backward(retain_graph=True)
+            nan_grads = [isnan(parameter.grad) for parameter in self.parameters]
+            if any(nan_grads):
+                print('Grad NaN point:',epoch)
+                metrics['time'] = perf_counter()-start
+                logs.append(metrics)
+                break
             optimizer.step()
             metrics['time'] = perf_counter()-start
             dParams.append(self.parameterState())

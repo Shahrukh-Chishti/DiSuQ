@@ -543,7 +543,7 @@ class Kerman(Circuit):
         
         No,Ni,Nj = self.kermanDistribution() #No,self.Ni,self.Nj
         
-        Qo = [self.backend.basisQq(basis_max) for basis_max in basis['O']]
+        Qo = [self.backend.basisQo(basis_max) for basis_max in basis['O']]
         Qi = [self.backend.basisQq(basis_max) for basis_max in basis['I']]
         Qj = [self.backend.basisQq(basis_max) for basis_max in basis['J']]
         Q = Qo + Qi + Qj
