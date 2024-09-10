@@ -6,6 +6,7 @@ from torch.linalg import det,inv,eigh as eigsolve, eigvalsh
 from torch.nn.utils import clip_grad_norm_,clip_grad_value_
 from numpy import arange,set_printoptions,meshgrid,linspace,array,sqrt,sort,log10,random,logspace
 from scipy.optimize import minimize
+from random import sample,seed
 from time import perf_counter,sleep
 from DiSuQ.Torch.non_attacking_rooks import charPoly
 from DiSuQ.Torch.components import L,J,C,L0,J0,C0
@@ -169,7 +170,7 @@ class OrderingOptimization(Optimization):
         if device is not None:
             H = H.to(device)
         if H.is_sparse:
-            spectrum = lobpcg(H.to(float),k=4,largest=False)[0]; states = None
+            spectrum,states = lobpcg(H.to(float),k=4,method='ortho',largest=False)
         else:
             #spectrum = eigvalsh(H); states = None
             spectrum,states = eigsolve(H)
@@ -403,45 +404,47 @@ def breakPoint(logs):
 def truncNormalParameters(circuit,subspace,N,var=5):
     # var : std of normal distribution
     iDs,domain = [],[]
-    for component in circuit.network:
+    for index,component in enumerate(circuit.network):
         if component.ID in subspace:
             iDs.append(component.ID)
             loc = component.energy().item()
             a,b = component.bounds()
+            if a.is_cuda:
+                a,b = a.cpu(),b.cpu()
             a = (a - loc)/var ; b = (b - loc)/var
-            domain.append(truncnorm.rvs(a,b,loc,var,size=N,random_state=random.seed(101)))
-    grid = array(domain)
-    space = []
-    for point in grid.T:
-        state = circuit.circuitState()
-        state.update(dict(zip(iDs,point)))
-        space.append(state)
-    return space
+            domain.append(truncnorm.rvs(a,b,loc,var,size=N,random_state=random.seed(101+index)))
+    grid = array(domain).T
+    return parameterSpace(circuit,grid,iDs)
 
-def uniformParameters(circuit,subspace,N):
+def uniformParameters(circuit,subspace,n,N,random_state=10,logscale=False):
     iDs,domain = [],[]
+    spacing = linspace
+    if logscale:
+        spacing = logspace
     for component in circuit.network:
         if component.ID in subspace:
             iDs.append(component.ID)
             a,b = component.bounds()
-            a = log10(a.item()); b = log10(b.item())
-            domain.append(logspace(a,b,N+1,endpoint=False)[1:])
+            a,b = a.item(),b.item()
+            if logscale:
+                a = log10(a); b = log10(b)
+            domain.append(spacing(a,b,n+1,endpoint=False)[1:])
     grid = array(meshgrid(*domain))
-    grid = grid.reshape(len(iDs),-1)
-    space = []
-    for point in grid.T:
-        state = circuit.circuitState()
-        state.update(dict(zip(iDs,point)))
-        space.append(state)
-    return space
+    grid = grid.reshape(len(iDs),-1).T
+    seed(random_state)
+    grid = sample(grid.tolist(),N)
+    return parameterSpace(circuit,grid,iDs)
 
 def domainParameters(domain,circuit,subspace):
     grid = array(meshgrid(*domain))
-    grid = grid.reshape(len(subspace),-1)
+    grid = grid.reshape(len(subspace),-1).T
+    return parameterSpace(circuit,grid,subspace)
+
+def parameterSpace(circuit,grid,iDs):
     space = []
-    for point in grid.T:
-        state = circuit.circuitState()
-        state.update(dict(zip(subspace,point)))
+    state = circuit.circuitState()
+    for point in grid:
+        state.update(dict(zip(iDs,point)))
         space.append(state)
     return space
 
