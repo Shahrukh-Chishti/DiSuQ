@@ -21,13 +21,16 @@ inf = 1e12
 
 # upper limit of circuit elements
 # Energy units in GHz
-J0,C0,L0 = 1200,2500,1200 ; J_,C_,L_ = 1e-6,1e-6,1e-6
 J0,J_ = 500.,0. ; C0,C_ = 150.,1e-6
 # such a huge range should be avoided, since the algebra with extreme values are below tolerance
 #J0,C0,L0 = 1e4,1e4,1e4 ; J_,C_,L_ = 1e-10,1e-10,1e-10
 #J0,C0,L0 = 25,38,32 ; J_,C_,L_ = 5,.3,1
 #zero = 1e-18
 J0,C0,L0 = 1e8,1e8,1e8 ; J_,C_,L_ = 1e-18,1e-18,1e-18
+J0,C0,L0 = 1200,2500,1200 ; J_,C_,L_ = 1e-6,1e-6,1e-6
+plus,miuns = 1e6,-1e6 # numerical bound on infinity
+# non-zero lower bound is necessary for logarithmic transform & practical sense
+# bounds(non-inclusive) enclose domain of parameter space
 
 def null(H):
     def empty(*args):
@@ -137,8 +140,8 @@ class J(Elements):
         return sigmoid(self.jo) * self.J0 + self.J_ # GHz
     
     def bounds(self):
-        upper = sigmoid(tensor(1e6))*self.J0 + self.J_
-        lower = sigmoid(-tensor(1e6))*self.J0 + self.J_
+        upper = tensor(self.J0 + self.J_)
+        lower = tensor(self.J_)
         return lower,upper
 
 class C(Elements):
@@ -160,8 +163,8 @@ class C(Elements):
         return capEnergy(self.energy()) # he9/e/e : natural unit
     
     def bounds(self):
-        upper = sigmoid(tensor(1e6))*self.C0 + self.C_
-        lower = sigmoid(-tensor(1e6))*self.C0 + self.C_
+        upper = tensor(self.C0 + self.C_)
+        lower = tensor(self.C_)
         return lower,upper
 
 class L(Elements):
@@ -184,8 +187,8 @@ class L(Elements):
         return indEnergy(self.energy()) # 4e9 e^2/h : natural unit
     
     def bounds(self):
-        upper = sigmoid(tensor(1e6))*self.L0 + self.L_
-        lower = sigmoid(-tensor(1e6))*self.L0 + self.L_
+        upper = tensor(self.L0 + self.L_)
+        lower = tensor(self.L_)
         return lower,upper
 
 if __name__=='__main__':
