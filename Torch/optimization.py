@@ -442,8 +442,8 @@ def domainParameters(domain,circuit,subspace):
 
 def parameterSpace(circuit,grid,iDs):
     space = []
-    state = circuit.circuitState()
     for point in grid:
+        state = circuit.circuitState()
         state.update(dict(zip(iDs,point)))
         space.append(state)
     return space
