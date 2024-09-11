@@ -5,6 +5,7 @@ from torch.autograd import grad
 from torch.linalg import det,inv,eigh as eigsolve, eigvalsh
 from torch.nn.utils import clip_grad_norm_,clip_grad_value_
 from numpy import arange,set_printoptions,meshgrid,linspace,array,sqrt,sort,log10,random,logspace
+from numpy.random import choice
 from scipy.optimize import minimize
 from random import sample,seed
 from time import perf_counter,sleep
@@ -421,7 +422,8 @@ def truncNormalParameters(circuit,subspace,N,var=5):
     return parameterSpace(circuit,grid,iDs)
 
 def uniformParameters(circuit,subspace,n,N,random_state=10,logscale=False):
-    iDs,domain = [],[]
+    iDs,grid = [],[]
+    seed(random_state)
     spacing = linspace
     if logscale:
         spacing = logspace
@@ -432,11 +434,9 @@ def uniformParameters(circuit,subspace,n,N,random_state=10,logscale=False):
             a,b = a.item(),b.item()
             if logscale:
                 a = log10(a); b = log10(b)
-            domain.append(spacing(a,b,n+1,endpoint=False)[1:])
-    grid = array(meshgrid(*domain))
-    grid = grid.reshape(len(iDs),-1).T
-    seed(random_state)
-    grid = sample(grid.tolist(),N)
+            domain = spacing(a,b,n+1,endpoint=False)[1:]
+            grid.append(choice(domain,N))
+    grid = array(grid)
     return parameterSpace(circuit,grid,iDs)
 
 def domainParameters(domain,circuit,subspace):
