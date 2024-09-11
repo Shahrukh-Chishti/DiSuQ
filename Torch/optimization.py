@@ -170,7 +170,7 @@ class OrderingOptimization(Optimization):
         if device is not None:
             H = H.to(device)
         if H.is_sparse:
-            spectrum,states = lobpcg(H.to(float),k=4,method='ortho',largest=False)
+            spectrum,states = lobpcg(H,k=4,method='ortho',largest=False)
         else:
             #spectrum = eigvalsh(H); states = None
             spectrum,states = eigsolve(H)
