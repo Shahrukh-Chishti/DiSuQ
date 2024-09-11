@@ -375,7 +375,11 @@ class OrderingOptimization(Optimization):
             loss.backward(retain_graph=True)
             nan_grads = [isnan(parameter.grad) for parameter in self.parameters]
             if any(nan_grads):
-                print('Grad NaN point:',epoch)
+                print('Grad NaN point: @',epoch,'\t Loss:',metrics['loss'])
+                # degeneracy check
+                Sorted = Spectrum[0][0].diff().sort()
+                print(Sorted[0][:4])
+                print(Sorted[1][:4])
                 metrics['time'] = perf_counter()-start
                 logs.append(metrics)
                 break
