@@ -17,6 +17,7 @@ __pycache__/
 # Temp files
 temp.*
 temp-plot.html
+.nfs*
 
 # Plots
 *.html

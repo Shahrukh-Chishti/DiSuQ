@@ -18,6 +18,8 @@ Z0 = h/4/e/e
 Z0 = flux_quanta / 2 / e
 zero = 1e-12
 inf = 1e12
+COMPILER_BACKEND = "inductor"
+DISTRIBUTION_BACKEND = "nccl"
 
 # upper limit of circuit elements
 # Energy units in GHz
@@ -117,21 +119,24 @@ def classComponents(component):
     return var,energy,phys
 
 class Elements:
-    def __init__(self,plus,minus,ID=None):
+    def __init__(self,plus,minus,ID=None,device=None,dtype=float,requires_grad=True):
         self.plus = plus
         self.minus = minus
         if ID is None:
             ID = uuid.uuid4().hex
         self.ID = ID
+        self.device = device
+        self.dtype = dtype
+        self.requires_grad = requires_grad
 
 class J(Elements):
-    def __init__(self,plus,minus,Ej,ID=None,J0=J0,J_=J_):
-        super().__init__(plus,minus,ID)
+    def __init__(self,plus,minus,Ej,ID=None,J0=J0,J_=J_,device=None,dtype=float,requires_grad=True):
+        super().__init__(plus,minus,ID,device,dtype,requires_grad)
         self.J0 = J0; self.J_ = J_
         self.initJunc(Ej) # Ej[GHz]
         
     def initJunc(self,Ej):
-        self.jo = tensor(sigmoidInverse((Ej-self.J_)/self.J0),dtype=float,requires_grad=True)
+        self.jo = tensor(sigmoidInverse((Ej-self.J_)/self.J0),device=self.device,dtype=self.dtype,requires_grad=self.requires_grad) ##
         
     def variable(self):
         return self.jo
@@ -145,13 +150,13 @@ class J(Elements):
         return lower,upper
 
 class C(Elements):
-    def __init__(self,plus,minus,Ec,ID=None,C0=C0,C_=C_):
-        super().__init__(plus,minus,ID)
+    def __init__(self,plus,minus,Ec,ID=None,C0=C0,C_=C_,device=None,dtype=float,requires_grad=True):
+        super().__init__(plus,minus,ID,device,dtype,requires_grad)
         self.C0 = C0; self.C_ = C_
         self.initCap(Ec) # Ec[GHz]
         
     def initCap(self,Ec):
-        self.cap = tensor(sigmoidInverse((Ec-self.C_)/self.C0),dtype=float,requires_grad=True)
+        self.cap = tensor(sigmoidInverse((Ec-self.C_)/self.C0),device=self.device,dtype=self.dtype,requires_grad=self.requires_grad) ##
         
     def variable(self):
         return self.cap
@@ -168,14 +173,14 @@ class C(Elements):
         return lower,upper
 
 class L(Elements):
-    def __init__(self,plus,minus,El,ID=None,external=False,L0=L0,L_=L_):
-        super().__init__(plus,minus,ID)
+    def __init__(self,plus,minus,El,ID=None,external=False,L0=L0,L_=L_,device=None,dtype=float,requires_grad=True):
+        super().__init__(plus,minus,ID,device,dtype,requires_grad)
         self.L0 = L0; self.L_ = L_
         self.external = external # duplication : doesn't requires_grad
         self.initInd(El) # El[GHz]
         
     def initInd(self,El):
-        self.ind = tensor(sigmoidInverse((El-self.L_)/self.L0),dtype=float,requires_grad=True)
+        self.ind = tensor(sigmoidInverse((El-self.L_)/self.L0),device=self.device,dtype=self.dtype,requires_grad=self.requires_grad) ##
         
     def variable(self):
         return self.ind

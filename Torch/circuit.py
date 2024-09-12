@@ -1,15 +1,20 @@
 import networkx,copy,torch
 import matplotlib.pyplot as plt
-
+from contextlib import nullcontext
 import DiSuQ.Torch.dense as Dense
 import DiSuQ.Torch.sparse as Sparse
-from torch import exp,det,tensor,arange,zeros,zeros_like,sqrt,diagonal,argsort,lobpcg,set_num_threads,full as full_torch
-from torch.linalg import eigvalsh as eigsolve,inv,eigh
-from DiSuQ.Torch.components import diagonalisation,null,J,L,C,im,pi,complex
+from torch import exp,det,tensor,tile,arange,ones,zeros,zeros_like,sqrt,diagonal,argsort,lobpcg,set_num_threads,full as full_torch
+from torch.linalg import eigvalsh,inv,eigh
+from DiSuQ.Torch.components import diagonalisation,null,J,L,C,im,pi,complex,float
+from DiSuQ.Torch.components import COMPILER_BACKEND
 from time import perf_counter
 from numpy.linalg import matrix_rank
-from numpy.linalg import eigvalsh
+#from numpy.linalg import eigvalsh
 from numpy import prod,flip,array,sort,full as full_numpy
+from torch import nn
+from torch.nn.parameter import Parameter
+
+### Computational Sub-routines
 
 def inverse(A,zero=1e-15):
     if det(A) == 0:
@@ -29,19 +34,38 @@ def phase(phi):
     # phi = flux/flux_quanta
     return exp(im*2*pi*phi)
 
-def hamiltonianEnergy(H,sort=True):
+def impedanceUpdateCap(Co_,Z):
+    N = len(Z)
+    Z = 1/sqrt(Z)
+    Co_ = Z.view(N,1).expand(N,N)*Co_*Z.expand(N,N)
+    return Co_
+
+def impedanceUpdateInd(Lo_,Z):
+    N = len(Z)
+    Z = sqrt(Z)
+    Lo_ = Z.view(N,1).expand(N,N)*Lo_*Z.expand(N,N)
+    return Lo_
+
+def coeffProduct(H,Coeff,M):
+    nA,nB = Coeff.shape
+    for i in range(nA):
+        for j in range(nB):
+            #if not M[i,j] == 0:
+            H += Coeff[i,j]*M[(i,j)]
+    return H
+
+### Generic Diagonalization
+
+def hamiltonianEnergy(H):
     eigenenergies = eigsolve(H)
     return eigenenergies
 
 def wavefunction(H,level=[0]):
     eig,vec = eigh(H)
-    indices = argsort(eig)
-    states = vec.T[indices[level]]
+    states = vec.T[level]
     return states
 
-# operator construction
-
-class Circuit:
+class Circuit(nn.Module):
     """
         * no external fluxes must be in parallel : redundant
         * no LC component must be in parallel : redundant
@@ -52,9 +76,11 @@ class Circuit:
         * i,j : indices of indexed graph : mode correspondence
     """
 
-    def __init__(self,network,basis,sparse=True,pairs=dict(),device=None):
+    def __init__(self,network,control_iD,basis,sparse=True,pairs=dict(),device=None):
+        super().__init__()
         # circuit network
         self.network = network
+        self.control_iD = control_iD
         self.G = self.parseCircuit()
         self.spanning_tree = self.spanningTree()
         self.nodes,self.nodes_ = self.nodeIndex()
@@ -64,7 +90,7 @@ class Circuit:
         self.Nb = len(self.edges_inductive)
         self.pairs = pairs
         self.symmetrize(self.pairs)
-        # components
+        # circuit components
         self.Cn_,self.Ln_ = self.componentMatrix()
 
         self.basis = basis
@@ -75,6 +101,16 @@ class Circuit:
             self.backend = Sparse
         else:
             self.backend = Dense
+        self.device = device
+        self.null_flux = tensor(0.,device=self.device)
+        # basis Size undefined in Root class
+        self.null = self.backend.null(self.basisSize(),device=self.device)
+
+        self.spectrum_limit = 4
+        self.vectors_calc = False
+        self.grad_calc = True
+
+        self.forward = self.spectrumManifold
 
     def initialization(self,parameters):
         # parameters : GHz unit
@@ -85,15 +121,37 @@ class Circuit:
                 component.initInd(parameters[component.ID])
             elif component.__class__ == J :
                 component.initJunc(parameters[component.ID])
-                
         self.symmetrize(self.pairs)
-        # recalculate capacitances and inductances
-        # for 1) nodes-formalism 2) mode-formalism
-        # Transformation Invariant
-        self.Cn_,self.Ln_ = self.componentMatrix()
-        self.L_,self.C_ = self.modeTransformation()
-        self.No,self.Ni,self.Nj = self.kermanDistribution()
-        #self.Lo_,self.C_ = self.transformComponents()
+
+    def named_parameters(self,subspace=(),recurse=False):
+        parameters = []; IDs = []
+        slaves = self.pairs.keys()
+        for component in self.network:
+            if component.ID in subspace or len(subspace)==0:
+                if component.__class__ == C :
+                    parameter = component.cap
+                elif component.__class__ == L :
+                    parameter = component.ind
+                elif component.__class__ == J :
+                    parameter = component.jo
+                if not component.ID in slaves:
+                    IDs.append(component.ID)
+                    parameters.append(parameter)
+        return zip(IDs,parameters)
+
+    def parameters(self):
+        independent = []
+        slaves = self.pairs.keys()
+        for component in self.network:
+            if component.__class__ == C :
+                parameter = component.cap
+            elif component.__class__ == L :
+                parameter = component.ind
+            elif component.__class__ == J :
+                parameter = component.jo
+            if not component.ID in slaves:
+                independent.append(parameter)
+        return independent
         
     def symmetrize(self,pairs):
         components = self.circuitComposition()
@@ -200,7 +258,7 @@ class Circuit:
         """
             external_fluxes : {identifier:flux_value}
         """
-        flux = tensor(0.0)
+        flux = self.null_flux.clone()
         external = set(external_fluxes.keys())
         S = self.spanning_tree
         path = networkx.shortest_path(S,u,v)
@@ -240,7 +298,7 @@ class Circuit:
         return edges,L_ext
 
     def nodeCapacitance(self):
-        Cn = zeros((self.Nn,self.Nn))
+        Cn = zeros((self.Nn,self.Nn)) ##
         for i,node in self.nodes.items():
             for u,v,component in self.G.edges(node,data=True):
                 component = component['component']
@@ -253,7 +311,7 @@ class Circuit:
         return Cn
 
     def branchInductance(self):
-        Lb = zeros((self.Nb,self.Nb))
+        Lb = zeros((self.Nb,self.Nb)) ##
         #fill_diagonal(Lb,L_limit)
         for index,(u,v,key) in self.edges_inductive.items():
             component = self.G[u][v][key]['component']
@@ -263,7 +321,7 @@ class Circuit:
         return Lb
 
     def mutualInductance(self):
-        M = zeros((self.Nb,self.Nb))
+        M = zeros((self.Nb,self.Nb)) ##
         return M
 
     def connectionPolarity(self):
@@ -275,13 +333,6 @@ class Circuit:
                 Rbn[index][self.nodes_[v]] = -1
 
         return Rbn
-
-    def modeBasisSize(self,basis):
-        n_baseO = prod(array(basis['O']))
-        n_baseI = prod(array(basis['I']))
-        n_baseJ = prod(array(basis['J']))
-
-        return n_baseO,n_baseI,n_baseJ
 
     def islandModes(self):
         islands = self.graphGL(elements=[C])
@@ -297,7 +348,7 @@ class Circuit:
         basis = self.basis
         fluxModes = [basisPj(basis_max) for basis_max in basis]
         edges,L_ext = self.fluxBiasComponents()
-        H = tensor([[0.0]])
+        H = self.backend.null() #tensor([[0.0]])
         for (u,v,key),L in zip(edges,L_ext):
             i,j = self.nodes_[u],self.nodes_[v]
             #print(u,v,i,j,L)
@@ -310,9 +361,48 @@ class Circuit:
             H = H + P@P / 2 / L
         return H
     
+    #@torch.compile(backend=COMPILER_BACKEND, fullgraph=False)
+    def circuitHamiltonian(self,external_flux):
+        # torch reconstruct computation graph repeatedly
+        H = self.hamiltonianLC()
+        H += self.hamiltonianJosephson(external_flux)
+        return H
+    
+    def controlData(self,control):
+        if len(self.control_iD) == 0:
+            return dict()
+        assert len(control) == len(self.control_iD)
+        control = dict(zip(self.control_iD,control))
+        return control
+    
+    #@torch.compile(backend=COMPILER_BACKEND, fullgraph=False)
+    def eigenSpectrum(self,control):
+        # control data : array/list of Tensor/s
+        control = self.controlData(control)
+        algo = None
+        with torch.inference_mode() if self.grad_calc is False else nullcontext() as null:
+            H = self.circuitHamiltonian(control)
+            if self.vectors_calc:
+                if self.grad_calc is False and H.dtype is float and not self.sparse:
+                    # w/o : flux controls or Fourier conjugate
+                    spectrum,states = lobpcg(H,k=self.spectrum_limit,largest=False,method='ortho')
+                    algo = 'lobpcg' # inconsistent & fast
+                else:
+                    spectrum,states = eigh(H)
+                    spectrum = spectrum[:self.spectrum_limit]
+                    states = states.T[:self.spectrum_limit]
+                    algo = 'eigh' # consistent
+            else:
+                # stable eigenvalues over degeneracy limits
+                spectrum = eigvalsh(H)
+                states = zeros(len(H),self.spectrum_limit)
+                spectrum = spectrum[:self.spectrum_limit]
+                algo = 'eigvalsh' # consistent
+        return spectrum,states
+    
     def operatorExpectation(self,bra,O,mode,ket):
         basis = self.basis
-        O = [O(basis_max) for basis_max in basis]
+        O = [O[basis_max] for basis_max in basis]
         O = self.backend.basisProduct(O,[mode])
         return bra.conj()@ O@ ket
 
@@ -325,49 +415,27 @@ class Circuit:
         H = H_LC + H_J(external_fluxes)
         if grad:
             if self.sparse:
+                # illegal type casting
                 eigenenergies = lobpcg(H.to(float),k=4,largest=False)[0]
             else:
-                eigenenergies = hamiltonianEnergy(H)
+                eigenenergies = eigsolve(H)
         else:
             if self.sparse:
                 H = self.backend.scipyfy(H)
                 eigenenergies = self.backend.sparse.linalg.eigsh(H,return_eigenvectors=False,which='SA')
                 eigenenergies = sort(eigenenergies)
             else:
-                H = H.detach().numpy() 
+                H = H.detach().numpy()
                 eigenenergies = eigvalsh(H)
-        
         return eigenenergies
-
-    def spectrumManifold(self,flux_points,flux_manifold,H_LC=tensor(0.0),H_J=None,excitation=[1],grad=True,log=False):
-        """
-            flux_points : inductor identifier for external introduction
-            flux_manifold : [(fluxes)]
-        """
-        if H_J is None:
-            H_J = null(H_LC)
-        #manifold of flux space M
-        if not grad:
-            Ex = full_numpy((len(excitation),len(flux_manifold)),float('nan'))
-        else:
-            Ex = full_torch((len(excitation),len(flux_manifold)),float('nan'))
-        E0 = []
-        #H_LC = self.hamiltonianLC()
-        #H_ext = self.fluxInducerEnergy()
-        start = perf_counter()
-        for index,fluxes in enumerate(flux_manifold):
-            if log:
-                if index%50 == 0:
-                    print(index,'\t',perf_counter()-start)
-            external_fluxes = dict(zip(flux_points,fluxes))
-            #H_J = self.josephsonEnergy(external_fluxes)
-            #H = H_LC + H_J(external_fluxes)
-            eigenenergies = self.circuitEnergy(H_LC,H_J,external_fluxes,grad)
-            #eigenenergies = hamiltonianEnergy(H)
-            
-            E0.append(eigenenergies[0])
-            Ex[:,index] = eigenenergies[excitation]-eigenenergies[0]
-        return E0,Ex
+    
+    def spectrumManifold(self,manifold):
+        # sequential execution within batch of control points
+        Spectrum = [] # check autograd over creation
+        for control in manifold:
+            spectrum,states = self.eigenSpectrum(control)
+            Spectrum.append((spectrum,states))
+        return Spectrum
     
     def fluxScape(self,flux_points,flux_manifold):
         H_LC = self.kermanHamiltonianLC()
@@ -379,18 +447,21 @@ class Circuit:
         return EI,EII
 
 class Kerman(Circuit):
-    def __init__(self,network,basis,sparse=True,pairs=dict(),device=None):
-        super().__init__(network,basis,sparse,pairs,device)
+    def __init__(self,network,control_iD,basis,sparse=True,pairs=dict(),device=None):
+        super().__init__(network,control_iD,basis,sparse,pairs,device)
         self.No,self.Ni,self.Nj = self.kermanDistribution()
         self.R = self.kermanTransform().real
         self.L_,self.C_ = self.modeTransformation()
-    
-    def kermanBasisSize(self):
-        N = 1
+
+    def basisSize(self,modes=False):
+        N = dict()
         basis = self.basis
-        N *= prod([size for size in basis['O']])
-        N *= prod([2*size+1 for size in basis['I']])
-        N *= prod([2*size+1 for size in basis['J']])
+        N['O'] = [size for size in basis['O']]
+        N['I'] = [2*size+1 for size in basis['I']]
+        N['J'] = [2*size+1 for size in basis['J']]
+        if modes:
+            return N
+        N = prod(N['O'])*prod(N['I'])*prod(N['J'])
         return int(N)
 
     def kermanDistribution(self):
@@ -405,7 +476,7 @@ class Kerman(Circuit):
 
     def kermanTransform(self):
         Ln_ = self.Ln_
-        R = diagonalisation(Ln_.detach(),True)
+        R = diagonalisation(Ln_.detach(),True).to(float)
         return R
     
     def kermanComponents(self):
@@ -431,12 +502,7 @@ class Kerman(Circuit):
         R = self.R
         L_ = inv(R.T) @ Ln_ @ inv(R)
         C_ = R @ Cn_ @ R.T
-        return L_,C_    
-
-    def modeImpedance(self):
-        Cn_,Ln_,basis = self.Cn_,self.Ln_,self.basis
-        impedance = [sqrt(Cn_[i,i]/Ln_[i,i]) for i in range(len(basis))]
-        return impedance
+        return L_,C_
 
     def oscillatorImpedance(self):
         Cn_,Ln_,basis = self.Cn_,self.Ln_,self.basis
@@ -472,6 +538,7 @@ class Kerman(Circuit):
         assert len(combination)==len(Dminus)
         return Dplus,Dminus
 
+    #@torch.compile(backend=COMPILER_BACKEND, fullgraph=True)
     def hamiltonianJosephson(self,external_fluxes=dict()):
         edges,Ej = self.josephsonComponents()
         N = self.kermanBasisSize()
@@ -497,6 +564,7 @@ class Kerman(Circuit):
 
         return H/2
 
+    #@torch.compile(backend=COMPILER_BACKEND, fullgraph=True)
     def hamiltonianLC(self):
         """
             basis : {O:(,,,),I:(,,,),J:(,,,)}
@@ -746,32 +814,11 @@ class Charge(Circuit):
         H = self.backend.modeMatrixProduct(F,Ln_,F)/2
         H += self.josephsonCharge(external_fluxes)
         return H
-    
+     
 class Mixed(Circuit):
+    def __init__(self,network,basis,sparse=True,pairs=dict()):
+        super().__init__(network,basis,sparse,pairs,device)
 
-    def mixedHamiltonianLC(self,basis,n_trunc):
-        assert len(basis)==len(n_trunc)
-        Cn_,Ln_ = self.Cn_,self.Ln_
-        Q,F = [],[]
-        Z = self.modeImpedance()
-        for base,n,z in zip(basis,n_trunc,Z):
-            if base=='o':
-                Q.append(self.backend.basisQo(n,z))
-                F.append(self.backend.basisFo(n,z))
-            elif base == 'q':
-                Q.append(self.backend.basisQq(n))
-                F.append(self.backend.basisFq(n))
-            elif base == 'f':
-                Q.append(self.backend.basisQf(n))
-                F.append(self.backend.basisFf(n))
-                
-        assert len(Q) == len(basis)
-        assert len(F) == len(basis)
-        H = self.backend.modeMatrixProduct(Q,Cn_,Q)
-        H += self.backend.modeMatrixProduct(F,Ln_,F)
-
-        return H/2
-    
     def josephsonMixed(self,basis,n_trunc):
         assert len(basis)==len(n_trunc)
         Dplus,Dminus = [],[]
@@ -809,17 +856,39 @@ class Mixed(Circuit):
 
             return H/2
         return Hj
+    
+    def mixedHamiltonianLC(self,basis,n_trunc):
+        assert len(basis)==len(n_trunc)
+        Cn_,Ln_ = self.Cn_,self.Ln_
+        Q,F = [],[]
+        Z = self.modeImpedance()
+        for base,n,z in zip(basis,n_trunc,Z):
+            if base=='o':
+                Q.append(self.backend.basisQo(n,z))
+                F.append(self.backend.basisFo(n,z))
+            elif base == 'q':
+                Q.append(self.backend.basisQq(n))
+                F.append(self.backend.basisFq(n))
+            elif base == 'f':
+                Q.append(self.backend.basisQf(n))
+                F.append(self.backend.basisFf(n))
+                
+        assert len(Q) == len(basis)
+        assert len(F) == len(basis)
+        H = self.backend.modeMatrixProduct(Q,Cn_,Q)
+        H += self.backend.modeMatrixProduct(F,Ln_,F)
+
+        return H/2
 
 if __name__=='__main__':
     import models
-    circuit = models.shuntedQubit([2,2,2],sparse=False)
+    from DiSuQ.Torch.circuit import Kerman,Charge
+    torch.set_num_threads(12)
+    basis = [6]*3 ; Rep = Charge
+    basis = {'O':[10],'I':[],'J':[4,4]} ; Rep = Kerman
+    circuit = models.shuntedQubit(Rep,basis,sparse=True)
     flux_manifold = zip(arange(0,1,.01))
-    H_LC = circuit.chargeHamiltonianLC()
-    H_J = circuit.josephsonCharge({'I':tensor(.125)})
-    circuit.basis = {'O':[2],'I':[],'J':[2,2]}
-    H_J = circuit.kermanHamiltonianJosephson({'I':tensor(.225)})
+    H_LC = circuit.hamiltonianLC()
+    H_J = circuit.hamiltonianJosephson
+    eige = circuit.circuitEnergy(H_LC,H_J,{'I':tensor(.225)})
     import ipdb; ipdb.set_trace()
-    H_LC = circuit.kermanHamiltonianLC()
-    e1 = hamiltonianEnergy(H_J)
-    Ej2 = circuit.josephsonCharge({'I':tensor(.0003)})
-    e2 = hamiltonianEnergy(Ej2)
