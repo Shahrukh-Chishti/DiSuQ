@@ -138,7 +138,6 @@ def viewPCA(X,index,size=(8,6),title=None,x=None,y=None):
     plt.colorbar(label='index')
     plt.show()
     
-    
 def view_pydot(G):
     #import ipdb; ipdb.set_trace()
     pdot = to_pydot(G)

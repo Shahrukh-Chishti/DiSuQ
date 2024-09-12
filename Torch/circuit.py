@@ -1,15 +1,12 @@
 import networkx,copy,torch
-import matplotlib.pyplot as plt
 from contextlib import nullcontext
 import DiSuQ.Torch.dense as Dense
 import DiSuQ.Torch.sparse as Sparse
-from torch import exp,det,tensor,tile,arange,ones,zeros,zeros_like,sqrt,diagonal,argsort,lobpcg,set_num_threads,full as full_torch
+from torch import exp,det,tensor,arange,zeros,sqrt,diagonal,lobpcg
 from torch.linalg import eigvalsh,inv,eigh
 from DiSuQ.Torch.components import diagonalisation,null,J,L,C,im,pi,complex,float
-from DiSuQ.Torch.components import COMPILER_BACKEND
-from time import perf_counter
 from numpy.linalg import matrix_rank
-from numpy import prod,flip,array,sort,full as full_numpy
+from numpy import prod,sort
 from torch import nn
 
 ### Computational Sub-routines
