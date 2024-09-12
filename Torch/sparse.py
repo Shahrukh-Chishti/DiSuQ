@@ -1,5 +1,4 @@
 from numpy import abs as absolute
-
 from torch import kron as kronecker
 from torch import vstack,transpose
 from torch import matmul as mul,nonzero
@@ -260,4 +259,3 @@ if __name__=='__main__':
     s2 = zeros(3,3);s2[0,0]=4
     Sp1 = sparsify(s1)
     Sp2 = sparsify(s2)
-    import ipdb;ipdb.set_trace()

@@ -9,10 +9,8 @@ from DiSuQ.Torch.components import diagonalisation,null,J,L,C,im,pi,complex,floa
 from DiSuQ.Torch.components import COMPILER_BACKEND
 from time import perf_counter
 from numpy.linalg import matrix_rank
-#from numpy.linalg import eigvalsh
 from numpy import prod,flip,array,sort,full as full_numpy
 from torch import nn
-from torch.nn.parameter import Parameter
 
 ### Computational Sub-routines
 
@@ -57,7 +55,7 @@ def coeffProduct(H,Coeff,M):
 ### Generic Diagonalization
 
 def hamiltonianEnergy(H):
-    eigenenergies = eigsolve(H)
+    eigenenergies = eigvalsh(H)
     return eigenenergies
 
 def wavefunction(H,level=[0]):
@@ -406,6 +404,7 @@ class Circuit(nn.Module):
         O = self.backend.basisProduct(O,[mode])
         return bra.conj()@ O@ ket
 
+    # ToBeDeprecated
     def circuitEnergy(self,H_LC=tensor(0.0),H_J=None,external_fluxes=dict(),grad=True):
         ## this could be improved : removing if clause, sub-class, sparse/dense and grad/numer segregation
         if H_J is None:
@@ -418,7 +417,7 @@ class Circuit(nn.Module):
                 # illegal type casting
                 eigenenergies = lobpcg(H.to(float),k=4,largest=False)[0]
             else:
-                eigenenergies = eigsolve(H)
+                eigenenergies = eigvalsh(H)
         else:
             if self.sparse:
                 H = self.backend.scipyfy(H)
@@ -891,4 +890,4 @@ if __name__=='__main__':
     H_LC = circuit.hamiltonianLC()
     H_J = circuit.hamiltonianJosephson
     eige = circuit.circuitEnergy(H_LC,H_J,{'I':tensor(.225)})
-    import ipdb; ipdb.set_trace()
+    print(eige)

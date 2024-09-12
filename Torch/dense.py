@@ -230,5 +230,3 @@ if __name__=='__main__':
     Qo = basisQo(30,tensor(4))
     Fq = basisFq(30)
     Qf = basisQf(30)
-
-    import ipdb;ipdb.set_trace()
