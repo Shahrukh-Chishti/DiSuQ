@@ -94,11 +94,11 @@ def initializationSequential(parameters,optimizer,iterations=100,lr=.005):
         Search.append(optimizer.optimization(iterations))
     return Search
 
-def initializationParallelism(optimizer,lossFunction,flux_profile,iterations=100,lr=.005):
+def initializationParallelism(optimizer,iterations=100,lr=.005):
     def optimization(parameters):
         optimizer.circuit.initialization(parameters)
-        optim.parameters,_ = optim.circuitParameters()
-        return optimizer.optimization(lossFunction,flux_profile,iterations=iterations,lr=lr)
+        optimizer.parameters,_ = optimizer.circuitParameters()
+        return optimizer.optimization(iterations=iterations)
     return optimization
 
 # Search Space Population

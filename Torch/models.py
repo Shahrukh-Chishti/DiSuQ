@@ -1,13 +1,8 @@
-import numpy,sys,scqubits
-from DiSuQ.Torch.circuit import Circuit, hamiltonianEnergy, phase
-from DiSuQ.Torch.circuit import Charge,Kerman
-from DiSuQ.Torch.components import J,C,L,pi,h
+import numpy,scqubits
+from DiSuQ.Torch.circuit import Circuit, phase
+from DiSuQ.Torch.components import J,C,L
 from DiSuQ.Torch.components import C0,J0,L0,capE,indE,C_,J_,L_
-from DiSuQ.Torch.components import e,h,flux_quanta,hbar
-from numpy.linalg import det
-from pyvis import network as pvnet
-from torch import tensor,diag,sqrt
-from torch.linalg import inv
+from torch import tensor,sqrt
 
 def tensorize(values,variable=True):
     tensors = []
@@ -220,7 +215,7 @@ def shuntedQubit(Rep,basis,josephson=[120.,50,120.],cap=[10.,50.,10.],ind=100.,s
         pairs['JJ3'] = 'JJ1'
         pairs['C3'] = 'C1'
     
-    circuit = Rep(circuit,basis,sparse,pairs)
+    circuit = Rep(circuit,['I'],basis,sparse,pairs)
     return circuit
 
 def shuntedQubitFluxFree(basis,josephson=[120.,50,120.],cap=[10.,50.,10.],sparse=True):

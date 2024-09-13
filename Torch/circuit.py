@@ -29,8 +29,11 @@ def phase(phi):
     # phi = flux/flux_quanta
     return exp(im*2*pi*phi)
 
-### Circuit Module
+def hamiltonianEnergy(H):
+    eigenenergies = eigvalsh(H)
+    return eigenenergies
 
+### Circuit Module
 class Circuit(nn.Module):
     """
         * no external fluxes must be in parallel : redundant
@@ -488,12 +491,12 @@ class Kerman(Circuit):
         O = combination[:No]
         I = combination[No:No+Ni]
         J = combination[No+Ni:]
-        #assert I==0
-        #assert J==1 or 0
+        
         Z = self.oscillatorImpedance() * 2 # cooper pair factor
-        # re-calculation with parameter iteration
+        # re-calculation impedance factor with circuit variation
         DO_plus = [self.backend.displacementOscillator(basis_max,z,o) for o,z,basis_max in zip(O,Z,basis['O'])]
         DO_minus = [self.backend.displacementOscillator(basis_max,z,-o) for o,z,basis_max in zip(O,Z,basis['O'])]
+        
         DI_plus = [self.backend.displacementCharge(basis_max,i) for i,basis_max in zip(I,basis['I'])]
         DI_minus = [self.backend.displacementCharge(basis_max,-i) for i,basis_max in zip(I,basis['I'])]
         DJ_plus = [self.backend.displacementCharge(basis_max,j) for j,basis_max in zip(J,basis['J'])]
@@ -517,7 +520,6 @@ class Kerman(Circuit):
 
         #Lo_ = self.Lo_
         Co_,Coi_,Coj_,Ci_,Cij_,Cj_ = C_
-        n_baseO,n_baseI,n_baseJ = self.modeBasisSize(basis)
         No,Ni,Nj = self.kermanDistribution() #No,self.Ni,self.Nj
 
         Z = sqrt(diagonal(Co_)/diagonal(Lo_))
@@ -547,7 +549,7 @@ class Kerman(Circuit):
     #@torch.compile(backend=COMPILER_BACKEND, fullgraph=True)
     def hamiltonianJosephson(self,external_fluxes=dict()):
         edges,Ej = self.josephsonComponents()
-        N = self.kermanBasisSize()
+        N = self.basisSize()
         H = self.backend.null(N)
         for (u,v,key),E in zip(edges,Ej):
             i,j = self.nodes_[u],self.nodes_[v]
