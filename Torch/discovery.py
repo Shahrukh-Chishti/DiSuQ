@@ -1,7 +1,7 @@
 import torch
-import torch
 from torch import tensor,abs,stack,var,log
 from numpy import meshgrid,linspace,array,log10,random,logspace
+from torch.optim import Adam,RMSprop,Rprop
 from numpy.random import choice
 from random import seed
 from scipy.stats import truncnorm
@@ -84,12 +84,12 @@ def lossTransition(E10,E21):
 
 # Discovery Initialization
 
-def initializationSequential(parameters,optimizer,iterations=100,lr=.005):
+def initializationSequential(parameters,optimizer,iterations=100,lr=.005,algo=RMSprop):
     Search = []
     for index,parameter in enumerate(parameters):
         print(index,'--------------------')
         optimizer.circuit.initialization(parameter)
-        optimizer.initAlgo(lr=lr)
+        optimizer.initAlgo(lr=lr,algo=algo)
         optimizer.parameters,_ = optimizer.circuitParameters()
         Search.append(optimizer.optimization(iterations))
     return Search
@@ -133,7 +133,7 @@ def uniformParameters(circuit,subspace,n,N,random_state=10,logscale=False):
                 a = log10(a); b = log10(b)
             domain = spacing(a,b,n+1,endpoint=False)[1:]
             grid.append(choice(domain,N))
-    grid = array(grid)
+    grid = array(grid).T
     return parameterSpace(circuit,grid,iDs)
 
 def domainParameters(domain,circuit,subspace):

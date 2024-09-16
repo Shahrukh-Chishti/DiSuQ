@@ -2,7 +2,7 @@ import networkx,copy,torch
 from contextlib import nullcontext
 import DiSuQ.Torch.dense as Dense
 import DiSuQ.Torch.sparse as Sparse
-from torch import exp,det,tensor,arange,zeros,sqrt,diagonal,lobpcg,rand,eye
+from torch import exp,det,norm,tensor,arange,zeros,sqrt,diagonal,lobpcg,rand,eye
 from torch.linalg import eigvalsh,inv,eigh
 from DiSuQ.Torch.components import diagonalisation,null,J,L,C,im,pi,complex,float
 from numpy.linalg import matrix_rank
@@ -76,6 +76,7 @@ class Circuit(nn.Module):
         self.spectrum_limit = 4
         self.ii_limit = 3
         self.vectors_calc = False
+        self.grad_calc = True
         # nn.Module : default function call in optimization
         self.forward = self.spectrumManifold
 
