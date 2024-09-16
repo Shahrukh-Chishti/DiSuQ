@@ -2,7 +2,7 @@ import networkx,copy,torch
 from contextlib import nullcontext
 import DiSuQ.Torch.dense as Dense
 import DiSuQ.Torch.sparse as Sparse
-from torch import exp,det,tensor,arange,zeros,sqrt,diagonal,lobpcg
+from torch import exp,det,tensor,arange,zeros,sqrt,diagonal,lobpcg,rand,eye
 from torch.linalg import eigvalsh,inv,eigh
 from DiSuQ.Torch.components import diagonalisation,null,J,L,C,im,pi,complex,float
 from numpy.linalg import matrix_rank
@@ -74,8 +74,8 @@ class Circuit(nn.Module):
         self.null = self.backend.null(self.basisSize(),device=self.device)
 
         self.spectrum_limit = 4
+        self.ii_limit = 3
         self.vectors_calc = False
-        self.grad_calc = True
         # nn.Module : default function call in optimization
         self.forward = self.spectrumManifold
 
@@ -349,23 +349,27 @@ class Circuit(nn.Module):
         algo = None
         with torch.inference_mode() if self.grad_calc is False else nullcontext() as null:
             H = self.circuitHamiltonian(control)
+            spectrum = eigvalsh(H)[:self.spectrum_limit]
+            states = None
             if self.vectors_calc:
-                if self.grad_calc is False and H.dtype is float and not self.sparse:
-                    # w/o : flux controls or Fourier conjugate
-                    spectrum,states = lobpcg(H,k=self.spectrum_limit,largest=False,method='ortho')
-                    algo = 'lobpcg' # inconsistent & fast
-                else:
-                    spectrum,states = eigh(H)
-                    spectrum = spectrum[:self.spectrum_limit]
-                    states = states.T[:self.spectrum_limit]
-                    algo = 'eigh' # consistent
-            else:
-                # stable eigenvalues over degeneracy limits
-                spectrum = eigvalsh(H)
-                states = zeros(len(H),self.spectrum_limit)
-                spectrum = spectrum[:self.spectrum_limit]
-                algo = 'eigvalsh' # consistent
+                states = self.eigenVectors(H,spectrum)
         return spectrum,states
+
+    #@torch.compile(backend=COMPILER_BACKEND, fullgraph=False)
+    def eigenVectors(self,H,eigenvalues):
+        Vectors = []
+        for val in eigenvalues:
+            Vectors.append(self.inverseIteration(H,val,iterations=self.ii_limit))
+        return Vectors
+
+    #@torch.compile(backend=COMPILER_BACKEND, fullgraph=True)
+    def inverseIteration(self,H,val,iterations):
+        N = self.N
+        vec = rand(N,dtype=complex,requires_grad=True)
+        invII = inv(H-val*eye(N))
+        for i in range(iterations):
+            vec = invII@vec/norm(invII@vec)
+        return vec
 
     def operatorExpectation(self,bra,O,mode,ket):
         basis = self.basis
@@ -420,6 +424,7 @@ class Kerman(Circuit):
     def __init__(self,network,control_iD,basis,sparse=True,pairs=dict(),device=None):
         super().__init__(network,control_iD,basis,sparse,pairs,device)
         self.No,self.Ni,self.Nj = self.kermanDistribution()
+        self.N = self.basisSize()
         self.R = self.kermanTransform().real
         self.L_,self.C_ = self.modeTransformation()
 
@@ -719,6 +724,7 @@ class Flux(Circuit):
 class Charge(Circuit):
     def __init__(self,network,control_iD,basis,sparse=True,pairs=dict(),device=None):
         super().__init__(network,control_iD,basis,sparse,pairs,device)
+        self.N = self.basisSize()
 
     def basisSize(self,modes=False):
         N = [2*size+1 for size in self.basis]
