@@ -22,7 +22,6 @@ class Optimization:
         # depending upon the choice of optimization & loss
         self.vectors_calc = False
         self.grad_calc = True
-        self.logInit()
 
     def logInit(self):
         self.logs = []
@@ -205,10 +204,11 @@ class Minimization(Optimization):
         self.dParams.append(self.parameterState())
         self.dCircuit.append(self.circuitState())
         #torch.compiler.cudagraph_mark_step_begin()
-        
+
     def optimization(self,method='Nelder-Mead',options=dict()):
         options['disp'] = True
         self.start = perf_counter()
+        self.logInit()
         results = minimize(self.objective,self.x0,method=method,options=options,jac=self.gradients,bounds=self.Bounds,callback=self.logger)
         return self.logCompile()
 
@@ -281,6 +281,7 @@ class GradientDescent(Optimization):
 
     def optimization(self,iterations=100):
         start = perf_counter()
+        self.logInit()
         for self.iteration in range(iterations):
             #torch.compiler.cudagraph_mark_step_begin()
             self.optimizer.step(self.closure)

@@ -92,13 +92,14 @@ def initializationSequential(parameters,optimizer,iterations=100,lr=.005,algo=RM
         # circuit.initialization rewrites a new tensor
         optimizer.parameters,_ = optimizer.circuitParameters()
         optimizer.initAlgo(lr=lr,algo=algo)
-        Search.append(optimizer.optimization(iterations))
+        Search.append(optimizer.optimization(iterations=iterations))
     return Search
 
 def initializationParallelism(optimizer,iterations=100,lr=.005):
     def optimization(parameters):
         optimizer.circuit.initialization(parameters)
         optimizer.parameters,_ = optimizer.circuitParameters()
+        optimizer.initAlgo(lr=lr,algo=algo)
         return optimizer.optimization(iterations=iterations)
     return optimization
 

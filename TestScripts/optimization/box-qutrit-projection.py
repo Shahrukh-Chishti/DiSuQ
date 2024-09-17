@@ -80,7 +80,7 @@ def ladderQutrit(detuning,cutoff=16,node=None,levels=True):
             d6 = abs(nodeChargeExcitation(I,node,II)-1)
             d7 = abs(nodeChargeExcitation(ground,node,II))
             loss += d5**2 + d6**2 + d7**2
-            #loss /= 49.
+            loss /= 49.
             distances = [d.detach().item() for d in (d5,d6,d7)]
             metrics.update(dict(zip(('d5','d6','d7'),distances)))
         return loss,metrics
