@@ -89,8 +89,9 @@ def initializationSequential(parameters,optimizer,iterations=100,lr=.005,algo=RM
     for index,parameter in enumerate(parameters):
         print(index,'--------------------')
         optimizer.circuit.initialization(parameter)
-        optimizer.initAlgo(lr=lr,algo=algo)
+        # circuit.initialization rewrites a new tensor
         optimizer.parameters,_ = optimizer.circuitParameters()
+        optimizer.initAlgo(lr=lr,algo=algo)
         Search.append(optimizer.optimization(iterations))
     return Search
 

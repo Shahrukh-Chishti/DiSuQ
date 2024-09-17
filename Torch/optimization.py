@@ -189,7 +189,6 @@ class Minimization(Optimization):
             if parameter.grad is None: 
                 # spectrum degeneracy:torch.eigh destablize
                 # loss detached from computation graph
-                #import ipdb;ipdb.set_trace()
                 gradients.append(0.0)
             else:
                 gradients.append(parameter.grad.detach().item())
@@ -228,8 +227,7 @@ class GradientDescent(Optimization):
         self.optimizer = self.initAlgo()
 
     def initAlgo(self,algo=Adam,lr=1e-3):
-        optimizer = algo(self.parameters,lr)
-        return optimizer
+        self.optimizer = algo(self.parameters,lr)
 
     def initLBFGS(self,lr=None,tol=1e-6,max_iter=20,history_size=5):
         line_search = None
@@ -267,6 +265,7 @@ class GradientDescent(Optimization):
     #@torch.compile(backend=COMPILER_BACKEND, fullgraph=False)
     def closure(self):
         """
+            * erase the grad
             * reevaluates the model and returns the loss
             * calculate gradient
             * register the logs
