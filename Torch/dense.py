@@ -70,13 +70,35 @@ def unitaryTransformation(M,U):
 def mul(A,B):
     return A@B
 
-""" Operator Objects """
+""" Operator Function """
 
 def identity(n,dtype=float,device=None):
     return eye(n,dtype=dtype,device=device) ##
 
 def null(N=1,dtype=complex,device=None):
     return zeros(N,N,dtype=complex,device=device) ##
+
+# States Grid
+
+def chargeStates(n,dtype=int,device=None):
+    charge = linspace(n,-n,2*n+1,dtype=dtype,device=None)
+    return charge
+
+def fluxStates(n,N=1,dtype=complex,device=None):
+    # N : range of flux operator in [-1,1]
+    flux = linspace(N,-N,n,dtype=dtype,device=device)
+    return flux
+
+def transformationMatrix(n_charge,n_flux,N_flux=1,device=None):
+    charge_states = chargeStates(n_charge,complex,device)
+    flux_states = fluxStates(n_flux,N_flux,complex,device)
+
+    T = outer(flux_states,charge_states)
+    T *= 2*pi*im
+    T = exp(T)/sqroot(n_flux)
+    return T # unitary transformation
+
+# Oscillator Basis
 
 def basisQo(n,impedance,device=None):
     Qo = arange(1,n,device=device) ##dev
@@ -89,6 +111,43 @@ def basisFo(n,impedance,device=None):
     Fo = sqrt(Fo)
     Fo = diag(Fo,diagonal=1) + diag(Fo,diagonal=-1) ##
     return Fo.to(dtype=complex)*sqrt(impedance/2/pi)
+
+# Canonical Basis
+
+def basisQq(n,device=None):
+    # charge basis
+    charge = chargeStates(n,complex,device)
+    Q = diag(charge.clone().detach()) ##
+    return Q * 2
+
+def basisFqKerman(n):
+    # charge basis
+    N = 2*n+1
+    P = zeros((N,N),dtype=complex)
+    charge = chargeStates(n)
+    for q in charge:
+        for p in charge:
+            if not p==q:
+                P[q,p] = (-(n+1)*sin(2*pi*(q-p)*n/N) + n*sin(2*pi*(q-p)*(n+1)/N))
+                P[q,p] /= -im*N*(1-cos(2*pi*(q-p)/N))*N
+    return P
+
+def basisFq(n,device=None):
+    Q = basisQq(n,device)
+    U = transformationMatrix(n,2*n+1,n,device)
+    return U@Q@U.conj().T/2/(2.0*n+1.0)
+
+def basisFf(n,N=1,device=None):
+    flux = fluxStates(n,N,device=device)
+    F = diag(flux)
+    return F
+
+def basisQf(n,N=1):
+    F = basisFf(n,N)
+    U = transformationMatrix(int((n-1)/2),n,N)
+    return U@F@U.conj().T # *2*(2*n+1)
+
+# Oscillator basis Diagonalization
 
 def fluxFlux(n,impedance):
     N = 2*n+1
@@ -120,61 +179,7 @@ def fluxCharge(n,impedance):
     Pq = unitaryTransformation(Po,D)
     return Pq
 
-def chargeStates(n,dtype=int,device=None):
-    charge = linspace(n,-n,2*n+1,dtype=dtype,device=None) ##
-    return charge
-
-def fluxStates(N_flux,n_flux=1,dtype=complex,device=None):
-    flux = linspace(n_flux,-n_flux,N_flux,dtype=dtype,device=device) ##
-    return flux#/N_flux
-
-def transformationMatrix(n_charge,N_flux,n_flux=1,device=None):
-    charge_states = chargeStates(n_charge,complex,device)
-    flux_states = fluxStates(N_flux,n_flux,complex,device)*N_flux
-
-    T = outer(flux_states,charge_states) ##
-    T *= 2*pi*im/N_flux
-    T = exp(T)/sqroot(N_flux)
-    return T # unitary transformation
-
-def basisQq(n,device=None):
-    # charge basis
-    charge = chargeStates(n,complex,device)
-    Q = diag(charge.clone().detach()) ##
-    return Q * 2
-
-def basisFqKerman(n):
-    # charge basis
-    N = 2*n+1
-    P = zeros((N,N),dtype=complex)
-    charge = chargeStates(n)
-    for q in charge:
-        for p in charge:
-            if not p==q:
-                P[q,p] = (-(n+1)*sin(2*pi*(q-p)*n/N) + n*sin(2*pi*(q-p)*(n+1)/N))
-                P[q,p] /= -im*N*(1-cos(2*pi*(q-p)/N))*N
-    return P
-
-def basisFq(n,device=None):
-    Q = basisQq(n,device)
-    U = transformationMatrix(n,2*n+1,n,device)
-    return U@Q@U.conj().T/2/(2.0*n+1.0)
-
-def basisFf(n):
-    flux = fluxStates(2*n+1,n,complex)
-    F = diag(flux)
-    return F
-
-def basisFf(N,n):
-    flux = fluxStates(N,n)/2/pi
-    # range in 0-1 and not 0-2pi
-    F = diag(flux)
-    return F
-
-def basisQf(n):
-    F = basisFf(n).to(complex)
-    U = transformationMatrix(n,2*n+1,n)
-    return U@F@U.conj().T*2*(2*n+1)
+# Derivative Stencil
 
 def basisFiniteI(n,bound):
     delta = (bound[1]-bound[0])/(n-1)
@@ -182,7 +187,7 @@ def basisFiniteI(n,bound):
     I = zeros(n,n)
     for index,coeff in enumerate(stencil):
         index -= 3
-        I += diag(tensor([coeff]*(n-numpy.abs(index))),index)
+        I += diag(tensor([coeff]*(n-abs(index))),index)
     return I/delta
 
 def basisFiniteII(n,bound):
@@ -191,8 +196,10 @@ def basisFiniteII(n,bound):
     II = zeros(n,n)
     for index,coeff in enumerate(stencil):
         index -= 3
-        II += diag(tensor([coeff]*(n-numpy.abs(index))),index)
-    return II/delta/delta    
+        II += diag(tensor([coeff]*(n-abs(index))),index)
+    return II/delta/delta
+
+# Junction Displacement Operators    
 
 def chargeDisplacePlus(n,device=None):
     """n : charge basis truncation"""
