@@ -18,7 +18,7 @@ def empty(shape):
 
 # analysis
 
-def comparison(H,limit=4):
+def eigenComparison(H,limit=4):
     from torch.linalg import eigvalsh,eigh
     print('torch.linalg.eigvalsh:',eigvalsh(H)[:limit])
     print('torch.linalg.eigh:',eigh(H)[0][:limit])
