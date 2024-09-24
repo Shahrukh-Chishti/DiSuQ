@@ -228,9 +228,9 @@ def displacementFlux(n,a):
     D = expm(im*2*pi*a*D)
     return D
 
-def displacementFlux(N,n,a):
-    flux = fluxStates(N,n)/2/pi
-    flux = exp(im*2*pi*a*flux)
+def displacementFlux(n,a,N=1):
+    flux = fluxStates(n,N)
+    flux = exp(im*a*flux)
     return diag(flux)
 
 if __name__=='__main__':

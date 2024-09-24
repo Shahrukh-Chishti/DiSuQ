@@ -704,7 +704,7 @@ class Flux(Circuit):
         Dplus = [self.backend.displacementFlux(basis_max,1) for z,basis_max in zip(Z,basis)]
         Dminus = [self.backend.displacementFlux(basis_max,-1) for z,basis_max in zip(Z,basis)]
         edges,Ej = self.josephsonComponents()
-        N = self.canonicalBasisSize()
+        N = self.basisSize()
         H = self.backend.null(N)
         for (u,v,key),E in zip(edges,Ej):
             i,j = self.nodes_[u],self.nodes_[v]
