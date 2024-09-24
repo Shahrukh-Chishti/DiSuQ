@@ -3,9 +3,9 @@ from contextlib import nullcontext
 import DiSuQ.Torch.dense as Dense
 import DiSuQ.Torch.sparse as Sparse
 from torch import exp,det,norm,tensor,arange,zeros,sqrt,diagonal,lobpcg,rand,eye
-from torch.linalg import eigvalsh,inv,eigh
+from torch.linalg import eigvalsh,inv
 from DiSuQ.Torch.components import diagonalisation,null,J,L,C,im,pi,complex,float
-from numpy.linalg import matrix_rank
+from numpy.linalg import matrix_rank,eigvalsh as eigenvalues
 from numpy import prod,sort
 from torch import nn
 
@@ -266,7 +266,7 @@ class Circuit(nn.Module):
         return edges,L_ext
 
     def nodeCapacitance(self):
-        Cn = zeros((self.Nn,self.Nn)) ##
+        Cn = zeros((self.Nn,self.Nn))
         for i,node in self.nodes.items():
             for u,v,component in self.G.edges(node,data=True):
                 component = component['component']
@@ -279,7 +279,7 @@ class Circuit(nn.Module):
         return Cn
 
     def branchInductance(self):
-        Lb = zeros((self.Nb,self.Nb)) ##
+        Lb = zeros((self.Nb,self.Nb))
         #fill_diagonal(Lb,L_limit)
         for index,(u,v,key) in self.edges_inductive.items():
             component = self.G[u][v][key]['component']
@@ -289,7 +289,7 @@ class Circuit(nn.Module):
         return Lb
 
     def mutualInductance(self):
-        M = zeros((self.Nb,self.Nb)) ##
+        M = zeros((self.Nb,self.Nb)) 
         return M
 
     def connectionPolarity(self):
@@ -347,7 +347,6 @@ class Circuit(nn.Module):
     def eigenSpectrum(self,control):
         # control data : array/list of Tensor/s
         control = self.controlData(control)
-        algo = None
         with torch.inference_mode() if self.grad_calc is False else nullcontext() as null:
             H = self.circuitHamiltonian(control)
             spectrum = eigvalsh(H)[:self.spectrum_limit]
@@ -380,7 +379,7 @@ class Circuit(nn.Module):
 
     # ToBeDeprecated
     def circuitEnergy(self,H_LC=tensor(0.0),H_J=None,external_fluxes=dict(),grad=True):
-        ## this could be improved : removing if clause, sub-class, sparse/dense and grad/numer segregation
+        # this could be improved : removing if clause, sub-class, sparse/dense and grad/numer segregation
         if H_J is None:
             H_J = null(H_LC)
         #H_LC = self.hamiltonianLC()
@@ -389,7 +388,7 @@ class Circuit(nn.Module):
         if grad:
             if self.sparse:
                 # illegal type casting
-                eigenenergies = lobpcg(H.to(float),k=4,largest=False)[0]
+                eigenenergies = lobpcg(H.to(float),k=4,largest=False,method='ortho')[0]
             else:
                 eigenenergies = eigvalsh(H)
         else:
@@ -399,7 +398,7 @@ class Circuit(nn.Module):
                 eigenenergies = sort(eigenenergies)
             else:
                 H = H.detach().numpy()
-                eigenenergies = eigvalsh(H)
+                eigenenergies = eigenvalues(H)
         return eigenenergies
 
     def spectrumManifold(self,manifold):
@@ -413,8 +412,8 @@ class Circuit(nn.Module):
     def fluxScape(self,flux_points,flux_manifold):
         H_LC = self.hamiltonianLC()
         H_J = self.hamiltonianJosephson
-        E0,EI = self.spectrumManifold(flux_point,flux_profile,H_LC,H_J,excitation=1)
-        E0,EII = self.spectrumManifold(flux_point,flux_profile,H_LC,H_J,excitation=2)
+        E0,EI = self.spectrumManifold(flux_points,flux_manifold,H_LC,H_J,excitation=1)
+        E0,EII = self.spectrumManifold(flux_points,flux_manifold,H_LC,H_J,excitation=2)
         EI = tensor(EI).detach().numpy()
         EII = tensor(EII).detach().numpy()
         return EI,EII
