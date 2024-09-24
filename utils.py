@@ -9,12 +9,25 @@ import networkx as nx
 from networkx.drawing.nx_pydot import write_dot
 from numpy import full,nan,zeros,arange
 
+# tensor
+
 def empty(shape):
     E = zeros(shape)
     E.fill(nan)
     return E
 
-# analysis plots
+# analysis
+
+def comparison(H,limit=4):
+    from torch.linalg import eigvalsh,eigh
+    print('torch.linalg.eigvalsh:',eigvalsh(H)[:limit])
+    print('torch.linalg.eigh:',eigh(H)[0][:limit])
+    from numpy.linalg import eigvalsh,eigh
+    H = H.detach().numpy()
+    print('numpy.linalg.eigvalsh:',eigvalsh(H)[:limit])
+    print('numpy.linalg.eigh:',eigh(H)[0][:limit])
+
+# plots
     
 def render(fig,title,size,html,export):
     fig.update_layout(font={'size':30})
