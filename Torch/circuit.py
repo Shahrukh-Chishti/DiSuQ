@@ -302,6 +302,11 @@ class Circuit(nn.Module):
 
         return Rbn
 
+    def modeImpedance(self):
+        Cn_,Ln_,basis = self.Cn_,self.Ln_,self.basis
+        impedance = [sqrt(Cn_[i,i]/Ln_[i,i]) for i in range(len(basis))]
+        return impedance
+    
     def islandModes(self):
         islands = self.graphGL(elements=[C])
         islands = networkx.connected_components(islands)
@@ -327,6 +332,12 @@ class Circuit(nn.Module):
                 P = self.backend.basisProduct(fluxModes,[i]) - self.backend.basisProduct(fluxModes,[j])
             H = H + P@P / 2 / L
         return H
+
+    def basisSize(self,modes=False):
+        N = [size for size in self.basis]
+        if modes:
+            return N
+        return prod(N)
 
     #@torch.compile(backend=COMPILER_BACKEND, fullgraph=False)
     def circuitHamiltonian(self,external_flux):
