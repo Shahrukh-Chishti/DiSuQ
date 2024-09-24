@@ -5,7 +5,7 @@ from torch import linspace,arange,diagonal,diag,sqrt,eye
 from torch.linalg import det,inv,eig as eigsolve
 from torch import matrix_exp as expm,exp,outer
 from torch import sin,cos,sigmoid,clamp
-from torch import cfloat as complex, float32 as float
+from torch import cdouble as complex, float64 as float
 
 im = 1.0j
 root2 = sqroot(2)
