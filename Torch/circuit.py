@@ -266,7 +266,7 @@ class Circuit(nn.Module):
         return edges,L_ext
 
     def nodeCapacitance(self):
-        Cn = zeros((self.Nn,self.Nn))
+        Cn = zeros((self.Nn,self.Nn),dtype=float)
         for i,node in self.nodes.items():
             for u,v,component in self.G.edges(node,data=True):
                 component = component['component']
@@ -279,7 +279,7 @@ class Circuit(nn.Module):
         return Cn
 
     def branchInductance(self):
-        Lb = zeros((self.Nb,self.Nb))
+        Lb = zeros((self.Nb,self.Nb),dtype=float)
         #fill_diagonal(Lb,L_limit)
         for index,(u,v,key) in self.edges_inductive.items():
             component = self.G[u][v][key]['component']
@@ -289,11 +289,11 @@ class Circuit(nn.Module):
         return Lb
 
     def mutualInductance(self):
-        M = zeros((self.Nb,self.Nb)) 
+        M = zeros((self.Nb,self.Nb),dtype=float) 
         return M
 
     def connectionPolarity(self):
-        Rbn = zeros((self.Nb,self.Nn))
+        Rbn = zeros((self.Nb,self.Nn),dtype=float)
         for index,(u,v,key) in self.edges_inductive.items():
             if not u==0:
                 Rbn[index][self.nodes_[u]] = 1
@@ -319,7 +319,6 @@ class Circuit(nn.Module):
         H = self.backend.null() #tensor([[0.0]])
         for (u,v,key),L in zip(edges,L_ext):
             i,j = self.nodes_[u],self.nodes_[v]
-            #print(u,v,i,j,L)
             if i<0 or j<0 :
                 # grounded inducer
                 i = max(i,j)
@@ -578,7 +577,7 @@ class Kerman(Circuit):
         return H/2
 
     def kermanChargeOffset(self,charge_offset=dict()):
-        charge = zeros(self.Nn)
+        charge = zeros(self.Nn,dtype=float)
         for node,dQ in charge_offset.items():
             charge[self.nodes_[node]] = dQ
         charge = self.R@charge
@@ -765,13 +764,12 @@ class Charge(Circuit):
                 Jminus = self.backend.crossBasisProduct(Dplus,Dminus,j,i)
                 #assert (Jminus == Jplus.conj().T).all()
                 
-            #print(E,flux)
             H -= E*(Jplus*phase(flux) + Jminus*phase(-flux))
 
         return H/2
 
     def chargeChargeOffset(self,charge_offset=dict()):
-        charge = zeros(self.Nn)
+        charge = zeros(self.Nn,dtype=float)
         basis = self.basis
         Cn_ = self.Cn_
         for node,dQ in charge_offset.items():
@@ -853,7 +851,6 @@ class Mixed(Circuit):
                     Jminus = self.backend.crossBasisProduct(Dplus,Dminus,j,i)
                     #assert (Jminus == Jplus.conj().T).all()
 
-                #print(E,flux)
                 H -= E*(Jplus*phase(flux) + Jminus*phase(-flux))
 
             return H/2
