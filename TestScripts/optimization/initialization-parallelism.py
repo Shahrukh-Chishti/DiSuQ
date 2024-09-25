@@ -10,7 +10,7 @@ from torch import set_num_threads
 set_num_threads(6)
 
 
-with open('/Users/chishti/DiSuQ/Examples/C-shuntedProfiling/target_fluxqubit.p', 'rb') as content:
+with open('./target_fluxqubit.p', 'rb') as content:
     target_info = pickle.load(content)
 target_spectrum = target_info['spectrum']
 print(target_spectrum.shape)
@@ -36,4 +36,4 @@ print('test run-------------pass')
 with Pool(10) as multi:
     Search = multi.map(initializationParallelism(optim,iterations=5),parameters)
     
-import ipdb;ipdb.set_trace()
+print(len(Search))

@@ -28,7 +28,7 @@ circuit += [L(1,2,El,'L1',True,L0,L_),C(1,2,Ec,'C1',C0,C_),J(1,2,Ej,'J1',J0,J_)]
 circuit += [L(2,3,El,'L2',True,L0,L_),C(2,3,Ec,'C2',C0,C_),J(2,3,Ej,'J2',J0,J_)]
 circuit += [L(3,0,El,'L3',True,L0,L_),C(3,0,Ec,'C3',C0,C_),J(3,0,Ej,'J3',J0,J_)]
 
-n_base = 10
+n_base = 2
 basis = {'O':[n_base]*3,'J':[],'I':[]}; rep = 'K'
 control_iD = ['L0']
 
@@ -106,3 +106,5 @@ FullSpace = initializationSequential(parameters,optim,iterations=iterations,lr=l
 index = 0
 print(FullSpace[index][0])
 print(FullSpace[index][1])
+dLogs,dParams,dCircuit = FullSpace[0]
+plotCompare(dLogs.index,dLogs,'Optimizing Box-Qutrit','iteration')
