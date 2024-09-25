@@ -135,7 +135,6 @@ def basisFqKerman(n):
 def basisFq(n,device=None):
     Q = basisQq(n,device)
     U = transformationMatrix(n,device=device)
-    import ipdb;ipdb.set_trace()
     return U@Q@U.conj().T/2
 
 def basisFf(N,n=1,device=None):

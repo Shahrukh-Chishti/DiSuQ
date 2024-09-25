@@ -1,4 +1,4 @@
-from DiSuQ.Torch.components import J,C,L
+from DiSuQ.Torch.components import J,C,L,sigmoidInverse
 from DiSuQ.Torch.components import C0,J0,L0,capE,indE,C_,J_,L_
 from torch import tensor
 SPARSE = False # default

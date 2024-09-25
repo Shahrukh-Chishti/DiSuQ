@@ -804,7 +804,7 @@ class Charge(Circuit):
         return H
 
 class Mixed(Circuit):
-    def __init__(self,network,basis,sparse=True,pairs=dict()):
+    def __init__(self,network,basis,sparse=True,pairs=dict(),device=None):
         super().__init__(network,basis,sparse,pairs,device)
 
     def hamiltonianLC(self,basis,n_trunc):
