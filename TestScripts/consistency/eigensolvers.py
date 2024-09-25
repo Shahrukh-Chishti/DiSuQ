@@ -15,7 +15,7 @@ def comparison(H,limit=4):
 
 def main(N=1):
     print('Comparison of different Eigvalue problem solving algorithms, \n available from various libraries & modules')
-    
+    print('Consistency proof must be extended to different operating controls of the qubits')
     print('Harmonic Oscillator(q basis)-------')
     circuit = oscillatorLC(Charge,[N*128])
     H = circuit.hamiltonianLC()
