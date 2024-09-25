@@ -105,14 +105,6 @@ def sparsify(T,dense=None,device=None):
     indices = vstack(indices)
     return sparse_coo_tensor(indices,values,shape,device=device) ##
 
-"""" Operator Object """
-
-def identity(n,dtype=float,device=None):
-    return sparsify(eye(n,dtype=dtype),device=device)
-
-def null(shape=1,dtype=complex,device=None):
-    return sparse_coo_tensor([[],[]],[],[shape]*2,dtype=dtype,device=device) ##
-
 def diagSparse(values,diagonal=0,device=None):
     N = len(values)+absolute(diagonal)
     rows = arange(N,dtype=int,device=device) ##
@@ -128,17 +120,15 @@ def diagSparse(values,diagonal=0,device=None):
     indices = vstack([rows,cols])
     return sparse_coo_tensor(indices,values,(N,N),device=device) ##
 
-def basisQo(n,impedance,device=None):
-    Qo = arange(1,n,device=device) ##
-    Qo = sqrt(Qo)
-    Qo = -diagSparse(Qo,1,device) + diagSparse(Qo,-1,device)
-    return Qo*im*sqrt(1/2/pi/impedance)
+"""" Operator Tensors """
 
-def basisFo(n,impedance,device=None):
-    Po = arange(1,n,device=device) ##
-    Po = sqrt(Po)
-    Po = diagSparse(Po,1,device) + diagSparse(Po,-1,device)
-    return Po*sqrt(impedance/2/pi)
+def identity(n,dtype=float,device=None):
+    return sparsify(eye(n,dtype=dtype),device=device)
+
+def null(shape=1,dtype=complex,device=None):
+    return sparse_coo_tensor([[],[]],[],[shape]*2,dtype=dtype,device=device) ##
+
+# States Grid
 
 def chargeStates(n,device=None):
     charge = linspace(n,-n,2*n+1,dtype=complex,device=device) ##
@@ -156,6 +146,22 @@ def transformationMatrix(n_charge,N_flux,n_flux=1,device=None):
     T *= 2*pi*im/N_flux
     T = exp(T)/sqroot(N_flux)
     return sparsify(T,device=device)
+
+# Oscillator Basis
+
+def basisQo(n,impedance,device=None):
+    Qo = arange(1,n,device=device) ##
+    Qo = sqrt(Qo)
+    Qo = -diagSparse(Qo,1,device) + diagSparse(Qo,-1,device)
+    return Qo*im*sqrt(1/2/pi/impedance)
+
+def basisFo(n,impedance,device=None):
+    Po = arange(1,n,device=device) ##
+    Po = sqrt(Po)
+    Po = diagSparse(Po,1,device) + diagSparse(Po,-1,device)
+    return Po*sqrt(impedance/2/pi)
+
+# Canonical Basis
 
 def basisQq(n,device=None):
     # charge basis
@@ -197,6 +203,8 @@ def basisQf(n):
     U = transformationMatrix(n,2*n+1,n)
     return U@F@U.conj().T*(2*n+1)*2
 
+# Derivative Stencil
+
 def basisFiniteI(n,bound):
     delta = (bound[1]-bound[0])/(n-1)
     stencil = [-1 / 60, 3 / 20, -3 / 4, 0.0, 3 / 4, -3 / 20, 1 / 60]
@@ -214,6 +222,8 @@ def basisFiniteII(n,bound):
         index -= 3
         II += diagSparse(tensor([coeff]*(n-numpy.abs(index))),index)
     return II/delta/delta    
+
+# Junction Displacement Operators    
 
 def chargeDisplacePlus(n,device=None):
     """n : charge basis truncation"""
