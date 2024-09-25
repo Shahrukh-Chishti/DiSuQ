@@ -1,8 +1,8 @@
-from numpy import array,concatenate,unique
+from numpy import array,concatenate,unique,arange
 from numpy import argwhere,isin,argmin,copy,around
 from numpy.linalg import det
 from numpy.random import randint,rand
-from torch import roll,zeros_like,sum,zeros
+from torch import roll,zeros_like,sum,zeros,tensor
 from torch import complex128 as complex,column_stack as stack
 from time import perf_counter,sleep
 
@@ -131,3 +131,14 @@ class PolynomialOptimization(Optimization):
         E0 = self.groundEigen(poly)
         state0 = self.groundState(E0,H)
         return E0,state0
+
+if __name__=='__main__':
+    from DiSuQ.Torch.models import fluxonium
+    basis = {'O':[5],'I':[],'J':[]}
+    circuit = fluxonium(basis,sparse=True)
+    optim = PolynomialOptimization(circuit)
+    print(circuit.circuitComponents())
+    flux_profile = tensor(arange(0,1,.1))
+    flux_profile = [{'I':flux} for flux in flux_profile]
+    H = optim.circuitHamiltonian(external_fluxes=flux_profile[3])
+    print(optim.characterisiticPoly(H))
