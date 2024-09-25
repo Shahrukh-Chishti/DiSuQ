@@ -224,7 +224,7 @@ class GradientDescent(Optimization):
         self.log_spectrum = False
         self.log_hessian = False
         self.iteration = 0
-        self.optimizer = self.initAlgo()
+        self.initAlgo()
 
     def initAlgo(self,algo=Adam,lr=1e-3):
         self.optimizer = algo(self.parameters,lr)

@@ -95,7 +95,7 @@ def initializationSequential(parameters,optimizer,iterations=100,lr=.005,algo=RM
         Search.append(optimizer.optimization(iterations=iterations))
     return Search
 
-def initializationParallelism(optimizer,iterations=100,lr=.005):
+def initializationParallelism(optimizer,iterations=100,lr=.005,algo=RMSprop):
     def optimization(parameters):
         optimizer.circuit.initialization(parameters)
         optimizer.parameters,_ = optimizer.circuitParameters()
