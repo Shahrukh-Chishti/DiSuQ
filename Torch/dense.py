@@ -84,18 +84,18 @@ def chargeStates(n,dtype=int,device=None):
     charge = linspace(n,-n,2*n+1,dtype=dtype,device=None)
     return charge
 
-def fluxStates(n,N=1,dtype=complex,device=None):
-    # N : range of flux operator in [-1,1]
-    flux = linspace(N,-N,n,dtype=dtype,device=device)
+def fluxStates(N,n=1,dtype=complex,device=None):
+    flux = linspace(n,-n,N+1,dtype=dtype,device=device)[1:]
     return flux
 
-def transformationMatrix(n_charge,n_flux,N_flux=1,device=None):
+def transformationMatrix(n_charge,n_flux=1,device=None):
     charge_states = chargeStates(n_charge,complex,device)
-    flux_states = fluxStates(n_flux,N_flux,complex,device)
-
+    N_flux = 2*n_charge+1 # dimensionality of Hilbert space
+    flux_states = fluxStates(N_flux,n_flux,complex,device)/2/n_flux
+    # domain of flux bound to (-.5,.5] : Fourier transform
     T = outer(flux_states,charge_states)
-    T *= 2*pi*im
-    T = exp(T)/sqroot(n_flux)
+    T *= 2*pi*im # Fourier Phase
+    T = exp(T)/N_flux # Normalization
     return T # unitary transformation
 
 # Oscillator Basis
@@ -134,11 +134,12 @@ def basisFqKerman(n):
 
 def basisFq(n,device=None):
     Q = basisQq(n,device)
-    U = transformationMatrix(n,2*n+1,n,device)
-    return U@Q@U.conj().T/2/(2.0*n+1.0)
+    U = transformationMatrix(n,device=device)
+    import ipdb;ipdb.set_trace()
+    return U@Q@U.conj().T/2
 
-def basisFf(n,N=1,device=None):
-    flux = fluxStates(n,N,device=device)
+def basisFf(N,n=1,device=None):
+    flux = fluxStates(N,n,device=device)/2/n # periodicity bound
     F = diag(flux)
     return F
 

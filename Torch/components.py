@@ -2,7 +2,7 @@ import uuid
 from numpy import log,sqrt as sqroot,pi,prod,clip
 from torch import tensor,norm,abs,ones,zeros,zeros_like,argsort
 from torch import linspace,arange,diagonal,diag,sqrt,eye
-from torch.linalg import det,inv,eig as eigsolve
+from torch.linalg import det,inv,eig as eigsolve,norm
 from torch import matrix_exp as expm,exp,outer
 from torch import sin,cos,sigmoid,clamp
 from torch import cdouble as complex, float64 as float # default precision
