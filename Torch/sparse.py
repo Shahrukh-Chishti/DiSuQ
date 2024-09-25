@@ -130,22 +130,23 @@ def null(shape=1,dtype=complex,device=None):
 
 # States Grid
 
-def chargeStates(n,device=None):
-    charge = linspace(n,-n,2*n+1,dtype=complex,device=device) ##
+def chargeStates(n,dtype=int,device=None):
+    charge = linspace(n,-n,2*n+1,dtype=dtype,device=device)
     return charge
 
-def fluxStates(N_flux,n_flux=1,device=None):
-    flux = linspace(n_flux,-n_flux,N_flux,dtype=complex,device=device) ##
-    return flux#/N_flux
+def fluxStates(N_flux,n_flux=1,dtype=complex,device=None):
+    flux = linspace(n_flux,-n_flux,N_flux+1,dtype=dtype,device=device)[1:]
+    return flux
 
-def transformationMatrix(n_charge,N_flux,n_flux=1,device=None):
+def transformationMatrix(n_charge,n_flux=1,device=None):
     charge_states = chargeStates(n_charge,device)
-    flux_states = fluxStates(N_flux,n_flux,device)*N_flux
-
+    N_flux = 2*n_charge+1 # dimensionality of Hilbert space
+    flux_states = fluxStates(N_flux,n_flux,complex,device)/2/n_flux
+    # domain of flux bound to (-.5,.5] : Fourier transform
     T = outer(flux_states,charge_states)
-    T *= 2*pi*im/N_flux
-    T = exp(T)/sqroot(N_flux)
-    return sparsify(T,device=device)
+    T *= 2*pi*im # Fourier Phase
+    T = exp(T)/N_flux # Normalization
+    return T # unitary transformation
 
 # Oscillator Basis
 
@@ -169,7 +170,7 @@ def basisQq(n,device=None):
     Q = diagSparse(charge.clone().detach(),device=device) ##
     return Q * 2
 
-def basisFq(n):
+def basisFqKerman(n):
     # charge basis
     N = 2*n+1
     P = zeros((N,N),dtype=complex)
@@ -183,18 +184,16 @@ def basisFq(n):
 
 def basisFq(n,device=None):
     Q = basisQq(n,device)
-    U = transformationMatrix(n,2*n+1,n,device)
-    #return unitaryTransformation(Q,transpose(U.conj(),0,1))/(2.0*n+1.0)/2.0
-    return U@Q@U.conj().T/2/(2.0*n+1.0)
+    U = transformationMatrix(n,device=device)
+    return U@Q@U.conj().T/2
 
-def basisFf(n):
-    flux = fluxStates(2*n+1,n)
+def basisFf(N,n=1,device=None):
+    flux = fluxStates(N,n,device=device)/2/n
     F = diagSparse(flux)
     return F
 
-def basisFf(N,n):
-    flux = fluxStates(N,n)/2/pi
-    # range in 0-1 and not 0-2pi
+def basisFf(N,n,device=None):
+    flux = fluxStates(N,n,device=device)/2/n # periodicity bound
     F = diagSparse(flux)
     return F
 

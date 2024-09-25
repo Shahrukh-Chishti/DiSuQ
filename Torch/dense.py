@@ -70,7 +70,7 @@ def unitaryTransformation(M,U):
 def mul(A,B):
     return A@B
 
-""" Operator Function """
+""" Operator Tensors """
 
 def identity(n,dtype=float,device=None):
     return eye(n,dtype=dtype,device=device) ##
