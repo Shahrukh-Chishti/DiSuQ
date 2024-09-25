@@ -166,7 +166,7 @@ def basisFo(n,impedance,device=None):
 
 def basisQq(n,device=None):
     # charge basis
-    charge = chargeStates(n,device)
+    charge = chargeStates(n,complex,device)
     Q = diagSparse(charge.clone().detach(),device=device) ##
     return Q * 2
 

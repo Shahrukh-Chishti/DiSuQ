@@ -359,6 +359,8 @@ class Circuit(nn.Module):
         control = self.controlData(control)
         with torch.inference_mode() if self.grad_calc is False else nullcontext() as null:
             H = self.circuitHamiltonian(control)
+            if self.grad_calc is False and self.sparse:
+                H = H.to_dense()
             spectrum = eigvalsh(H)[:self.spectrum_limit]
             states = None
             if self.vectors_calc:
