@@ -57,5 +57,8 @@ def executionSetup(rank:int):
     dist.destroy_process_group()
 
 if __name__=='__main__':
+    print('Testing the base Distributed multiprocessing')
     mp.spawn(executionSetup,nprocs=world_size)
+    print('pass on world size:',world_size)
+    print('Distributed class is built over this !!')
     sys.exit(0)
